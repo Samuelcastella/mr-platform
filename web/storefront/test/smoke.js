@@ -1,13 +1,14 @@
 // Prueba de humo del storefront (solo Node, sin dependencias): node test/smoke.js
 const { spawn, spawnSync } = require('child_process');
-const fs = require('fs'), os = require('os'), path = require('path'), vm = require('vm');
-const root = path.join(__dirname, '..'), port = 4590 + Math.floor(Math.random() * 300), base = 'http://127.0.0.1:' + port;
+const fs = require('fs'), os = require('os'), path = require('path'), vm = require('vm'), http = require('http');
+const root = path.join(__dirname, '..'), port = 4590 + Math.floor(Math.random() * 200), apiPort = port + 700, base = 'http://127.0.0.1:' + port;
 let failed = 0;
 const ok = (c, m) => { if (!c) { failed++; console.error('FAIL', m); } else console.log('ok  ', m); };
 const get = (p, o) => fetch(base + p, o);
 
 (async () => {
-  const srv = spawn(process.execPath, ['server.js'], { cwd: root, env: { ...process.env, PORT: String(port), CATALOG_API_URL: '' }, stdio: 'ignore' });
+  const fakeApi = http.createServer((req,res)=>{ if(req.url==='/health'){res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({ok:true}));return} if(req.url==='/v1/inquiries'&&req.method==='POST'){let body='';req.on('data',c=>body+=c);req.on('end',()=>{let j={};try{j=JSON.parse(body)}catch{};res.writeHead(j.kind&&j.name&&j.contact?201:400,{'content-type':'application/json'});res.end(JSON.stringify(j.kind&&j.name&&j.contact?{ok:true,inquiry:{id:77,status:'new'}}:{error:'invalid'}))});return} if(req.url.startsWith('/v1/products')){res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({data:[]}));return} res.writeHead(404);res.end() }); await new Promise(resolve=>fakeApi.listen(apiPort,'127.0.0.1',resolve));
+  const srv = spawn(process.execPath, ['server.js'], { cwd: root, env: { ...process.env, PORT: String(port), CATALOG_API_URL: 'http://127.0.0.1:'+apiPort }, stdio: 'ignore' });
   try {
     for (let i = 0; i < 40; i++) { try { await get('/health'); break; } catch { await new Promise(r => setTimeout(r, 100)); } }
     const home = await get('/');
@@ -47,14 +48,17 @@ const get = (p, o) => fetch(base + p, o);
     const et = home.headers.get('etag');
     ok((await get('/', { headers: { 'if-none-match': et } })).status === 304, 'ETag → 304');
 
-    // API sin configurar, método no permitido y path traversal
-    ok((await get('/ready')).status === 503, '/ready sin catálogo configurado → 503');
-    ok((await get('/api/v1/products')).status === 503, '/api sin CATALOG_API_URL → 503');
+    // Readiness y proxy de intención pública
+    ok((await get('/ready')).status === 200, '/ready con catálogo saludable → 200');
+    const inquiry = await get('/api/v1/inquiries', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({kind:'supplier',name:'Proveedor Demo',contact:'demo@example.com',message:'Catálogo de prueba'}) });
+    const inquiryBody = await inquiry.json();
+    ok(inquiry.status === 201 && inquiryBody.inquiry?.id === 77, 'POST /api/v1/inquiries → proxy funcional');
+    ok((await get('/api/v1/products')).status === 200, 'GET /api/v1/products → proxy funcional');
     ok((await get('/', { method: 'POST' })).status === 405, 'POST → 405');
     const trav = await (await get('/assets/..%2fserver.js')).text();
     ok(!trav.includes('createServer'), 'path traversal no expone server.js');
     ok((await get('/ruta/inexistente')).status === 200, 'SPA fallback para rutas desconocidas');
-  } finally { srv.kill(); }
+  } finally { srv.kill(); await new Promise(resolve=>fakeApi.close(resolve)); }
   if (failed) { console.error(failed + ' fallo(s)'); process.exit(1); }
   console.log('Todo correcto');
 })();
