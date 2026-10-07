@@ -806,45 +806,95 @@ export async function handleFulfillment(
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
     let body: any;
     try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
+
     const fulfillmentId = Number(attemptRoute[1]);
-    const status = clean(body?.status, 24).toUpperCase();
+    const attemptStatus = clean(body?.status, 24).toUpperCase();
     const reason = clean(body?.reason, 500) || null;
     const actor = clean(body?.actor, 120) || "internal";
-    if (!["SUCCESS", "FAILED", "REJECTED"].includes(status)) return json({ error: "invalid_attempt_status" }, 400);
+    const collectorReference = clean(body?.collectorReference, 160) || null;
+    const codCollected = body?.codCollected === true;
+    let proof: any = {};
+    try { proof = normalizeProof(body?.proof); } catch { return json({ error: "proof_too_large" }, 413); }
 
-    const rows = await db`SELECT id FROM fulfillments WHERE id = ${fulfillmentId} LIMIT 1`;
-    if (!rows.length) return json({ error: "not_found" }, 404);
+    if (!["SUCCESS", "FAILED", "REJECTED"].includes(attemptStatus)) {
+      return json({ error: "invalid_attempt_status" }, 400);
+    }
 
-    const inserted = await db.begin(async (tx: DB) => {
-      const lock = await tx`
-        SELECT id
+    const outcome: any = await db.begin(async (tx: DB) => {
+      const currentRows = await tx`
+        SELECT id, status
         FROM fulfillments
         WHERE id = ${fulfillmentId}
         FOR UPDATE`;
-      if (!lock.length) throw new Error("not_found");
+      if (!currentRows.length) return { error: "not_found", status: 404 };
+      if (currentRows[0].status !== "OUT_FOR_DELIVERY") {
+        return {
+          error: "attempt_not_allowed",
+          status: 409,
+          fulfillmentStatus: currentRows[0].status
+        };
+      }
+
       const seq = await tx`
         SELECT COALESCE(MAX(attempt_number), 0)::int + 1 AS next
         FROM delivery_attempts
         WHERE fulfillment_id = ${fulfillmentId}`;
       const attemptNumber = Number(seq[0]?.next || 1);
-      const result = await tx`
-        INSERT INTO delivery_attempts(
-          fulfillment_id, attempt_number, status, reason, actor
-        )
-        VALUES(${fulfillmentId}, ${attemptNumber}, ${status}, ${reason}, ${actor})
-        RETURNING id, attempt_number, status, reason, occurred_at`;
+
       await tx`
-        INSERT INTO fulfillment_tracking_events(
-          fulfillment_id, event_type, status, description
+        INSERT INTO delivery_attempts(
+          fulfillment_id, attempt_number, status, reason, proof, actor
         )
         VALUES(
-          ${fulfillmentId}, 'DELIVERY_ATTEMPT', ${status},
-          ${reason || "Delivery attempt " + attemptNumber}
+          ${fulfillmentId}, ${attemptNumber}, ${attemptStatus}, ${reason},
+          ${JSON.stringify(proof)}::jsonb, ${actor}
         )`;
-      return result[0];
+
+      const target = attemptStatus === "SUCCESS" ? "DELIVERED" : "FAILED";
+      const transition: any = await transitionFulfillmentInTx(
+        tx,
+        fulfillmentId,
+        target,
+        actor,
+        reason || ("delivery_attempt:" + attemptStatus),
+        proof
+      );
+      if (transition.error) return transition;
+
+      if (attemptStatus === "SUCCESS" && codCollected) {
+        const collections = await tx`
+          SELECT id, status, expected_amount_minor
+          FROM cod_collections
+          WHERE fulfillment_id = ${fulfillmentId}
+          FOR UPDATE`;
+        if (collections.length && collections[0].status === "PENDING") {
+          const collectionId = Number(collections[0].id);
+          await tx`
+            UPDATE cod_collections
+            SET status = 'COLLECTED',
+                collected_amount_minor = expected_amount_minor,
+                collector_reference = ${collectorReference},
+                collected_at = NOW(),
+                updated_at = NOW()
+            WHERE id = ${collectionId}`;
+          await tx`
+            INSERT INTO cod_collection_history(
+              cod_collection_id, from_status, to_status, actor, reason
+            )
+            VALUES(
+              ${collectionId}, 'PENDING', 'COLLECTED', ${actor}, 'collected_at_delivery'
+            )`;
+        }
+      }
+
+      return { ok: true, attemptNumber };
     });
 
-    return json({ attempt: inserted }, 201);
+    if (outcome.error) return json(outcome, outcome.status || 409);
+    return json({
+      fulfillment: await loadFulfillment(db, fulfillmentId),
+      attemptNumber: outcome.attemptNumber
+    }, 201);
   }
 
   const eventRoute = url.pathname.match(/^\/v1\/internal\/fulfillments\/(\d+)\/tracking-events$/);
