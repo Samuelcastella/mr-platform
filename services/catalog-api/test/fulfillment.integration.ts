@@ -226,7 +226,18 @@ const attempt = await api("/v1/internal/fulfillments/" + deliveryFulfillment.id 
   headers: { "content-type": "application/json", "x-internal-key": internalKey },
   body: JSON.stringify({ status: "FAILED", reason: "Cliente no disponible", actor: "courier-ci" })
 });
-ok(attempt.response.status === 201 && Number(attempt.body.attempt?.attempt_number) === 1, "intento fallido queda auditado");
+ok(
+  attempt.response.status === 201 &&
+  attempt.body.fulfillment?.status === "FAILED" &&
+  Number(attempt.body.fulfillment?.attempts?.[0]?.attemptNumber) === 1,
+  "intento fallido queda auditado y mueve fulfillment a FAILED"
+);
+
+const retryDelivery = await transitionFulfillment(deliveryFulfillment.id, "OUT_FOR_DELIVERY");
+ok(
+  retryDelivery.response.status === 200 && retryDelivery.body.fulfillment?.status === "OUT_FOR_DELIVERY",
+  "fulfillment fallido puede reintentarse"
+);
 
 const delivered = await transitionFulfillment(deliveryFulfillment.id, "DELIVERED", {
   proof: { receivedBy: "Cliente CI", note: "Entrega CI" }
