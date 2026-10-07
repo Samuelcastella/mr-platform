@@ -713,11 +713,16 @@ export async function handleFulfillment(
     if (!rows.length) return json({ error: "not_found" }, 404);
 
     const inserted = await db.begin(async (tx: DB) => {
+      const lock = await tx`
+        SELECT id
+        FROM fulfillments
+        WHERE id = ${fulfillmentId}
+        FOR UPDATE`;
+      if (!lock.length) throw new Error("not_found");
       const seq = await tx`
         SELECT COALESCE(MAX(attempt_number), 0)::int + 1 AS next
         FROM delivery_attempts
-        WHERE fulfillment_id = ${fulfillmentId}
-        FOR UPDATE`;
+        WHERE fulfillment_id = ${fulfillmentId}`;
       const attemptNumber = Number(seq[0]?.next || 1);
       const result = await tx`
         INSERT INTO delivery_attempts(
