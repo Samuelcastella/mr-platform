@@ -83,6 +83,35 @@ function normalizeProof(raw: any) {
   return raw;
 }
 
+function trackingReference() {
+  return "MRF-" + Date.now().toString(36).toUpperCase() + "-" + crypto.randomUUID().slice(0, 6).toUpperCase();
+}
+
+async function ensureCodCollection(tx: DB, fulfillmentId: number, orderId: number) {
+  const payments = await tx$
+    SELECT id, amount_minor, currency
+    FROM payments
+    WHERE order_id = ${orderId}
+      AND method = 'CASH_ON_DELIVERY'
+    LIMIT 1`;
+  if (!payments.length) return null;
+
+  const payment = payments[0];
+  const rows = await tx$
+    INSERT INTO cod_collections(
+      fulfillment_id, payment_id, status, expected_amount_minor, currency
+    )
+    VALUES(
+      ${fulfillmentId}, ${Number(payment.id)}, 'PENDING',
+      ${Number(payment.amount_minor)}, ${payment.currency}
+    )
+    ON CONFLICT (fulfillment_id)
+    DO UPDATE SET updated_at = NOW()
+    RETURNING id`;
+
+  return Number(rows[0].id);
+}
+
 async function loadFulfillment(db: DB, id: number) {
   const rows = await db`
     SELECT
