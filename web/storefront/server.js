@@ -63,9 +63,26 @@ http.createServer(async (req, res) => {
   }
   if (p.startsWith('/api/')) {
     const h = { ...SEC, 'content-type': 'application/json', 'cache-control': 'no-store' };
-    if (!api || req.method !== 'GET') { res.writeHead(503, h); res.end('{"error":"catalog unavailable"}'); return; }
+    if (!api) { res.writeHead(503, h); res.end('{"error":"catalog unavailable"}'); return; }
+    const upstreamPath = p.slice(4);
+    const canRead = req.method === 'GET';
+    const canSubmitInquiry = req.method === 'POST' && upstreamPath === '/v1/inquiries';
+    if (!canRead && !canSubmitInquiry) { res.writeHead(405, { ...h, allow: 'GET, POST' }); res.end('{"error":"method_not_allowed"}'); return; }
     try {
-      const r = await fetch(api + p.slice(4) + new URL(req.url, 'http://x').search, { signal: AbortSignal.timeout(5000) });
+      const headers = {};
+      let body;
+      if (canSubmitInquiry) {
+        headers['content-type'] = 'application/json';
+        const chunks = [];
+        let total = 0;
+        for await (const chunk of req) {
+          total += chunk.length;
+          if (total > 16384) { res.writeHead(413, h); res.end('{"error":"payload_too_large"}'); return; }
+          chunks.push(chunk);
+        }
+        body = Buffer.concat(chunks);
+      }
+      const r = await fetch(api + upstreamPath + new URL(req.url, 'http://x').search, { method: req.method, headers, body, signal: AbortSignal.timeout(5000) });
       res.writeHead(r.status, { ...h, 'content-type': r.headers.get('content-type') || 'application/json' });
       res.end(Buffer.from(await r.arrayBuffer()));
     } catch { res.writeHead(502, h); res.end('{"error":"catalog unreachable"}'); }
