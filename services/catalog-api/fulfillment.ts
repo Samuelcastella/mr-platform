@@ -83,6 +83,20 @@ function normalizeProof(raw: any) {
   return raw;
 }
 
+function parseJsonObject(raw: any) {
+  if (!raw) return {};
+  if (typeof raw === "object" && !Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 function trackingReference() {
   return "MRF-" + Date.now().toString(36).toUpperCase() + "-" + crypto.randomUUID().slice(0, 6).toUpperCase();
 }
@@ -167,7 +181,7 @@ async function loadFulfillment(db: DB, id: number) {
       etaMinDays: row.eta_min_days == null ? null : Number(row.eta_min_days),
       etaMaxDays: row.eta_max_days == null ? null : Number(row.eta_max_days)
     },
-    proofOfDelivery: row.proof_of_delivery || {},
+    proofOfDelivery: parseJsonObject(row.proof_of_delivery),
     codCollection: row.cod_id ? {
       id: Number(row.cod_id),
       status: row.cod_status,
