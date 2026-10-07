@@ -488,3 +488,21 @@ It does not supersede implementation-specific specs.
 ---
 
 **Core rule:** build the current operating phase while preserving the architecture needed for the long-term vision.
+
+## 21. Implementation issue map
+
+The first execution backlog has been created in GitHub:
+
+| Issue | Workstream | Strategic phase |
+|---|---|---|
+| #13 | Complete authoritative storefront catalog integration | Phase 1 |
+| #14 | Server-side orders and order state machine | Phase 2 |
+| #15 | Inventory reservations and idempotency | Phase 2 |
+| #16 | Server-side checkout + cash / bank transfer / COD | Phase 3 |
+| #17 | Fulfillment, local delivery and logistical COD | Phase 4 |
+| #18 | Validate Honduras fiscal rules before CAI/ISV implementation | Phase 5 |
+
+Issues #5 (domain registration) and #8 (future mobile app) remain separate external/future work and do not block the Commerce Core sequence.
+
+This mapping is the initial execution ledger. New work should be linked back to a strategic gap or an approved SPEC before implementation.
+
