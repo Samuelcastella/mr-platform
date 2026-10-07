@@ -127,5 +127,5 @@ export async function handleInternal(
     return json({ inquiry: result.inquiry });
   }
 
-  return json({ error: "not_found" }, 404);
+  return null;
 }
