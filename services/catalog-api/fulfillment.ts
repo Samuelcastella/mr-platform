@@ -1,4 +1,5 @@
 import { transitionOrderInTx } from "./orders";
+import { auditActor, authorizeInternal, writeAuditEvent, type InternalActor } from "./auth";
 
 type DB = any;
 
@@ -59,12 +60,6 @@ const ALLOWED: Record<string, Set<string>> = {
   RETURNED: new Set(),
   CANCELLED: new Set()
 };
-
-function authorized(req: Request) {
-  const expected = Bun.env.INTERNAL_API_TOKEN || "";
-  const supplied = req.headers.get("x-internal-key") || "";
-  return Boolean(expected) && supplied === expected;
-}
 
 function requestHash(value: unknown) {
   return new Bun.CryptoHasher("sha256").update(JSON.stringify(value)).digest("hex");
@@ -698,7 +693,9 @@ async function completeReturnInspection(
   req: Request,
   id: number,
   db: DB,
-  clean: (v: unknown, max: number) => string
+  clean: (v: unknown, max: number) => string,
+  actor: InternalActor,
+  locationId: number
 ) {
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
@@ -753,15 +750,29 @@ async function completeReturnInspection(
       }
     }
 
+    const actorLabel =
+      actor.type === "USER" ? "staff:" + actor.userId : "service:" + actor.service;
+
     await tx`
       UPDATE return_inspections
       SET status = 'COMPLETED',
           disposition = ${disposition},
           notes = ${notes},
-          inspected_by = 'internal',
+          inspected_by = ${actorLabel},
           inspected_at = NOW(),
           updated_at = NOW()
       WHERE id = ${id}`;
+
+    await writeAuditEvent(tx, {
+      ...auditActor(actor),
+      action: "return_inspection.completed",
+      resourceType: "ReturnInspection",
+      resourceId: id,
+      locationId,
+      outcome: "SUCCESS",
+      reason: notes,
+      metadata: { disposition }
+    });
 
     return { ok: true };
   });
