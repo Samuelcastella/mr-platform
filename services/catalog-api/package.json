@@ -1,1 +1,9 @@
-{"name":"mr-catalog-api","version":"0.1.0","private":true,"scripts":{"start":"bun run index.ts"}}
+{
+  "name": "mr-catalog-api",
+  "version": "0.2.0",
+  "private": true,
+  "packageManager": "bun@1.2.0",
+  "scripts": {
+    "start": "bun run index.ts"
+  }
+}
