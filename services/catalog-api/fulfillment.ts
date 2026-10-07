@@ -88,7 +88,7 @@ function trackingReference() {
 }
 
 async function ensureCodCollection(tx: DB, fulfillmentId: number, orderId: number) {
-  const payments = await tx$
+  const payments = await tx`
     SELECT id, amount_minor, currency
     FROM payments
     WHERE order_id = ${orderId}
@@ -97,7 +97,7 @@ async function ensureCodCollection(tx: DB, fulfillmentId: number, orderId: numbe
   if (!payments.length) return null;
 
   const payment = payments[0];
-  const rows = await tx$
+  const rows = await tx`
     INSERT INTO cod_collections(
       fulfillment_id, payment_id, status, expected_amount_minor, currency
     )
@@ -309,7 +309,7 @@ export async function ensureFulfillmentSchema(db: DB) {
     )`;
 
 
-  await db$
+  await db`
     CREATE TABLE IF NOT EXISTS cod_collection_history (
       id BIGSERIAL PRIMARY KEY,
       cod_collection_id BIGINT NOT NULL REFERENCES cod_collections(id) ON DELETE RESTRICT,
@@ -320,7 +320,7 @@ export async function ensureFulfillmentSchema(db: DB) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
 
-  await db$
+  await db`
     CREATE TABLE IF NOT EXISTS return_inspections (
       id BIGSERIAL PRIMARY KEY,
       fulfillment_id BIGINT UNIQUE NOT NULL REFERENCES fulfillments(id) ON DELETE RESTRICT,
