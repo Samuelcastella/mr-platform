@@ -65,20 +65,24 @@ http.createServer(async (req, res) => {
     const h = { ...SEC, 'content-type': 'application/json', 'cache-control': 'no-store' };
     if (!api) { res.writeHead(503, h); res.end('{"error":"catalog unavailable"}'); return; }
     const upstreamPath = p.slice(4);
+    if (upstreamPath.startsWith('/v1/internal/')) { res.writeHead(404, h); res.end('{"error":"not_found"}'); return; }
     const canRead = req.method === 'GET';
     const canSubmitInquiry = req.method === 'POST' && upstreamPath === '/v1/inquiries';
     const canSubmitEvent = req.method === 'POST' && upstreamPath === '/v1/events';
-    if (!canRead && !canSubmitInquiry && !canSubmitEvent) { res.writeHead(405, { ...h, allow: 'GET, POST' }); res.end('{"error":"method_not_allowed"}'); return; }
+    const canSubmitOrder = req.method === 'POST' && (upstreamPath === '/v1/orders' || /^\/v1\/orders\/\d+\/(confirm|cancel)$/.test(upstreamPath));
+    if (!canRead && !canSubmitInquiry && !canSubmitEvent && !canSubmitOrder) { res.writeHead(405, { ...h, allow: 'GET, POST' }); res.end('{"error":"method_not_allowed"}'); return; }
     try {
       const headers = {};
       let body;
-      if (canSubmitInquiry || canSubmitEvent) {
+      if (canSubmitInquiry || canSubmitEvent || canSubmitOrder) {
         headers['content-type'] = 'application/json';
+        if (canSubmitOrder && req.headers['idempotency-key']) headers['idempotency-key'] = String(req.headers['idempotency-key']).slice(0, 128);
         const chunks = [];
         let total = 0;
+        const limit = canSubmitOrder ? 32768 : 16384;
         for await (const chunk of req) {
           total += chunk.length;
-          if (total > 16384) { res.writeHead(413, h); res.end('{"error":"payload_too_large"}'); return; }
+          if (total > limit) { res.writeHead(413, h); res.end('{"error":"payload_too_large"}'); return; }
           chunks.push(chunk);
         }
         body = Buffer.concat(chunks);
