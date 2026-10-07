@@ -27,6 +27,18 @@ function load(file, ext) {
   return e;
 }
 
+async function catalogReady() {
+  if (!api) return { ok: false, status: 503, error: 'CATALOG_API_URL not configured' };
+  try {
+    const r = await fetch(api + '/health', { signal: AbortSignal.timeout(3000) });
+    if (!r.ok) return { ok: false, status: 502, error: 'catalog health returned ' + r.status };
+    const body = await r.json().catch(() => ({}));
+    return { ok: body.ok !== false, status: body.ok === false ? 502 : 200 };
+  } catch {
+    return { ok: false, status: 502, error: 'catalog unreachable' };
+  }
+}
+
 function send(req, res, e, cc) {
   const ae = String(req.headers['accept-encoding'] || '');
   const headers = { ...SEC, 'content-type': e.type, 'cache-control': cc, etag: e.etag, vary: 'Accept-Encoding' };
@@ -43,6 +55,12 @@ http.createServer(async (req, res) => {
   let p;
   try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400, SEC); res.end('bad request'); return; }
   if (p === '/health') { res.writeHead(200, { ...SEC, 'cache-control': 'no-store' }); res.end('ok'); return; }
+  if (p === '/ready') {
+    const ready = await catalogReady();
+    res.writeHead(ready.status, { ...SEC, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ ok: ready.ok, service: 'MR עדולם storefront', catalog: ready.ok ? 'connected' : 'unavailable' }));
+    return;
+  }
   if (p.startsWith('/api/')) {
     const h = { ...SEC, 'content-type': 'application/json', 'cache-control': 'no-store' };
     if (!api || req.method !== 'GET') { res.writeHead(503, h); res.end('{"error":"catalog unavailable"}'); return; }
