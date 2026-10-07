@@ -1,3 +1,5 @@
+import { auditActor, authorizeInternal, writeAuditEvent } from "./auth";
+
 type DB = any;
 
 const json = (body: unknown, status = 200) =>
@@ -43,12 +45,6 @@ export const OfflinePaymentProvider: PaymentProvider = {
     };
   }
 };
-
-function authorized(req: Request) {
-  const expected = Bun.env.INTERNAL_API_TOKEN || "";
-  const supplied = req.headers.get("x-internal-key") || "";
-  return Boolean(expected) && supplied === expected;
-}
 
 function requestHash(value: unknown) {
   return new Bun.CryptoHasher("sha256").update(JSON.stringify(value)).digest("hex");
@@ -369,7 +365,9 @@ export async function handleCheckout(req: Request, url: URL, db: DB, clean: (v: 
   }
 
   if (url.pathname === "/v1/internal/payments" && req.method === "GET") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const auth = await authorizeInternal(req, db, "payments.read");
+    if (!auth.ok) return auth.response;
+
     const status = clean(url.searchParams.get("status"), 32).toUpperCase();
     const rows = await db`
       SELECT p.id, p.order_id, o.order_number, p.provider, p.method, p.status,
@@ -384,30 +382,55 @@ export async function handleCheckout(req: Request, url: URL, db: DB, clean: (v: 
 
   const internalPayment = url.pathname.match(/^\/v1\/internal\/payments\/(\d+)$/);
   if (internalPayment && req.method === "GET") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
     const id = Number(internalPayment[1]);
     const rows = await db`
-      SELECT p.id, p.order_id, o.order_number, p.checkout_session_id, p.provider,
+      SELECT p.id, p.order_id, o.order_number, o.location_id, p.checkout_session_id, p.provider,
              p.method, p.status, p.amount_minor, p.currency, p.external_reference,
              p.evidence, p.created_at, p.updated_at
       FROM payments p
       JOIN orders o ON o.id = p.order_id
       WHERE p.id = ${id}
       LIMIT 1`;
-    return rows.length ? json({ payment: rows[0] }) : json({ error: "not_found" }, 404);
+    if (!rows.length) return json({ error: "not_found" }, 404);
+
+    const auth = await authorizeInternal(req, db, "payments.read", {
+      locationId: Number(rows[0].location_id)
+    });
+    if (!auth.ok) return auth.response;
+
+    return json({ payment: rows[0] });
   }
 
   const internalStatus = url.pathname.match(/^\/v1\/internal\/payments\/(\d+)\/status$/);
   if (internalStatus && req.method === "PATCH") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const id = Number(internalStatus[1]);
+    const locationRows = await db`
+      SELECT o.location_id
+      FROM payments p
+      JOIN orders o ON o.id = p.order_id
+      WHERE p.id = ${id}
+      LIMIT 1`;
+    if (!locationRows.length) return json({ error: "not_found" }, 404);
+
+    const auth = await authorizeInternal(req, db, "payments.confirm_manual", {
+      locationId: Number(locationRows[0].location_id),
+      mutation: true
+    });
+    if (!auth.ok) return auth.response;
+
     let body: any;
-    try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "invalid_json" }, 400);
+    }
 
     const target = clean(body?.status, 32).toUpperCase();
     const reason = clean(body?.reason, 240) || null;
-    if (!PAYMENT_STATUSES.has(target) || !MANUAL_TARGETS.has(target)) return json({ error: "invalid_status" }, 400);
+    if (!PAYMENT_STATUSES.has(target) || !MANUAL_TARGETS.has(target)) {
+      return json({ error: "invalid_status" }, 400);
+    }
 
-    const id = Number(internalStatus[1]);
     const result: any = await db.begin(async (tx: DB) => {
       const rows = await tx`
         SELECT id, status
@@ -415,17 +438,33 @@ export async function handleCheckout(req: Request, url: URL, db: DB, clean: (v: 
         WHERE id = ${id}
         FOR UPDATE`;
       if (!rows.length) return { error: "not_found", status: 404 };
+
       const current = rows[0].status;
-      if (current !== "PENDING") return { error: "invalid_transition", status: 409, current, target };
+      if (current !== "PENDING") {
+        return { error: "invalid_transition", status: 409, current, target };
+      }
 
       await tx`
         UPDATE payments
         SET status = ${target}, updated_at = NOW()
         WHERE id = ${id}`;
 
+      const actorLabel =
+        auth.actor.type === "USER" ? "staff:" + auth.actor.userId : "service:" + auth.actor.service;
       await tx`
         INSERT INTO payment_status_history(payment_id, from_status, to_status, actor, reason)
-        VALUES(${id}, ${current}, ${target}, 'internal', ${reason})`;
+        VALUES(${id}, ${current}, ${target}, ${actorLabel}, ${reason})`;
+
+      await writeAuditEvent(tx, {
+        ...auditActor(auth.actor),
+        action: "payment.status_changed",
+        resourceType: "Payment",
+        resourceId: id,
+        locationId: Number(locationRows[0].location_id),
+        outcome: "SUCCESS",
+        reason,
+        metadata: { fromStatus: current, toStatus: target }
+      });
 
       return { ok: true };
     });
