@@ -2,6 +2,7 @@ import { SQL } from "bun";
 import { ensureOrdersSchema, handleOrders } from "./orders";
 import { ensureCheckoutSchema, handleCheckout } from "./checkout";
 import { ensureFulfillmentSchema, handleFulfillment } from "./fulfillment";
+import { ensureAuthSchema, handleAuth } from "./auth";
 
 const db = new SQL({
   hostname: Bun.env.PGHOST!,
@@ -130,6 +131,7 @@ ON public_events(event_name, created_at DESC)`;
 await ensureOrdersSchema(db);
 await ensureCheckoutSchema(db);
 await ensureFulfillmentSchema(db);
+await ensureAuthSchema(db);
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, {
@@ -154,6 +156,9 @@ Bun.serve({
       const result = await db`SELECT NOW() AS db_time`;
       return json({ ok: true, service: "MR עדולם Catalog API", database: "connected", dbTime: result[0].db_time });
     }
+
+    const authResponse = await handleAuth(req, url, db);
+    if (authResponse) return authResponse;
 
     if (url.pathname === "/v1/products" && req.method === "GET") {
       const status = url.searchParams.get("status");
@@ -313,8 +318,8 @@ Bun.serve({
 
     return json({
       service: "MR עדולם Catalog API",
-      version: "0.6.0",
-      endpoints: ["/health", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/checkouts", "/v1/checkouts/:id", "/v1/fulfillment/options", "/v1/fulfillments", "/v1/fulfillments/:id", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
+      version: "0.7.0",
+      endpoints: ["/health", "/v1/auth/login", "/v1/auth/logout", "/v1/auth/me", "/v1/security/bootstrap", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/checkouts", "/v1/checkouts/:id", "/v1/fulfillment/options", "/v1/fulfillments", "/v1/fulfillments/:id", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
     });
   }
 });
