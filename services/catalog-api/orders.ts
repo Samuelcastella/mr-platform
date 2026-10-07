@@ -1,3 +1,5 @@
+import { auditActor, authorizeInternal, writeAuditEvent } from "./auth";
+
 type DB = any;
 
 const json = (body: unknown, status = 200) =>
@@ -32,12 +34,6 @@ const ALLOWED: Record<string, Set<string>> = {
   COMPLETED: new Set(),
   CANCELLED: new Set()
 };
-
-function authorized(req: Request) {
-  const expected = Bun.env.INTERNAL_API_TOKEN || "";
-  const supplied = req.headers.get("x-internal-key") || "";
-  return Boolean(expected) && supplied === expected;
-}
 
 function orderNumber() {
   return "MR-" + Date.now().toString(36).toUpperCase() + "-" + crypto.randomUUID().slice(0, 6).toUpperCase();
@@ -581,7 +577,9 @@ export async function handleOrders(req: Request, url: URL, db: DB, clean: (v: un
   }
 
   if (url.pathname === "/v1/internal/orders" && req.method === "GET") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const auth = await authorizeInternal(req, db, "orders.read");
+    if (!auth.ok) return auth.response;
+
     const status = clean(url.searchParams.get("status"), 32).toUpperCase();
     const rows = await db`
       SELECT id, order_number, channel, status, currency, grand_total_minor, location_id,
@@ -595,26 +593,84 @@ export async function handleOrders(req: Request, url: URL, db: DB, clean: (v: un
 
   const internalOrder = url.pathname.match(/^\/v1\/internal\/orders\/(\d+)$/);
   if (internalOrder && req.method === "GET") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
-    const order = await loadOrder(db, Number(internalOrder[1]));
-    return order ? json({ order }) : json({ error: "not_found" }, 404);
+    const id = Number(internalOrder[1]);
+    const order = await loadOrder(db, id);
+    if (!order) return json({ error: "not_found" }, 404);
+
+    const auth = await authorizeInternal(req, db, "orders.read", {
+      locationId: order.locationId
+    });
+    if (!auth.ok) return auth.response;
+
+    return json({ order });
   }
 
   const internalStatus = url.pathname.match(/^\/v1\/internal\/orders\/(\d+)\/status$/);
   if (internalStatus && req.method === "PATCH") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const id = Number(internalStatus[1]);
+    const locationRows = await db`
+      SELECT location_id
+      FROM orders
+      WHERE id = ${id}
+      LIMIT 1`;
+    if (!locationRows.length) return json({ error: "not_found" }, 404);
+
     let body: any;
-    try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "invalid_json" }, 400);
+    }
+
     const target = clean(body?.status, 32).toUpperCase();
     const reason = clean(body?.reason, 240) || null;
-    const result: any = await transitionOrder(db, Number(internalStatus[1]), target, "internal", reason);
+    const permission = target === "CANCELLED" ? "orders.cancel" : "orders.confirm";
+    const auth = await authorizeInternal(req, db, permission, {
+      locationId: Number(locationRows[0].location_id),
+      mutation: true
+    });
+    if (!auth.ok) return auth.response;
+
+    const actorLabel =
+      auth.actor.type === "USER" ? "staff:" + auth.actor.userId : "service:" + auth.actor.service;
+
+    const result: any = await db.begin(async (tx: DB) => {
+      const transitioned: any = await transitionOrderInTx(tx, id, target, actorLabel, reason);
+      if (transitioned.error) return transitioned;
+
+      await writeAuditEvent(tx, {
+        ...auditActor(auth.actor),
+        action: "order.status_changed",
+        resourceType: "Order",
+        resourceId: id,
+        locationId: Number(locationRows[0].location_id),
+        outcome: "SUCCESS",
+        reason,
+        metadata: {
+          fromStatus: transitioned.current,
+          toStatus: transitioned.target
+        }
+      });
+
+      return transitioned;
+    });
+
     if (result.error) return json(result, result.status || 409);
-    return json({ order: await loadOrder(db, Number(internalStatus[1])) });
+    return json({ order: await loadOrder(db, id) });
   }
 
   if (url.pathname === "/v1/internal/reservations/expire" && req.method === "POST") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const auth = await authorizeInternal(req, db, "orders.cancel", { mutation: true });
+    if (!auth.ok) return auth.response;
+
     const expired = await expirePendingReservations(db);
+    await writeAuditEvent(db, {
+      ...auditActor(auth.actor),
+      action: "reservations.expire",
+      resourceType: "InventoryReservation",
+      outcome: "SUCCESS",
+      metadata: { expiredCount: expired }
+    });
     return json({ expired });
   }
 
