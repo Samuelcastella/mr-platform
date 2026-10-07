@@ -467,6 +467,7 @@ No rewrite is justified merely because a later architecture is more elegant. Rep
 This artifact acts as the strategic bridge between:
 
 - `docs/research/Resumen_Ejecutivo.md`
+- `docs/research/HONDURAS_RETAIL_OPERATING_PATTERNS_2026.md`
 - `docs/architecture/MR_עדולם_Blueprint_v2.0.md`
 - `docs/specs/M01_CATALOG_INVENTORY_V1.md`
 - future Order / Payment / Fulfillment specs
