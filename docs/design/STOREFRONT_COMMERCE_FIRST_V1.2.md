@@ -4,9 +4,9 @@ Status: IMPLEMENTED
 Date: 2026-10-07  
 Surface: Public storefront
 
-## Decision
+## Product decision
 
-The public homepage is optimized primarily for shopping and conversion. The broader business architecture remains visible, but it has been moved into a dedicated "Nuestra marca" route so customers are not forced to read internal operational concepts before shopping.
+The public homepage is optimized first for shopping and conversion. The broader business architecture remains available, but it now lives primarily under the dedicated `#/brand` route so customers are not required to read internal operational concepts before browsing products.
 
 ## Homepage hierarchy
 
@@ -18,40 +18,49 @@ The public homepage is optimized primarily for shopping and conversion. The broa
 6. Featured products.
 7. Marketplace section.
 8. Customer benefits.
-9. Brief brand-growth teaser.
+9. Short brand-growth teaser.
 
-## Separate brand page
+## Dedicated brand page
 
-The route `#/brand` contains:
+The `#/brand` route contains:
 - evolution from third-party products to private label and owned products;
-- omnichannel ecosystem;
-- sourcing loop;
-- multip-country readiness;
-- Control Center concept;
-- growth roadmap.
+- physical store + web + future app + commerce core + marketplace;
+- sourcing loop: sell → measure → compare → buy → receive → learn;
+- Honduras-first, multi-country-ready operations;
+- private Control Center concept;
+- staged growth roadmap.
 
 ## Mobile
 
-A bottom mobile navigation now exposes:
+A bottom navigation exposes:
 - Home
 - Catalog
 - Brand
 - Account
 - Cart
 
+## Reliability
+
+- GitHub CI executes `npm test` for storefront smoke tests.
+- The inline JavaScript is syntax-checked in CI.
+- Storefront liveness is `/health`.
+- Storefront readiness is `/ready` and depends on Catalog API health.
+- Railway production health checks use `/ready`.
+- Railway deployment watch patterns are limited to runtime storefront files and assets; tests and docs no longer trigger production redeploys.
+
 ## Preserved behavior
 
-- existing catalog route;
+- catalog;
 - product detail;
 - cart;
 - checkout prototype;
-- account and order history prototype;
+- account;
+- order history prototype;
 - marketplace;
 - admin prototype;
-- catalog API synchronization;
-- 3D crown behavior;
-- Railway static server.
+- Catalog API synchronization;
+- 3D crown behavior.
 
 ## Next visual milestone
 
-Replace emoji/demo product artwork with real product photography and image records sourced from the catalog/media pipeline.
+Replace emoji/demo product artwork with real product photography backed by the product-media pipeline. Real photography should become the dominant merchandising surface while the current iconography remains only as a fallback.
