@@ -679,6 +679,84 @@ async function transitionFulfillment(
   }
 }
 
+
+async function completeReturnInspection(
+  req: Request,
+  id: number,
+  db: DB,
+  clean: (v: unknown, max: number) => string
+) {
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
+
+  const disposition = clean(body?.disposition, 40).toUpperCase();
+  const notes = clean(body?.notes, 1000) || null;
+  if (!["RESTOCK", "DAMAGED", "QUARANTINE", "RETURN_TO_SUPPLIER"].includes(disposition)) {
+    return json({ error: "invalid_disposition" }, 400);
+  }
+
+  const result: any = await db.begin(async (tx: DB) => {
+    const rows = await tx`
+      SELECT i.id, i.order_id, i.status, f.status AS fulfillment_status
+      FROM return_inspections i
+      JOIN fulfillments f ON f.id = i.fulfillment_id
+      WHERE i.id = ${id}
+      FOR UPDATE OF i`;
+    if (!rows.length) return { error: "not_found", status: 404 };
+    if (rows[0].status !== "PENDING") return { error: "inspection_already_completed", status: 409 };
+    if (rows[0].fulfillment_status !== "RETURNED") {
+      return { error: "parcel_not_returned", status: 409 };
+    }
+
+    if (disposition === "RESTOCK") {
+      const reservations = await tx`
+        SELECT variant_id, location_id, quantity
+        FROM inventory_reservations
+        WHERE order_id = ${Number(rows[0].order_id)}
+          AND status = 'CONSUMED'
+        ORDER BY variant_id
+        FOR UPDATE`;
+
+      for (const reservation of reservations) {
+        const variantId = Number(reservation.variant_id);
+        const locationId = Number(reservation.location_id);
+        const quantity = Number(reservation.quantity);
+
+        await tx`
+          UPDATE inventory
+          SET quantity = quantity + ${quantity}, updated_at = NOW()
+          WHERE variant_id = ${variantId}
+            AND location_id = ${locationId}`;
+
+        await tx`
+          INSERT INTO inventory_movements(
+            variant_id, location_id, movement_type, quantity, reference, notes
+          )
+          VALUES(
+            ${variantId}, ${locationId}, 'CUSTOMER_RETURN', ${quantity},
+            ${"return_inspection:" + id}, 'Returned parcel inspected and approved for restock'
+          )`;
+      }
+    }
+
+    await tx`
+      UPDATE return_inspections
+      SET status = 'COMPLETED',
+          disposition = ${disposition},
+          notes = ${notes},
+          inspected_by = 'internal',
+          inspected_at = NOW(),
+          updated_at = NOW()
+      WHERE id = ${id}`;
+
+    return { ok: true };
+  });
+
+  if (result.error) return json(result, result.status || 409);
+  const rows = await db`SELECT * FROM return_inspections WHERE id = ${id}`;
+  return json({ returnInspection: rows[0] });
+}
+
 export async function handleFulfillment(
   req: Request,
   url: URL,
