@@ -95,7 +95,17 @@ Bun.serve({
       return Response.json({ ok: true, service: "MR עדולם Catalog API", database: "connected", dbTime: result[0].db_time });
     }
     if (url.pathname === "/v1/products" && req.method === "GET") {
-      const rows = await db`SELECT id, name, slug, category, brand, status, created_at FROM products ORDER BY id DESC LIMIT 100`;
+      const status = url.searchParams.get("status");
+      const rows = await db`
+        SELECT p.id, p.name, p.slug, p.category, p.brand, p.status, p.created_at,
+               MIN(v.price) AS price, MIN(v.currency) AS currency,
+               COALESCE(SUM(i.quantity - i.reserved), 0)::int AS stock
+        FROM products p
+        LEFT JOIN product_variants v ON v.product_id = p.id AND v.active
+        LEFT JOIN inventory i ON i.variant_id = v.id
+        WHERE (${status}::text IS NULL OR p.status = ${status}::text)
+        GROUP BY p.id
+        ORDER BY p.id DESC LIMIT 100`;
       return Response.json({ data: rows });
     }
     return Response.json({ service: "MR עדולם Catalog API", version: "0.1.0", endpoints: ["/health", "/v1/products"] });
