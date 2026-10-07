@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+
 jobs:
   storefront:
     runs-on: ubuntu-latest
@@ -14,3 +15,17 @@ jobs:
       - name: Prueba de humo del storefront
         working-directory: web/storefront
         run: npm test
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Validar Catalog API
+        run: bun build services/catalog-api/index.ts --target=bun --outfile=/tmp/catalog-api.js
+      - name: Validar rutas internas
+        run: bun build services/catalog-api/internal-routes.ts --target=bun --outfile=/tmp/internal-routes.js
+      - name: Validar Control Center
+        run: bun build services/control-center/index.ts --target=bun --outfile=/tmp/control-center.js
