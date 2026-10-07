@@ -181,6 +181,19 @@ ok(internalTransfer.response.status === 200, "operador puede consultar evidencia
 ok(internalTransfer.body.payment?.external_reference === "BAC-CI-12345", "referencia bancaria queda preservada como evidencia");
 ok(internalTransfer.body.payment?.status === "PENDING", "evidencia no auto-confirma transferencia");
 
+const transferPaid = await api("/v1/internal/payments/" + transferCheckout.payment.id + "/status", {
+  method: "PATCH",
+  headers: {
+    "content-type": "application/json",
+    "x-internal-key": internalKey
+  },
+  body: JSON.stringify({ status: "PAID", reason: "transferencia_verificada_ci" })
+});
+ok(transferPaid.response.status === 200 && transferPaid.body.payment?.status === "PAID", "transferencia solo se confirma mediante operación autorizada");
+
+const transferOrderAfterPaid = await api("/v1/orders/" + transferOrder.id + "?token=" + encodeURIComponent(transferOrder.token));
+ok(transferOrderAfterPaid.body.order?.status === "CONFIRMED", "confirmar pago no acopla Payment con Order");
+
 const codOrderResp = await createOrder("ci-checkout-order-cod", codVariant);
 const codOrder = codOrderResp.body.order;
 const codCheckoutResp = await createCheckout("ci-checkout-cod-001", codOrder, "CASH_ON_DELIVERY");
