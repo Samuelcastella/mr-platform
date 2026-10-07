@@ -1,6 +1,6 @@
 # MR עדולם — Control Center Intent Queue v1
 
-Status: PROPOSED — implementation blocked by staff identity/access control  
+Status: IMPLEMENTED — private runtime deployed; staff login activation pending  
 Method: Spec-Driven Development (SDD)  
 Date: 2026-10-07
 
@@ -8,7 +8,7 @@ Date: 2026-10-07
 
 Turn public intent submissions into an operational queue for MR עדולם without exposing customer or supplier information on public endpoints.
 
-The public Intent Center is already implemented. This specification defines the private follow-up layer.
+The public Intent Center is implemented. The private follow-up runtime is now deployed as a separate Railway service named `control-center`, connected to PostgreSQL and kept without a public domain until staff login credentials are configured.
 
 ## Actors
 
@@ -116,6 +116,19 @@ Before implementation, staff identity must provide:
 - protected write operations.
 
 A browser-only password or a token embedded in storefront JavaScript is explicitly prohibited.
+
+## Current implementation
+
+- Separate `control-center` Railway service: deployed and healthy.
+- PostgreSQL-backed intent queue.
+- Signed HttpOnly session cookie infrastructure.
+- CSRF protection for state-changing forms.
+- Login rate limiting.
+- Filters by type/status/search.
+- Priority, assignment and internal notes fields.
+- Status-history audit table.
+- CTA funnel metrics from `public_events`.
+- Service is intentionally not public yet because `CONTROL_CENTER_PASSWORD` has not been configured.
 
 ## Dependencies
 
