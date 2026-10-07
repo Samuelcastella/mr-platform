@@ -988,28 +988,38 @@ export async function handleFulfillment(
     const locationText = clean(body?.locationText, 220) || null;
     if (!eventType || !status || !description) return json({ error: "tracking_event_required" }, 400);
 
-    try {
-      const rows = await db`
+    if (providerEventId) {
+      const inserted = await db`
         INSERT INTO fulfillment_tracking_events(
           fulfillment_id, event_type, status, description, provider_event_id, location_text
         )
         VALUES(
           ${fulfillmentId}, ${eventType}, ${status}, ${description}, ${providerEventId}, ${locationText}
         )
+        ON CONFLICT (fulfillment_id, provider_event_id)
+          WHERE provider_event_id IS NOT NULL
+        DO NOTHING
         RETURNING id, event_type, status, description, location_text, occurred_at`;
-      return json({ event: rows[0] }, 201);
-    } catch (error: any) {
-      if (error?.code === "23505" && providerEventId) {
-        const rows = await db`
-          SELECT id, event_type, status, description, location_text, occurred_at
-          FROM fulfillment_tracking_events
-          WHERE fulfillment_id = ${fulfillmentId}
-            AND provider_event_id = ${providerEventId}
-          LIMIT 1`;
-        return json({ event: rows[0], replayed: true }, 200);
-      }
-      throw error;
+      if (inserted.length) return json({ event: inserted[0] }, 201);
+
+      const rows = await db`
+        SELECT id, event_type, status, description, location_text, occurred_at
+        FROM fulfillment_tracking_events
+        WHERE fulfillment_id = ${fulfillmentId}
+          AND provider_event_id = ${providerEventId}
+        LIMIT 1`;
+      return json({ event: rows[0], replayed: true }, 200);
     }
+
+    const rows = await db`
+      INSERT INTO fulfillment_tracking_events(
+        fulfillment_id, event_type, status, description, location_text
+      )
+      VALUES(
+        ${fulfillmentId}, ${eventType}, ${status}, ${description}, ${locationText}
+      )
+      RETURNING id, event_type, status, description, location_text, occurred_at`;
+    return json({ event: rows[0] }, 201);
   }
 
   const codRoute = url.pathname.match(/^\/v1\/internal\/cod-collections\/(\d+)\/status$/);
