@@ -241,6 +241,18 @@ async function createCheckout(req: Request, db: DB, clean: (v: unknown, max: num
         RETURNING id`;
       const checkoutId = Number(inserted[0].id);
 
+      const fulfillmentRows = await tx`
+        SELECT id, type
+        FROM fulfillments
+        WHERE order_id = ${orderId}
+        LIMIT 1`;
+
+      if (paymentMethod === "CASH_ON_DELIVERY") {
+        if (!fulfillmentRows.length || fulfillmentRows[0].type === "STORE_PICKUP") {
+          return { error: "cod_requires_delivery", status: 409 };
+        }
+      }
+
       const paymentRows = await tx`
         INSERT INTO payments(
           checkout_session_id, order_id, provider, method, status, amount_minor, currency,
@@ -253,6 +265,18 @@ async function createCheckout(req: Request, db: DB, clean: (v: unknown, max: num
         )
         RETURNING id`;
       const paymentId = Number(paymentRows[0].id);
+
+      if (paymentMethod === "CASH_ON_DELIVERY" && fulfillmentRows.length) {
+        await tx`
+          INSERT INTO cod_collections(
+            fulfillment_id, payment_id, status, expected_amount_minor, currency
+          )
+          VALUES(
+            ${Number(fulfillmentRows[0].id)}, ${paymentId}, 'PENDING',
+            ${Number(order.grand_total_minor)}, ${order.currency}
+          )
+          ON CONFLICT(fulfillment_id) DO NOTHING`;
+      }
 
       const providerResult = await OfflinePaymentProvider.authorize({
         paymentId,
