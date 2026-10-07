@@ -508,15 +508,16 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
         WHERE id = ${orderId}`;
 
       const token = crypto.randomUUID();
+      const tracking = trackingReference();
       const rows = await tx`
         INSERT INTO fulfillments(
-          public_token, order_id, type, status, provider,
+          public_token, order_id, type, status, provider, tracking_reference,
           department, municipality, address_line, address_reference,
           recipient_name, recipient_phone, quoted_shipping_minor, currency,
           eta_min_days, eta_max_days, idempotency_key, idempotency_hash
         )
         VALUES(
-          ${token}, ${orderId}, ${type}, 'PENDING', ${quote.provider},
+          ${token}, ${orderId}, ${type}, 'PENDING', ${quote.provider}, ${tracking},
           ${department}, ${municipality}, ${addressLine}, ${addressReference},
           ${recipientName}, ${recipientPhone}, ${quote.shippingMinor}, ${quote.currency},
           ${quote.etaMinDays}, ${quote.etaMaxDays}, ${key}, ${hash}
