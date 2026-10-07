@@ -1,4 +1,5 @@
 import { SQL } from "bun";
+import { ensureOrdersSchema, handleOrders } from "./orders";
 
 const db = new SQL({
   hostname: Bun.env.PGHOST!,
@@ -124,6 +125,8 @@ await db`
 CREATE INDEX IF NOT EXISTS idx_public_events_name_created
 ON public_events(event_name, created_at DESC)`;
 
+await ensureOrdersSchema(db);
+
 const json = (body: unknown, status = 200) =>
   Response.json(body, {
     status,
@@ -189,6 +192,9 @@ Bun.serve({
         LIMIT 100`;
       return json({ data: rows });
     }
+
+    const orderResponse = await handleOrders(req, url, db, clean);
+    if (orderResponse) return orderResponse;
 
     if (url.pathname === "/v1/inquiries" && req.method === "POST") {
       const length = Number(req.headers.get("content-length") || 0);
@@ -297,8 +303,8 @@ Bun.serve({
 
     return json({
       service: "MR עדולם Catalog API",
-      version: "0.3.0",
-      endpoints: ["/health", "/v1/products", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
+      version: "0.4.0",
+      endpoints: ["/health", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
     });
   }
 });
