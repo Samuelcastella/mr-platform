@@ -1,37 +1,57 @@
-# MR עדולם — Intent & Call-to-Action System v1.0
+# MR עדולם — Intent & Call-to-Action System
 
-Status: IMPLEMENTED  
-Version target: Storefront 1.3.0  
+Status: IMPLEMENTED — public lifecycle  
+Version: 1.1  
 Date: 2026-10-07
 
 ## Purpose
 
-Translate the strategic intent of MR עדולם into explicit public actions. The storefront should not only display products; it should convert customer demand, supplier interest, partnership proposals, support needs and stock interest into structured business signals.
+Translate the strategic intention of MR עדולם into explicit actions and measurable business signals.
 
-## Intent model
+The storefront must not only display products. It must capture demand, supplier interest, partnership proposals, support needs, availability interest and commercial funnel events in a structured way.
 
-| Intent | Public CTA | Data captured | Business use |
+## Public intent model
+
+| Intent | Public CTA | Structured data | Business signal |
 |---|---|---|---|
-| Buy | Comprar / Explorar catálogo | Product/cart behavior | Revenue and demand |
-| Product request | Solicitar producto | Need, contact, product/message | Assortment discovery |
-| Supplier | Soy proveedor | Supplier contact, country, offer details | Sourcing pipeline |
-| Partnership | Colaborar | Brand/partner proposal | Marketplace and alliances |
-| Support | Necesito ayuda | Contact + issue | Customer service |
-| Notify | Avísame | Product interest + contact | Restock / demand signal |
+| Buy | Comprar / Explorar catálogo | Catalog, cart and checkout behavior | Revenue intent |
+| Product request | Solicitar producto | Product/category, size, color, budget, contact | Missing assortment / demand |
+| Supplier | Soy proveedor | Company, city, categories, catalog URL, MOQ, contact | Sourcing opportunity |
+| Partnership | Colaborar | Company/brand, proposal type, URL, contact | Alliance / marketplace opportunity |
+| Support | Necesito ayuda | Topic, order reference, contact, message | Service need |
+| Notify | Avísame | Product/variant, preferred contact channel | Restock demand |
 
-## Public flow
+## Public lifecycle
 
-1. User chooses an intent.
-2. Storefront renders an intent-specific form.
-3. Browser sends the form to `POST /api/v1/inquiries`.
-4. Storefront server proxies only the allowed inquiry POST to Catalog API.
-5. Catalog API validates and persists the inquiry in PostgreSQL.
-6. The user receives a reference number.
-7. Future Control Center functionality will triage, assign and close the inquiry.
+1. The visitor chooses an intent.
+2. The storefront renders fields appropriate to that intent.
+3. A validated request is posted to `POST /api/v1/inquiries`.
+4. Catalog API persists the request in PostgreSQL.
+5. The response returns an opaque public token and human-readable numeric reference.
+6. The browser stores only the user's own reference/token locally.
+7. `#/requests` allows the user to refresh the status of requests created on that device.
+8. Status lookup uses `GET /v1/inquiries/:id?token=<opaque-token>`.
+9. The lookup response intentionally excludes contact details, internal notes, sourcing data and private operations.
+
+## CTA analytics
+
+The public funnel records a deliberately small allowlisted event set:
+
+- `page_view`
+- `cta_click`
+- `intent_submit`
+- `add_to_cart`
+- `checkout_start`
+
+Events are accepted at `POST /v1/events` and stored in `public_events`.
+
+### Analytics boundary
+
+The analytics event payload is designed for behavioral/funnel measurement, not for storing form contact information. PII from inquiry forms is not copied into analytics metadata.
 
 ## Database
 
-Table: `public_inquiries`
+### public_inquiries
 
 Core fields:
 - kind
@@ -42,69 +62,89 @@ Core fields:
 - message
 - metadata
 - status
+- public_token
+- created_at
+- updated_at
+
+### public_events
+
+Core fields:
+- event_name
+- session_id
+- route
+- metadata
 - created_at
 
-Allowed kinds:
-- supplier
-- product_request
-- support
-- partnership
-- notify
+## Public routes
 
-## Safety and validation
+- `POST /v1/inquiries`
+- `GET /v1/inquiries/:id?token=...`
+- `POST /v1/events`
 
-- 16 KB request-size limit.
-- Field length limits.
-- Honeypot bot field.
-- Allowlist for intent type.
-- Country-code validation.
-- Public API does not expose inquiry listing.
-- No internal costs, supplier-private records or admin data are returned.
-- Internal triage/listing remains blocked until authentication and authorization exist.
+The public API does **not** provide an endpoint to enumerate all inquiries.
 
-## Storefront integration
+## Storefront surfaces
 
-The intent center is available at `#/connect`.
+- Desktop navigation: Conecta con MR עדולם
+- Mobile navigation: Conectar
+- `#/connect`: Intent Center
+- `#/requests`: My requests / status tracking
+- Product detail CTAs: Consultar o solicitar / Avísame / Necesito ayuda
+- Account shortcut: Mis solicitudes
+- Brand page CTA
+- Homepage brand CTA
+- Footer CTA
 
-Calls to action are wired into:
-- desktop navigation;
-- brand page;
-- homepage brand section;
-- product page;
-- mobile navigation;
-- footer.
+## Validation and abuse controls
 
-## Product-level CTAs
+- Inquiry payload limit: 16 KB.
+- Event payload limit: 8 KB.
+- Allowlisted inquiry types.
+- Allowlisted event names.
+- Field length caps.
+- Country code validation.
+- Honeypot field for simple automated-form abuse.
+- Public tracking requires both numeric request ID and opaque token.
 
-Product pages expose:
-- Consultar o solicitar
-- Avisarme cuando esté disponible
-- Necesito ayuda
+## Internal operations boundary
 
-The current product route is carried into the inquiry flow when possible.
+The next Control Center step is a real Intent Queue / lightweight CRM, but it must not be exposed until staff identity and authorization exist.
 
-## Supplier intent
-
-Supplier submissions support the real operating model of MR עדולם: multiple vendors, multiple cities and multiple countries. The system does not assume one fixed brand, one permanent supplier or one source country.
-
-## Future Control Center
-
-The next internal module should add an authenticated Inquiry Queue with:
-- filters by kind/status/date/country;
+Planned internal capabilities:
+- queue by type/status/date/country;
 - assignment to staff;
-- notes;
+- internal notes;
+- priority;
 - status transitions;
 - supplier conversion;
 - product-request aggregation;
-- demand scoring;
-- restock campaigns;
-- audit trail.
+- restock demand scoring;
+- response SLA;
+- audit trail;
+- analytics dashboards.
+
+This private queue should be implemented behind authenticated staff access rather than by exposing inquiry enumeration on the public Catalog API.
+
+## Commercial intelligence derived from the system
+
+The intent layer will eventually answer questions such as:
+
+- Which products are customers requesting that we do not stock?
+- Which sizes/colors create the most unmet demand?
+- Which products should be restocked first?
+- Which suppliers are offering categories we need?
+- Which product requests could justify private label development?
+- Which CTA produces the highest conversion into cart, inquiry or checkout?
+- Which countries or cities are producing supplier or customer interest?
 
 ## Acceptance criteria
 
-- Intent route renders without JS syntax errors.
-- Storefront readiness passes.
-- Public inquiry POST is proxied.
-- Catalog API validates and persists an inquiry.
-- GitHub CI tests readiness and inquiry proxying.
+- Intent Center renders without JavaScript syntax errors.
+- Structured intent-specific fields are available.
+- Inquiry submission persists to PostgreSQL.
+- The user receives a reference and opaque token.
+- My Requests can retrieve only the user's token-authorized request status.
+- CTA analytics accepts only allowlisted events.
+- Storefront readiness depends on Catalog API health.
+- GitHub CI tests inquiry POST, public request tracking and analytics proxy.
 - Railway deployments reach SUCCESS.
