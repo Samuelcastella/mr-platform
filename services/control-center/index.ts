@@ -140,6 +140,7 @@ function loginPage(message=""){
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Acceso · MR עדולם</title><style>${css}</style></head><body><main class="login"><div class="eyebrow">Acceso privado</div><h1>MR עדולם Control Center</h1><p class="meta">Operación interna. El acceso requiere credenciales del equipo.</p>${message?`<div class="notice">${esc(message)}</div>`:""}<form method="post" action="/login"><label>Contraseña<input type="password" name="password" autocomplete="current-password" required></label><button>Entrar</button></form></main></body></html>`;
 }
 function setupPage(){return loginPage("El acceso aún no ha sido habilitado. Configure CONTROL_CENTER_PASSWORD en Railway antes de abrir este panel al equipo.");}\nfunction suggestedAction(kind:string){return ({product_request:"Buscar disponibilidad, comparar proveedores y evaluar incorporación al catálogo.",notify:"Revisar reposición y contactar cuando exista stock.",supplier:"Evaluar catálogo, precios, MOQ, tiempos y confiabilidad.",partnership:"Clasificar propuesta y asignar responsable comercial.",support:"Responder, resolver y cerrar con trazabilidad."} as Record<string,string>)[kind]||"Revisar y clasificar.";}
+function csvCell(v:unknown){const x=String(v??"");return /[",\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x;}
 
 async function dashboard(url:URL, session:any){
   await ensureSchema(); const sql=getDb();
@@ -180,7 +181,7 @@ async function dashboard(url:URL, session:any){
   return shell(`
     <div class="eyebrow">Bandeja de Intenciones</div><h1>Señales del mercado convertidas en trabajo.</h1><p class="meta">Clientes, proveedores, reposición, soporte y alianzas en una cola operativa.</p>
     ${metrics}
-    <form class="toolbar" method="get"><input type="search" name="q" value="${esc(q)}" placeholder="Buscar nombre, contacto o mensaje"><select name="kind"><option value="">Todos los tipos</option>${["product_request","notify","supplier","partnership","support"].map(x=>`<option value="${x}" ${x===kind?"selected":""}>${esc(labels[x])}</option>`).join("")}</select><select name="status"><option value="">Todos los estados</option>${opts([...statuses],status)}</select><button>Filtrar</button></form>
+    <form class="toolbar" method="get"><a href="/export/inquiries.csv" style="align-self:center;text-decoration:none;font-weight:900;color:#705b27">Exportar CSV ↓</a><input type="search" name="q" value="${esc(q)}" placeholder="Buscar nombre, contacto o mensaje"><select name="kind"><option value="">Todos los tipos</option>${["product_request","notify","supplier","partnership","support"].map(x=>`<option value="${x}" ${x===kind?"selected":""}>${esc(labels[x])}</option>`).join("")}</select><select name="status"><option value="">Todos los estados</option>${opts([...statuses],status)}</select><button>Filtrar</button></form>
     <section class="queue">${items}</section>`,session);
 }
 
@@ -205,6 +206,7 @@ Bun.serve({
     if(!session)return html(loginPage("Inicia sesión para continuar."),401);
     if(url.pathname==="/logout"&&req.method==="POST"){const fd=await req.formData();if(String(fd.get("csrf")||"")!==session.csrf)return html("Solicitud inválida",403);return redirect("/login",clearCookie())}
     if(url.pathname==="/"&&req.method==="GET")return html(await dashboard(url,session));
+    if(url.pathname==="/export/inquiries.csv"&&req.method==="GET"){await ensureSchema();const rows=await getDb()`SELECT i.id,i.kind,i.status,i.priority,i.name,i.contact,i.country_code,p.name product_name,i.created_at FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id ORDER BY i.created_at DESC LIMIT 5000`;const head=["id","kind","status","priority","name","contact","country","product","created_at"];const csv=[head.join(","),...rows.map((r:any)=>[r.id,r.kind,r.status,r.priority,r.name,r.contact,r.country_code,r.product_name,r.created_at].map(csvCell).join(","))].join("\n");return new Response(csv,{headers:securityHeaders({"content-type":"text/csv; charset=utf-8","content-disposition":"attachment; filename=mr-intenciones.csv","cache-control":"no-store"})});}
     const m=url.pathname.match(/^\/inquiries\/(\d+)\/update$/);
     if(m&&req.method==="POST"){
       const fd=await req.formData();if(String(fd.get("csrf")||"")!==session.csrf)return html("Solicitud inválida",403);
