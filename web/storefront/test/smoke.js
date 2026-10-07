@@ -13,7 +13,7 @@ const get = (p, o) => fetch(base + p, o);
     const home = await get('/');
     const html = await home.text();
     ok(home.status === 200 && /text\/html/.test(home.headers.get('content-type')), 'GET / → 200 html');
-    ok(html.includes('Una tienda, infinitas posibilidades'), 'título con el lema de marca');
+    ok(/<title>MR עדולם/.test(html), 'título de marca');
     ok(/<meta name="description"/.test(html) && /og:image/.test(html), 'meta description y Open Graph');
     ok(home.headers.get('x-content-type-options') === 'nosniff' && /default-src 'self'/.test(home.headers.get('content-security-policy') || ''), 'cabeceras de seguridad (nosniff + CSP)');
     ok((await (await get('/health')).text()) === 'ok', '/health → ok');
