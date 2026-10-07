@@ -196,7 +196,7 @@ export async function ensureFulfillmentSchema(db: DB) {
       type TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'PENDING',
       provider TEXT NOT NULL,
-      tracking_reference TEXT,
+      tracking_reference TEXT UNIQUE NOT NULL,
       department TEXT,
       municipality TEXT,
       address_line TEXT,
@@ -253,6 +253,7 @@ export async function ensureFulfillmentSchema(db: DB) {
       attempt_number INTEGER NOT NULL,
       status TEXT NOT NULL,
       reason TEXT,
+      proof JSONB NOT NULL DEFAULT '{}'::jsonb,
       actor TEXT NOT NULL,
       occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -276,6 +277,34 @@ export async function ensureFulfillmentSchema(db: DB) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CHECK (status IN ('PENDING','COLLECTED','FAILED','RECONCILED')),
       CHECK (collected_amount_minor IS NULL OR collected_amount_minor >= 0)
+    )`;
+
+
+  await db$
+    CREATE TABLE IF NOT EXISTS cod_collection_history (
+      id BIGSERIAL PRIMARY KEY,
+      cod_collection_id BIGINT NOT NULL REFERENCES cod_collections(id) ON DELETE RESTRICT,
+      from_status TEXT,
+      to_status TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+
+  await db$
+    CREATE TABLE IF NOT EXISTS return_inspections (
+      id BIGSERIAL PRIMARY KEY,
+      fulfillment_id BIGINT UNIQUE NOT NULL REFERENCES fulfillments(id) ON DELETE RESTRICT,
+      order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      disposition TEXT,
+      notes TEXT,
+      inspected_by TEXT,
+      inspected_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (status IN ('PENDING','COMPLETED')),
+      CHECK (disposition IS NULL OR disposition IN ('RESTOCK','DAMAGED','QUARANTINE','RETURN_TO_SUPPLIER'))
     )`;
 
   await db`CREATE INDEX IF NOT EXISTS idx_fulfillments_status_created ON fulfillments(status, created_at DESC)`;
