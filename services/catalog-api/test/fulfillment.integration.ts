@@ -86,7 +86,7 @@ async function transitionFulfillment(id: number, status: string, extra: any = {}
   });
 }
 
-await db.unsafe("TRUNCATE TABLE cod_collections, delivery_attempts, fulfillment_tracking_events, fulfillment_status_history, fulfillments, delivery_zones, payment_status_history, payment_attempts, payments, checkout_sessions, order_status_history, inventory_reservations, order_items, orders, inventory_movements, inventory, product_variants, products, locations RESTART IDENTITY CASCADE");
+await db.unsafe("TRUNCATE TABLE return_inspections, cod_collection_history, cod_collections, delivery_attempts, fulfillment_tracking_events, fulfillment_status_history, fulfillments, delivery_zones, payment_status_history, payment_attempts, payments, checkout_sessions, order_status_history, inventory_reservations, order_items, orders, inventory_movements, inventory, product_variants, products, locations RESTART IDENTITY CASCADE");
 
 const loc = await db`
   INSERT INTO locations(name, country_code, type, active)
@@ -172,6 +172,7 @@ ok(deliveryFulfillmentResp.response.status === 201, "crea fulfillment con direcc
 const deliveryFulfillment = deliveryFulfillmentResp.body.fulfillment;
 ok(deliveryFulfillment.quote?.shippingMinor === 6000 && deliveryFulfillment.quote?.etaMaxDays === 2, "fulfillment congela tarifa y ETA");
 ok(deliveryFulfillment.destination?.department === "Cortés" && deliveryFulfillment.destination?.municipality === "Puerto Cortés", "fulfillment conserva destino");
+ok(/^MRF-/.test(deliveryFulfillment.trackingReference || ""), "fulfillment genera tracking normalizado");
 
 const orderWithShipping = await api("/v1/orders/" + deliveryOrder.id + "?token=" + encodeURIComponent(deliveryOrder.token));
 ok(orderWithShipping.body.order?.shippingTotalMinor === 6000, "selección de fulfillment actualiza shipping del Order");
@@ -226,23 +227,25 @@ const attempt = await api("/v1/internal/fulfillments/" + deliveryFulfillment.id 
   headers: { "content-type": "application/json", "x-internal-key": internalKey },
   body: JSON.stringify({ status: "FAILED", reason: "Cliente no disponible", actor: "courier-ci" })
 });
-ok(
-  attempt.response.status === 201 &&
-  attempt.body.fulfillment?.status === "FAILED" &&
-  Number(attempt.body.fulfillment?.attempts?.[0]?.attemptNumber) === 1,
-  "intento fallido queda auditado y mueve fulfillment a FAILED"
-);
+ok(attempt.response.status === 201 && attempt.body.fulfillment?.status === "FAILED", "intento fallido queda auditado y cambia fulfillment a FAILED");
+ok(attempt.body.fulfillment?.orderStatus === "SHIPPED", "intento fallido no revierte Order SHIPPED");
 
-const retryDelivery = await transitionFulfillment(deliveryFulfillment.id, "OUT_FOR_DELIVERY");
-ok(
-  retryDelivery.response.status === 200 && retryDelivery.body.fulfillment?.status === "OUT_FOR_DELIVERY",
-  "fulfillment fallido puede reintentarse"
-);
-
-const delivered = await transitionFulfillment(deliveryFulfillment.id, "DELIVERED", {
-  proof: { receivedBy: "Cliente CI", note: "Entrega CI" }
+const retry = await transitionFulfillment(deliveryFulfillment.id, "OUT_FOR_DELIVERY", {
+  reason: "segundo intento"
 });
-ok(delivered.response.status === 200 && delivered.body.fulfillment?.status === "DELIVERED", "entrega finaliza fulfillment");
+ok(retry.response.status === 200, "FAILED puede reintentarse");
+
+const delivered = await api("/v1/internal/fulfillments/" + deliveryFulfillment.id + "/attempts", {
+  method: "POST",
+  headers: { "content-type": "application/json", "x-internal-key": internalKey },
+  body: JSON.stringify({
+    status: "SUCCESS",
+    reason: "Entregado al destinatario",
+    actor: "courier-ci",
+    proof: { receivedBy: "Cliente CI", note: "Entrega CI" }
+  })
+});
+ok(delivered.response.status === 201 && delivered.body.fulfillment?.status === "DELIVERED", "intento exitoso finaliza fulfillment");
 ok(delivered.body.fulfillment?.proofOfDelivery?.receivedBy === "Cliente CI", "proof of delivery se conserva como metadata");
 ok(delivered.body.fulfillment?.orderStatus === "DELIVERED", "fulfillment avanza Order mediante transición controlada");
 
@@ -257,6 +260,37 @@ for (const status of ["PREPARING", "READY", "DISPATCHED", "FAILED", "RETURNING",
 }
 const returnedInventory = await db`SELECT quantity, reserved FROM inventory WHERE variant_id = ${returnVariant} AND location_id = ${locationId}`;
 ok(Number(returnedInventory[0].quantity) === 1 && Number(returnedInventory[0].reserved) === 0, "RETURNED no restockea automáticamente inventario vendido");
+
+const inspections = await api("/v1/internal/return-inspections", {
+  headers: { "x-internal-key": internalKey }
+});
+const inspection = inspections.body.data?.find((x: any) => Number(x.order_id) === Number(returnOrder.id));
+ok(inspection?.status === "PENDING", "RETURNED crea inspección PENDING");
+
+const restock = await api("/v1/internal/return-inspections/" + inspection.id, {
+  method: "PATCH",
+  headers: { "content-type": "application/json", "x-internal-key": internalKey },
+  body: JSON.stringify({ disposition: "RESTOCK", notes: "Aprobado por CI" })
+});
+ok(restock.response.status === 200 && restock.body.returnInspection?.status === "COMPLETED", "inspección autoriza restock");
+
+const restockedInventory = await db`SELECT quantity, reserved FROM inventory WHERE variant_id = ${returnVariant} AND location_id = ${locationId}`;
+ok(Number(restockedInventory[0].quantity) === 2 && Number(restockedInventory[0].reserved) === 0, "RESTOCK devuelve inventario solo después de inspección");
+
+const returnMovement = await db`
+  SELECT movement_type, quantity
+  FROM inventory_movements
+  WHERE reference = ${"return_inspection:" + inspection.id}
+  ORDER BY id DESC
+  LIMIT 1`;
+ok(returnMovement[0]?.movement_type === "CUSTOMER_RETURN" && Number(returnMovement[0]?.quantity) === 1, "restock crea movimiento CUSTOMER_RETURN");
+
+const doubleRestock = await api("/v1/internal/return-inspections/" + inspection.id, {
+  method: "PATCH",
+  headers: { "content-type": "application/json", "x-internal-key": internalKey },
+  body: JSON.stringify({ disposition: "RESTOCK" })
+});
+ok(doubleRestock.response.status === 409, "inspección completada no restockea dos veces");
 
 const pickupOrderResp = await createOrder("ci-fulfillment-order-pickup", pickupVariant);
 const pickupOrder = pickupOrderResp.body.order;
@@ -278,28 +312,50 @@ const codFulfillment = codFulfillmentResp.body.fulfillment;
 const codCheckoutResp = await createCheckout("ci-fulfillment-checkout-cod", codOrder, "CASH_ON_DELIVERY");
 const codCheckout = codCheckoutResp.body.checkout;
 ok(codCheckout.response !== false && codCheckout.payment?.status === "PENDING", "COD Payment inicia PENDING");
-for (const status of ["PREPARING", "READY", "DISPATCHED", "OUT_FOR_DELIVERY", "DELIVERED"]) {
-  await transitionFulfillment(codFulfillment.id, status);
+for (const status of ["PREPARING", "READY", "DISPATCHED", "OUT_FOR_DELIVERY"]) {
+  const step = await transitionFulfillment(codFulfillment.id, status);
+  ok(step.response.status === 200, "COD fulfillment avanza a " + status);
 }
+
+const codDelivery = await api("/v1/internal/fulfillments/" + codFulfillment.id + "/attempts", {
+  method: "POST",
+  headers: { "content-type": "application/json", "x-internal-key": internalKey },
+  body: JSON.stringify({
+    status: "SUCCESS",
+    reason: "Entrega COD CI",
+    actor: "courier-ci",
+    codCollected: true,
+    collectorReference: "courier-ci-cash",
+    proof: { receivedBy: "Cliente COD CI" }
+  })
+});
+ok(codDelivery.response.status === 201 && codDelivery.body.fulfillment?.status === "DELIVERED", "entrega COD se registra mediante intento exitoso");
 const codCollectionRows = await db`SELECT id, status, expected_amount_minor FROM cod_collections WHERE payment_id = ${codCheckout.payment.id}`;
 ok(codCollectionRows[0]?.status === "PENDING", "CODCollection existe separado de Payment");
 const codCollectionId = Number(codCollectionRows[0].id);
 
-const collected = await api("/v1/internal/cod-collections/" + codCollectionId + "/status", {
-  method: "PATCH",
-  headers: { "content-type": "application/json", "x-internal-key": internalKey },
-  body: JSON.stringify({
-    status: "COLLECTED",
-    collectedAmountMinor: Number(codCollectionRows[0].expected_amount_minor),
-    collectorReference: "courier-ci-cash"
-  })
-});
-ok(collected.response.status === 200 && collected.body.collection?.status === "COLLECTED", "COD collection registra efectivo cobrado");
+const codAfterDelivery = await db`SELECT id, status, expected_amount_minor, collected_amount_minor FROM cod_collections WHERE payment_id = ${codCheckout.payment.id}`;
+ok(codAfterDelivery[0]?.status === "COLLECTED", "entrega con cobro deja CODCollection COLLECTED");
 
 const paymentAfterDelivery = await api("/v1/internal/payments/" + codCheckout.payment.id, {
   headers: { "x-internal-key": internalKey }
 });
 ok(paymentAfterDelivery.body.payment?.status === "PENDING", "DELIVERED/COLLECTED no marca Payment PAID automáticamente");
+
+const reconciled = await api("/v1/internal/cod-collections/" + codCollectionId + "/status", {
+  method: "PATCH",
+  headers: { "content-type": "application/json", "x-internal-key": internalKey },
+  body: JSON.stringify({ status: "RECONCILED", reason: "conciliacion_ci" })
+});
+ok(reconciled.response.status === 200 && reconciled.body.collection?.status === "RECONCILED", "COD se reconcilia en acción separada");
+
+const paymentAfterReconcile = await api("/v1/internal/payments/" + codCheckout.payment.id, {
+  headers: { "x-internal-key": internalKey }
+});
+ok(paymentAfterReconcile.body.payment?.status === "PAID", "Payment pasa a PAID solo al reconciliar COD");
+
+const unauthorizedInternal = await api("/v1/internal/fulfillments");
+ok(unauthorizedInternal.response.status === 401, "rutas internas de fulfillment requieren autorización");
 
 if (failures) {
   console.error(failures + " fallo(s)");
