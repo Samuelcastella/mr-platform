@@ -1017,48 +1017,104 @@ export async function handleFulfillment(
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
     let body: any;
     try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
+
     const id = Number(codRoute[1]);
     const target = clean(body?.status, 32).toUpperCase();
     const collectedAmountMinor = body?.collectedAmountMinor == null ? null : Number(body.collectedAmountMinor);
     const collectorReference = clean(body?.collectorReference, 160) || null;
+    const reason = clean(body?.reason, 300) || null;
+
+    if (!["COLLECTED", "FAILED", "RECONCILED"].includes(target)) {
+      return json({ error: "invalid_status" }, 400);
+    }
+    if (
+      collectedAmountMinor != null &&
+      (!Number.isSafeInteger(collectedAmountMinor) || collectedAmountMinor < 0)
+    ) {
+      return json({ error: "invalid_collected_amount" }, 400);
+    }
 
     const result: any = await db.begin(async (tx: DB) => {
       const rows = await tx`
-        SELECT id, status, expected_amount_minor
+        SELECT id, payment_id, status, expected_amount_minor, collected_amount_minor
         FROM cod_collections
         WHERE id = ${id}
         FOR UPDATE`;
       if (!rows.length) return { error: "not_found", status: 404 };
-      const current = rows[0].status;
 
+      const row = rows[0];
+      const current = row.status;
       const allowed =
         (current === "PENDING" && ["COLLECTED", "FAILED"].includes(target)) ||
         (current === "COLLECTED" && target === "RECONCILED");
       if (!allowed) return { error: "invalid_transition", status: 409, current, target };
 
       if (target === "COLLECTED") {
-        if (!Number.isSafeInteger(collectedAmountMinor) || collectedAmountMinor < 0) {
-          return { error: "collected_amount_required", status: 400 };
-        }
+        const amount = collectedAmountMinor ?? Number(row.expected_amount_minor);
         await tx`
           UPDATE cod_collections
           SET status = 'COLLECTED',
-              collected_amount_minor = ${collectedAmountMinor},
+              collected_amount_minor = ${amount},
               collector_reference = ${collectorReference},
               collected_at = NOW(),
               updated_at = NOW()
           WHERE id = ${id}`;
-      } else if (target === "RECONCILED") {
+      } else if (target === "FAILED") {
         await tx`
           UPDATE cod_collections
-          SET status = 'RECONCILED', reconciled_at = NOW(), updated_at = NOW()
+          SET status = 'FAILED',
+              collector_reference = ${collectorReference},
+              updated_at = NOW()
           WHERE id = ${id}`;
       } else {
+        const expected = Number(row.expected_amount_minor);
+        const collected = Number(row.collected_amount_minor ?? 0);
+        if (expected !== collected) {
+          return { error: "cod_amount_mismatch", status: 409, expected, collected };
+        }
+
+        const payments = await tx`
+          SELECT id, status
+          FROM payments
+          WHERE id = ${Number(row.payment_id)}
+          FOR UPDATE`;
+        if (!payments.length) return { error: "payment_not_found", status: 409 };
+        if (!["PENDING", "PAID"].includes(payments[0].status)) {
+          return {
+            error: "payment_not_reconcilable",
+            status: 409,
+            paymentStatus: payments[0].status
+          };
+        }
+
+        if (payments[0].status === "PENDING") {
+          await tx`
+            UPDATE payments
+            SET status = 'PAID', updated_at = NOW()
+            WHERE id = ${Number(row.payment_id)}`;
+          await tx`
+            INSERT INTO payment_status_history(
+              payment_id, from_status, to_status, actor, reason
+            )
+            VALUES(
+              ${Number(row.payment_id)}, 'PENDING', 'PAID',
+              'cod_reconciliation', ${reason || "cod_reconciled"}
+            )`;
+        }
+
         await tx`
           UPDATE cod_collections
-          SET status = 'FAILED', collector_reference = ${collectorReference}, updated_at = NOW()
+          SET status = 'RECONCILED',
+              reconciled_at = NOW(),
+              updated_at = NOW()
           WHERE id = ${id}`;
       }
+
+      await tx`
+        INSERT INTO cod_collection_history(
+          cod_collection_id, from_status, to_status, actor, reason
+        )
+        VALUES(${id}, ${current}, ${target}, 'internal', ${reason})`;
 
       return { ok: true };
     });
@@ -1068,12 +1124,31 @@ export async function handleFulfillment(
     return json({ collection: rows[0] });
   }
 
+  if (url.pathname === "/v1/internal/return-inspections" && req.method === "GET") {
+    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const rows = await db`
+      SELECT i.*, f.tracking_reference, o.order_number
+      FROM return_inspections i
+      JOIN fulfillments f ON f.id = i.fulfillment_id
+      JOIN orders o ON o.id = i.order_id
+      ORDER BY i.created_at DESC
+      LIMIT 100`;
+    return json({ data: rows });
+  }
+
+  const inspectionRoute = url.pathname.match(/^\/v1\/internal\/return-inspections\/(\d+)$/);
+  if (inspectionRoute && req.method === "PATCH") {
+    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    return completeReturnInspection(req, Number(inspectionRoute[1]), db, clean);
+  }
+
   if (
     url.pathname.startsWith("/v1/fulfillment") ||
     url.pathname.startsWith("/v1/fulfillments") ||
     url.pathname.startsWith("/v1/internal/fulfillments") ||
     url.pathname.startsWith("/v1/internal/delivery-zones") ||
-    url.pathname.startsWith("/v1/internal/cod-collections")
+    url.pathname.startsWith("/v1/internal/cod-collections") ||
+    url.pathname.startsWith("/v1/internal/return-inspections")
   ) {
     return json({ error: "method_not_allowed" }, 405);
   }
