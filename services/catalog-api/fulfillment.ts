@@ -807,7 +807,9 @@ export async function handleFulfillment(
   }
 
   if (url.pathname === "/v1/internal/delivery-zones" && req.method === "GET") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const auth = await authorizeInternal(req, db, "fulfillment.read");
+    if (!auth.ok) return auth.response;
+
     const rows = await db`
       SELECT department, service_type, active, shipping_minor, currency,
              eta_min_days, eta_max_days, provider, notes, updated_at
@@ -818,9 +820,15 @@ export async function handleFulfillment(
 
   const zoneRoute = url.pathname.match(/^\/v1\/internal\/delivery-zones\/(.+)$/);
   if (zoneRoute && req.method === "PUT") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const auth = await authorizeInternal(req, db, "settings.manage", { mutation: true });
+    if (!auth.ok) return auth.response;
+
     let body: any;
-    try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "invalid_json" }, 400);
+    }
 
     const rawDepartment = decodeURIComponent(zoneRoute[1]);
     const department = normalizeDepartment(rawDepartment, clean);
@@ -834,40 +842,75 @@ export async function handleFulfillment(
     const active = body?.active !== false;
 
     if (!department) return json({ error: "invalid_department" }, 400);
-    if (!["LOCAL_DELIVERY", "COURIER"].includes(serviceType)) return json({ error: "invalid_service_type" }, 400);
-    if (shippingMinor != null && (!Number.isSafeInteger(shippingMinor) || shippingMinor < 0)) return json({ error: "invalid_shipping" }, 400);
-    if (etaMinDays != null && (!Number.isSafeInteger(etaMinDays) || etaMinDays < 0)) return json({ error: "invalid_eta" }, 400);
-    if (etaMaxDays != null && (!Number.isSafeInteger(etaMaxDays) || etaMaxDays < 0)) return json({ error: "invalid_eta" }, 400);
-    if (etaMinDays != null && etaMaxDays != null && etaMaxDays < etaMinDays) return json({ error: "invalid_eta_range" }, 400);
+    if (!["LOCAL_DELIVERY", "COURIER"].includes(serviceType)) {
+      return json({ error: "invalid_service_type" }, 400);
+    }
+    if (shippingMinor != null && (!Number.isSafeInteger(shippingMinor) || shippingMinor < 0)) {
+      return json({ error: "invalid_shipping" }, 400);
+    }
+    if (etaMinDays != null && (!Number.isSafeInteger(etaMinDays) || etaMinDays < 0)) {
+      return json({ error: "invalid_eta" }, 400);
+    }
+    if (etaMaxDays != null && (!Number.isSafeInteger(etaMaxDays) || etaMaxDays < 0)) {
+      return json({ error: "invalid_eta" }, 400);
+    }
+    if (etaMinDays != null && etaMaxDays != null && etaMaxDays < etaMinDays) {
+      return json({ error: "invalid_eta_range" }, 400);
+    }
 
-    const rows = await db`
-      INSERT INTO delivery_zones(
-        department, service_type, active, shipping_minor, currency,
-        eta_min_days, eta_max_days, provider, notes
-      )
-      VALUES(
-        ${department}, ${serviceType}, ${active}, ${shippingMinor}, ${currency},
-        ${etaMinDays}, ${etaMaxDays}, ${provider}, ${notes}
-      )
-      ON CONFLICT(department, service_type)
-      DO UPDATE SET
-        active = EXCLUDED.active,
-        shipping_minor = EXCLUDED.shipping_minor,
-        currency = EXCLUDED.currency,
-        eta_min_days = EXCLUDED.eta_min_days,
-        eta_max_days = EXCLUDED.eta_max_days,
-        provider = EXCLUDED.provider,
-        notes = EXCLUDED.notes,
-        updated_at = NOW()
-      RETURNING *`;
-    return json({ zone: rows[0] });
+    const result: any = await db.begin(async (tx: DB) => {
+      const rows = await tx`
+        INSERT INTO delivery_zones(
+          department, service_type, active, shipping_minor, currency,
+          eta_min_days, eta_max_days, provider, notes
+        )
+        VALUES(
+          ${department}, ${serviceType}, ${active}, ${shippingMinor}, ${currency},
+          ${etaMinDays}, ${etaMaxDays}, ${provider}, ${notes}
+        )
+        ON CONFLICT(department, service_type)
+        DO UPDATE SET
+          active = EXCLUDED.active,
+          shipping_minor = EXCLUDED.shipping_minor,
+          currency = EXCLUDED.currency,
+          eta_min_days = EXCLUDED.eta_min_days,
+          eta_max_days = EXCLUDED.eta_max_days,
+          provider = EXCLUDED.provider,
+          notes = EXCLUDED.notes,
+          updated_at = NOW()
+        RETURNING *`;
+
+      await writeAuditEvent(tx, {
+        ...auditActor(auth.actor),
+        action: "delivery_zone.configured",
+        resourceType: "DeliveryZone",
+        resourceId: department + ":" + serviceType,
+        outcome: "SUCCESS",
+        metadata: {
+          department,
+          serviceType,
+          active,
+          shippingMinor,
+          currency,
+          etaMinDays,
+          etaMaxDays,
+          provider
+        }
+      });
+
+      return rows[0];
+    });
+
+    return json({ zone: result });
   }
 
   if (url.pathname === "/v1/internal/fulfillments" && req.method === "GET") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const auth = await authorizeInternal(req, db, "fulfillment.read");
+    if (!auth.ok) return auth.response;
+
     const status = clean(url.searchParams.get("status"), 32).toUpperCase();
     const rows = await db`
-      SELECT f.id, f.order_id, o.order_number, f.type, f.status, f.provider,
+      SELECT f.id, f.order_id, o.order_number, o.location_id, f.type, f.status, f.provider,
              f.department, f.municipality, f.quoted_shipping_minor, f.currency,
              f.eta_min_days, f.eta_max_days, f.created_at, f.updated_at
       FROM fulfillments f
@@ -880,44 +923,129 @@ export async function handleFulfillment(
 
   const internalFulfillment = url.pathname.match(/^\/v1\/internal\/fulfillments\/(\d+)$/);
   if (internalFulfillment && req.method === "GET") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
-    const fulfillment = await loadFulfillment(db, Number(internalFulfillment[1]));
+    const id = Number(internalFulfillment[1]);
+    const locationRows = await db`
+      SELECT o.location_id
+      FROM fulfillments f
+      JOIN orders o ON o.id = f.order_id
+      WHERE f.id = ${id}
+      LIMIT 1`;
+    if (!locationRows.length) return json({ error: "not_found" }, 404);
+
+    const auth = await authorizeInternal(req, db, "fulfillment.read", {
+      locationId: Number(locationRows[0].location_id)
+    });
+    if (!auth.ok) return auth.response;
+
+    const fulfillment = await loadFulfillment(db, id);
     return fulfillment ? json({ fulfillment }) : json({ error: "not_found" }, 404);
   }
 
   const statusRoute = url.pathname.match(/^\/v1\/internal\/fulfillments\/(\d+)\/status$/);
   if (statusRoute && req.method === "PATCH") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const id = Number(statusRoute[1]);
+    const locationRows = await db`
+      SELECT o.location_id
+      FROM fulfillments f
+      JOIN orders o ON o.id = f.order_id
+      WHERE f.id = ${id}
+      LIMIT 1`;
+    if (!locationRows.length) return json({ error: "not_found" }, 404);
+    const locationId = Number(locationRows[0].location_id);
+
     let body: any;
-    try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "invalid_json" }, 400);
+    }
+
     const target = clean(body?.status, 32).toUpperCase();
     const reason = clean(body?.reason, 300) || null;
-    const result: any = await transitionFulfillment(
-      db,
-      Number(statusRoute[1]),
-      target,
-      "internal",
-      reason,
-      body?.proof
-    );
+    const permission =
+      target === "DELIVERED"
+        ? "fulfillment.deliver"
+        : ["PREPARING", "READY"].includes(target)
+          ? "fulfillment.prepare"
+          : "fulfillment.dispatch";
+
+    const auth = await authorizeInternal(req, db, permission, {
+      locationId,
+      mutation: true
+    });
+    if (!auth.ok) return auth.response;
+
+    const actorLabel =
+      auth.actor.type === "USER" ? "staff:" + auth.actor.userId : "service:" + auth.actor.service;
+
+    const result: any = await db.begin(async (tx: DB) => {
+      const transitioned: any = await transitionFulfillmentInTx(
+        tx,
+        id,
+        target,
+        actorLabel,
+        reason,
+        body?.proof
+      );
+      if (transitioned.error) return transitioned;
+
+      await writeAuditEvent(tx, {
+        ...auditActor(auth.actor),
+        action: "fulfillment.status_changed",
+        resourceType: "Fulfillment",
+        resourceId: id,
+        locationId,
+        outcome: "SUCCESS",
+        reason,
+        metadata: { toStatus: target }
+      });
+
+      return transitioned;
+    });
+
     if (result.error) return json(result, result.status || 409);
-    return json({ fulfillment: await loadFulfillment(db, Number(statusRoute[1])) });
+    return json({ fulfillment: await loadFulfillment(db, id) });
   }
 
   const attemptRoute = url.pathname.match(/^\/v1\/internal\/fulfillments\/(\d+)\/attempts$/);
   if (attemptRoute && req.method === "POST") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
-    let body: any;
-    try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
-
     const fulfillmentId = Number(attemptRoute[1]);
+    const locationRows = await db`
+      SELECT o.location_id
+      FROM fulfillments f
+      JOIN orders o ON o.id = f.order_id
+      WHERE f.id = ${fulfillmentId}
+      LIMIT 1`;
+    if (!locationRows.length) return json({ error: "not_found" }, 404);
+    const locationId = Number(locationRows[0].location_id);
+
+    const auth = await authorizeInternal(req, db, "fulfillment.deliver", {
+      locationId,
+      mutation: true
+    });
+    if (!auth.ok) return auth.response;
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "invalid_json" }, 400);
+    }
+
     const attemptStatus = clean(body?.status, 24).toUpperCase();
     const reason = clean(body?.reason, 500) || null;
-    const actor = clean(body?.actor, 120) || "internal";
+    const actorLabel =
+      auth.actor.type === "USER"
+        ? "staff:" + auth.actor.userId
+        : clean(body?.actor, 120) || "service:" + auth.actor.service;
     const collectorReference = clean(body?.collectorReference, 160) || null;
     const codCollected = body?.codCollected === true;
     let proof: any = {};
-    try { proof = normalizeProof(body?.proof); } catch { return json({ error: "proof_too_large" }, 413); }
+    try {
+      proof = normalizeProof(body?.proof);
+    } catch {
+      return json({ error: "proof_too_large" }, 413);
+    }
 
     if (!["SUCCESS", "FAILED", "REJECTED"].includes(attemptStatus)) {
       return json({ error: "invalid_attempt_status" }, 400);
@@ -950,7 +1078,7 @@ export async function handleFulfillment(
         )
         VALUES(
           ${fulfillmentId}, ${attemptNumber}, ${attemptStatus}, ${reason},
-          ${JSON.stringify(proof)}::jsonb, ${actor}
+          ${JSON.stringify(proof)}::jsonb, ${actorLabel}
         )`;
 
       const target = attemptStatus === "SUCCESS" ? "DELIVERED" : "FAILED";
@@ -958,7 +1086,7 @@ export async function handleFulfillment(
         tx,
         fulfillmentId,
         target,
-        actor,
+        actorLabel,
         reason || ("delivery_attempt:" + attemptStatus),
         proof
       );
@@ -985,10 +1113,25 @@ export async function handleFulfillment(
               cod_collection_id, from_status, to_status, actor, reason
             )
             VALUES(
-              ${collectionId}, 'PENDING', 'COLLECTED', ${actor}, 'collected_at_delivery'
+              ${collectionId}, 'PENDING', 'COLLECTED', ${actorLabel}, 'collected_at_delivery'
             )`;
         }
       }
+
+      await writeAuditEvent(tx, {
+        ...auditActor(auth.actor),
+        action: "delivery.attempt_recorded",
+        resourceType: "Fulfillment",
+        resourceId: fulfillmentId,
+        locationId,
+        outcome: "SUCCESS",
+        reason,
+        metadata: {
+          attemptNumber,
+          attemptStatus,
+          codCollected
+        }
+      });
 
       return { ok: true, attemptNumber };
     });
@@ -1002,60 +1145,132 @@ export async function handleFulfillment(
 
   const eventRoute = url.pathname.match(/^\/v1\/internal\/fulfillments\/(\d+)\/tracking-events$/);
   if (eventRoute && req.method === "POST") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
-    let body: any;
-    try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
     const fulfillmentId = Number(eventRoute[1]);
+    const locationRows = await db`
+      SELECT o.location_id
+      FROM fulfillments f
+      JOIN orders o ON o.id = f.order_id
+      WHERE f.id = ${fulfillmentId}
+      LIMIT 1`;
+    if (!locationRows.length) return json({ error: "not_found" }, 404);
+    const locationId = Number(locationRows[0].location_id);
+
+    const auth = await authorizeInternal(req, db, "fulfillment.dispatch", {
+      locationId,
+      mutation: true
+    });
+    if (!auth.ok) return auth.response;
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "invalid_json" }, 400);
+    }
+
     const eventType = clean(body?.eventType, 80).toUpperCase();
     const status = clean(body?.status, 40).toUpperCase();
     const description = clean(body?.description, 500);
     const providerEventId = clean(body?.providerEventId, 160) || null;
     const locationText = clean(body?.locationText, 220) || null;
-    if (!eventType || !status || !description) return json({ error: "tracking_event_required" }, 400);
-
-    if (providerEventId) {
-      const inserted = await db`
-        INSERT INTO fulfillment_tracking_events(
-          fulfillment_id, event_type, status, description, provider_event_id, location_text
-        )
-        VALUES(
-          ${fulfillmentId}, ${eventType}, ${status}, ${description}, ${providerEventId}, ${locationText}
-        )
-        ON CONFLICT (fulfillment_id, provider_event_id)
-          WHERE provider_event_id IS NOT NULL
-        DO NOTHING
-        RETURNING id, event_type, status, description, location_text, occurred_at`;
-      if (inserted.length) return json({ event: inserted[0] }, 201);
-
-      const rows = await db`
-        SELECT id, event_type, status, description, location_text, occurred_at
-        FROM fulfillment_tracking_events
-        WHERE fulfillment_id = ${fulfillmentId}
-          AND provider_event_id = ${providerEventId}
-        LIMIT 1`;
-      return json({ event: rows[0], replayed: true }, 200);
+    if (!eventType || !status || !description) {
+      return json({ error: "tracking_event_required" }, 400);
     }
 
-    const rows = await db`
-      INSERT INTO fulfillment_tracking_events(
-        fulfillment_id, event_type, status, description, location_text
-      )
-      VALUES(
-        ${fulfillmentId}, ${eventType}, ${status}, ${description}, ${locationText}
-      )
-      RETURNING id, event_type, status, description, location_text, occurred_at`;
-    return json({ event: rows[0] }, 201);
+    if (providerEventId) {
+      const result: any = await db.begin(async (tx: DB) => {
+        const inserted = await tx`
+          INSERT INTO fulfillment_tracking_events(
+            fulfillment_id, event_type, status, description, provider_event_id, location_text
+          )
+          VALUES(
+            ${fulfillmentId}, ${eventType}, ${status}, ${description},
+            ${providerEventId}, ${locationText}
+          )
+          ON CONFLICT (fulfillment_id, provider_event_id)
+            WHERE provider_event_id IS NOT NULL
+          DO NOTHING
+          RETURNING id, event_type, status, description, location_text, occurred_at`;
+
+        if (!inserted.length) return { replayed: true };
+
+        await writeAuditEvent(tx, {
+          ...auditActor(auth.actor),
+          action: "fulfillment.tracking_event_added",
+          resourceType: "Fulfillment",
+          resourceId: fulfillmentId,
+          locationId,
+          outcome: "SUCCESS",
+          metadata: { eventType, status, providerEventId }
+        });
+        return { event: inserted[0], replayed: false };
+      });
+
+      if (result.replayed) {
+        const rows = await db`
+          SELECT id, event_type, status, description, location_text, occurred_at
+          FROM fulfillment_tracking_events
+          WHERE fulfillment_id = ${fulfillmentId}
+            AND provider_event_id = ${providerEventId}
+          LIMIT 1`;
+        return json({ event: rows[0], replayed: true }, 200);
+      }
+      return json({ event: result.event }, 201);
+    }
+
+    const result: any = await db.begin(async (tx: DB) => {
+      const rows = await tx`
+        INSERT INTO fulfillment_tracking_events(
+          fulfillment_id, event_type, status, description, location_text
+        )
+        VALUES(
+          ${fulfillmentId}, ${eventType}, ${status}, ${description}, ${locationText}
+        )
+        RETURNING id, event_type, status, description, location_text, occurred_at`;
+
+      await writeAuditEvent(tx, {
+        ...auditActor(auth.actor),
+        action: "fulfillment.tracking_event_added",
+        resourceType: "Fulfillment",
+        resourceId: fulfillmentId,
+        locationId,
+        outcome: "SUCCESS",
+        metadata: { eventType, status }
+      });
+      return rows[0];
+    });
+    return json({ event: result }, 201);
   }
 
   const codRoute = url.pathname.match(/^\/v1\/internal\/cod-collections\/(\d+)\/status$/);
   if (codRoute && req.method === "PATCH") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
-    let body: any;
-    try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
-
     const id = Number(codRoute[1]);
+    const locationRows = await db`
+      SELECT o.location_id
+      FROM cod_collections c
+      JOIN fulfillments f ON f.id = c.fulfillment_id
+      JOIN orders o ON o.id = f.order_id
+      WHERE c.id = ${id}
+      LIMIT 1`;
+    if (!locationRows.length) return json({ error: "not_found" }, 404);
+    const locationId = Number(locationRows[0].location_id);
+
+    const auth = await authorizeInternal(req, db, "payments.confirm_manual", {
+      locationId,
+      mutation: true
+    });
+    if (!auth.ok) return auth.response;
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "invalid_json" }, 400);
+    }
+
     const target = clean(body?.status, 32).toUpperCase();
-    const collectedAmountMinor = body?.collectedAmountMinor == null ? null : Number(body.collectedAmountMinor);
+    const collectedAmountMinor =
+      body?.collectedAmountMinor == null ? null : Number(body.collectedAmountMinor);
     const collectorReference = clean(body?.collectorReference, 160) || null;
     const reason = clean(body?.reason, 300) || null;
 
@@ -1133,7 +1348,8 @@ export async function handleFulfillment(
             )
             VALUES(
               ${Number(row.payment_id)}, 'PENDING', 'PAID',
-              'cod_reconciliation', ${reason || "cod_reconciled"}
+              ${auth.actor.type === "USER" ? "staff:" + auth.actor.userId : "service:" + auth.actor.service},
+              ${reason || "cod_reconciled"}
             )`;
         }
 
@@ -1145,11 +1361,28 @@ export async function handleFulfillment(
           WHERE id = ${id}`;
       }
 
+      const actorLabel =
+        auth.actor.type === "USER" ? "staff:" + auth.actor.userId : "service:" + auth.actor.service;
       await tx`
         INSERT INTO cod_collection_history(
           cod_collection_id, from_status, to_status, actor, reason
         )
-        VALUES(${id}, ${current}, ${target}, 'internal', ${reason})`;
+        VALUES(${id}, ${current}, ${target}, ${actorLabel}, ${reason})`;
+
+      await writeAuditEvent(tx, {
+        ...auditActor(auth.actor),
+        action: "cod_collection.status_changed",
+        resourceType: "CODCollection",
+        resourceId: id,
+        locationId,
+        outcome: "SUCCESS",
+        reason,
+        metadata: {
+          fromStatus: current,
+          toStatus: target,
+          collectedAmountMinor
+        }
+      });
 
       return { ok: true };
     });
@@ -1160,9 +1393,11 @@ export async function handleFulfillment(
   }
 
   if (url.pathname === "/v1/internal/return-inspections" && req.method === "GET") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
+    const auth = await authorizeInternal(req, db, "inventory.read");
+    if (!auth.ok) return auth.response;
+
     const rows = await db`
-      SELECT i.*, f.tracking_reference, o.order_number
+      SELECT i.*, f.tracking_reference, o.order_number, o.location_id
       FROM return_inspections i
       JOIN fulfillments f ON f.id = i.fulfillment_id
       JOIN orders o ON o.id = i.order_id
@@ -1173,8 +1408,23 @@ export async function handleFulfillment(
 
   const inspectionRoute = url.pathname.match(/^\/v1\/internal\/return-inspections\/(\d+)$/);
   if (inspectionRoute && req.method === "PATCH") {
-    if (!authorized(req)) return json({ error: "unauthorized" }, 401);
-    return completeReturnInspection(req, Number(inspectionRoute[1]), db, clean);
+    const id = Number(inspectionRoute[1]);
+    const locationRows = await db`
+      SELECT o.location_id
+      FROM return_inspections i
+      JOIN orders o ON o.id = i.order_id
+      WHERE i.id = ${id}
+      LIMIT 1`;
+    if (!locationRows.length) return json({ error: "not_found" }, 404);
+    const locationId = Number(locationRows[0].location_id);
+
+    const auth = await authorizeInternal(req, db, "inventory.adjust", {
+      locationId,
+      mutation: true
+    });
+    if (!auth.ok) return auth.response;
+
+    return completeReturnInspection(req, id, db, clean, auth.actor, locationId);
   }
 
   if (
