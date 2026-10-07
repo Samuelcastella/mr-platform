@@ -1,6 +1,7 @@
 import { SQL } from "bun";
 import { ensureOrdersSchema, handleOrders } from "./orders";
 import { ensureCheckoutSchema, handleCheckout } from "./checkout";
+import { ensureFulfillmentSchema, handleFulfillment } from "./fulfillment";
 
 const db = new SQL({
   hostname: Bun.env.PGHOST!,
@@ -128,6 +129,7 @@ ON public_events(event_name, created_at DESC)`;
 
 await ensureOrdersSchema(db);
 await ensureCheckoutSchema(db);
+await ensureFulfillmentSchema(db);
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, {
@@ -197,6 +199,9 @@ Bun.serve({
 
     const orderResponse = await handleOrders(req, url, db, clean);
     if (orderResponse) return orderResponse;
+
+    const fulfillmentResponse = await handleFulfillment(req, url, db, clean);
+    if (fulfillmentResponse) return fulfillmentResponse;
 
     const checkoutResponse = await handleCheckout(req, url, db, clean);
     if (checkoutResponse) return checkoutResponse;
@@ -308,8 +313,8 @@ Bun.serve({
 
     return json({
       service: "MR עדולם Catalog API",
-      version: "0.5.0",
-      endpoints: ["/health", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/checkouts", "/v1/checkouts/:id", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
+      version: "0.6.0",
+      endpoints: ["/health", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/checkouts", "/v1/checkouts/:id", "/v1/fulfillment/options", "/v1/fulfillments", "/v1/fulfillments/:id", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
     });
   }
 });

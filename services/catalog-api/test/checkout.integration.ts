@@ -64,7 +64,7 @@ async function createCheckout(key: string, order: any, method: string, evidence:
   });
 }
 
-await db.unsafe("TRUNCATE TABLE payment_status_history, payment_attempts, payments, checkout_sessions, order_status_history, inventory_reservations, order_items, orders, inventory_movements, inventory, product_variants, products, locations RESTART IDENTITY CASCADE");
+await db.unsafe("TRUNCATE TABLE cod_collections, delivery_attempts, fulfillment_tracking_events, fulfillment_status_history, fulfillments, delivery_zones, payment_status_history, payment_attempts, payments, checkout_sessions, order_status_history, inventory_reservations, order_items, orders, inventory_movements, inventory, product_variants, products, locations RESTART IDENTITY CASCADE");
 
 const loc = await db`
   INSERT INTO locations(name, country_code, type, active)
@@ -196,11 +196,36 @@ ok(transferOrderAfterPaid.body.order?.status === "CONFIRMED", "confirmar pago no
 
 const codOrderResp = await createOrder("ci-checkout-order-cod", codVariant);
 const codOrder = codOrderResp.body.order;
+await db`
+  INSERT INTO delivery_zones(department, service_type, active, shipping_minor, currency, eta_min_days, eta_max_days, provider)
+  VALUES('Cortés', 'LOCAL_DELIVERY', TRUE, 7500, 'HNL', 1, 2, 'MR')`;
+const fulfillmentResp = await api("/v1/fulfillments", {
+  method: "POST",
+  headers: {
+    "content-type": "application/json",
+    "idempotency-key": "ci-checkout-fulfillment-cod"
+  },
+  body: JSON.stringify({
+    orderId: codOrder.id,
+    orderToken: codOrder.token,
+    type: "LOCAL_DELIVERY",
+    department: "Cortés",
+    municipality: "Puerto Cortés",
+    addressLine: "Dirección CI",
+    addressReference: "Referencia CI",
+    recipientName: "Cliente COD",
+    recipientPhone: "9999-2222"
+  })
+});
+ok(fulfillmentResp.response.status === 201, "COD crea fulfillment antes del checkout");
 const codCheckoutResp = await createCheckout("ci-checkout-cod-001", codOrder, "CASH_ON_DELIVERY");
 ok(codCheckoutResp.response.status === 201, "crea checkout COD");
 const codCheckout = codCheckoutResp.body.checkout;
 ok(codCheckout.orderStatus === "CONFIRMED", "COD permite Order CONFIRMED");
 ok(codCheckout.payment?.status === "PENDING" && codCheckout.payment?.method === "CASH_ON_DELIVERY", "COD mantiene Payment PENDING");
+ok(codCheckout.amountMinor === 35000, "COD incluye tarifa server-side de entrega");
+const codRows = await db`SELECT status, expected_amount_minor FROM cod_collections WHERE payment_id = ${codCheckout.payment.id}`;
+ok(codRows[0]?.status === "PENDING" && Number(codRows[0]?.expected_amount_minor) === 35000, "CODCollection se crea separado del Payment");
 
 const paymentRows = await db`SELECT COUNT(*)::int AS count FROM payments`;
 const checkoutRows = await db`SELECT COUNT(*)::int AS count FROM checkout_sessions`;

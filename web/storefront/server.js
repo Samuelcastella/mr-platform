@@ -71,16 +71,17 @@ http.createServer(async (req, res) => {
     const canSubmitEvent = req.method === 'POST' && upstreamPath === '/v1/events';
     const canSubmitOrder = req.method === 'POST' && (upstreamPath === '/v1/orders' || /^\/v1\/orders\/\d+\/(confirm|cancel)$/.test(upstreamPath));
     const canSubmitCheckout = req.method === 'POST' && upstreamPath === '/v1/checkouts';
-    if (!canRead && !canSubmitInquiry && !canSubmitEvent && !canSubmitOrder && !canSubmitCheckout) { res.writeHead(405, { ...h, allow: 'GET, POST' }); res.end('{"error":"method_not_allowed"}'); return; }
+    const canSubmitFulfillment = req.method === 'POST' && upstreamPath === '/v1/fulfillments';
+    if (!canRead && !canSubmitInquiry && !canSubmitEvent && !canSubmitOrder && !canSubmitCheckout && !canSubmitFulfillment) { res.writeHead(405, { ...h, allow: 'GET, POST' }); res.end('{"error":"method_not_allowed"}'); return; }
     try {
       const headers = {};
       let body;
-      if (canSubmitInquiry || canSubmitEvent || canSubmitOrder || canSubmitCheckout) {
+      if (canSubmitInquiry || canSubmitEvent || canSubmitOrder || canSubmitCheckout || canSubmitFulfillment) {
         headers['content-type'] = 'application/json';
-        if ((canSubmitOrder || canSubmitCheckout) && req.headers['idempotency-key']) headers['idempotency-key'] = String(req.headers['idempotency-key']).slice(0, 128);
+        if ((canSubmitOrder || canSubmitCheckout || canSubmitFulfillment) && req.headers['idempotency-key']) headers['idempotency-key'] = String(req.headers['idempotency-key']).slice(0, 128);
         const chunks = [];
         let total = 0;
-        const limit = (canSubmitOrder || canSubmitCheckout) ? 32768 : 16384;
+        const limit = (canSubmitOrder || canSubmitCheckout || canSubmitFulfillment) ? 32768 : 16384;
         for await (const chunk of req) {
           total += chunk.length;
           if (total > limit) { res.writeHead(413, h); res.end('{"error":"payload_too_large"}'); return; }
