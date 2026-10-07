@@ -67,11 +67,12 @@ http.createServer(async (req, res) => {
     const upstreamPath = p.slice(4);
     const canRead = req.method === 'GET';
     const canSubmitInquiry = req.method === 'POST' && upstreamPath === '/v1/inquiries';
-    if (!canRead && !canSubmitInquiry) { res.writeHead(405, { ...h, allow: 'GET, POST' }); res.end('{"error":"method_not_allowed"}'); return; }
+    const canSubmitEvent = req.method === 'POST' && upstreamPath === '/v1/events';
+    if (!canRead && !canSubmitInquiry && !canSubmitEvent) { res.writeHead(405, { ...h, allow: 'GET, POST' }); res.end('{"error":"method_not_allowed"}'); return; }
     try {
       const headers = {};
       let body;
-      if (canSubmitInquiry) {
+      if (canSubmitInquiry || canSubmitEvent) {
         headers['content-type'] = 'application/json';
         const chunks = [];
         let total = 0;
