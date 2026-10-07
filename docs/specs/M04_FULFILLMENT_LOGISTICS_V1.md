@@ -178,9 +178,12 @@ Required:
 
 Rules:
 
-- order must exist and be CONFIRMED / PROCESSING / READY;
-- one active fulfillment per order in v1;
+- the public fulfillment plan is created **before checkout** while the order is PENDING_CONFIRMATION (or already CONFIRMED);
+- one fulfillment plan per order in v1;
 - shipping cost and ETA are copied from server DeliveryZone config;
+- the server updates Order.shipping_total_minor and Order.grand_total_minor before checkout so checkout charges the authoritative delivered total;
+- once checkout exists, the public fulfillment plan cannot be replaced;
+- operational fulfillment transitions begin only after checkout has confirmed the order;
 - client cannot set authoritative shipping price / ETA;
 - STORE_PICKUP does not require delivery address;
 - LOCAL_DELIVERY / COURIER require department + municipality + address.
@@ -283,11 +286,12 @@ Statuses:
 
 Rules:
 
-- only create CODCollection when Payment.method = CASH_ON_DELIVERY;
+- CODCollection is created when a COD fulfillment is dispatched and a CASH_ON_DELIVERY Payment exists;
 - delivery and collection are separate facts;
-- DELIVERED does not automatically set Payment = PAID;
-- trusted operator/provider event may mark CODCollection COLLECTED;
-- payment reconciliation is a later controlled action.
+- a successful delivery attempt may record CODCollection as COLLECTED;
+- DELIVERED or COLLECTED does **not** automatically set Payment = PAID;
+- only an explicit authorized RECONCILED transition, after validating collected vs expected amount, moves the linked Payment from PENDING to PAID;
+- every COD status transition is auditable.
 
 ## 12. Return to origin
 
@@ -295,7 +299,14 @@ RETURNED means logistics returned the physical parcel to MR.
 
 It does not automatically return inventory to sellable stock.
 
-Restocking requires later inspection / return workflow.
+RETURNED creates a ReturnInspection in PENDING state. An authorized inspection must choose one disposition:
+
+- RESTOCK
+- DAMAGED
+- QUARANTINE
+- RETURN_TO_SUPPLIER
+
+Only RESTOCK re-enters inventory and writes an auditable CUSTOMER_RETURN inventory movement. A completed inspection cannot be applied twice.
 
 This prevents damaged, opened, used or unsuitable merchandise from becoming sellable automatically.
 
@@ -305,9 +316,11 @@ Fulfillment transition may advance Order status only through approved mappings:
 
 - PREPARING -> Order PROCESSING
 - READY -> Order READY
-- DISPATCHED -> Order SHIPPED
-- DELIVERED -> Order DELIVERED
-- final commercial completion remains an Order policy decision
+- DISPATCHED -> Order SHIPPED and consumes the reserved physical stock
+- DELIVERED -> Order DELIVERED for shipped delivery
+- STORE_PICKUP READY -> DELIVERED maps to Order COMPLETED and consumes the reservation
+- logistics cancellation maps to Order CANCELLED only while the Order is still cancellable
+- failed delivery / returning / returned do not rewrite the Order into a fictitious delivered state
 
 Order inventory consumption remains governed by the existing Order reservation lifecycle.
 
@@ -394,7 +407,10 @@ No delivery price is trusted from the client.
 13. Internal mutations require authorization.
 14. PostgreSQL integration tests pass.
 15. Storefront smoke tests pass.
-16. Railway catalog-api/storefront deployments reach SUCCESS.
+16. Return-to-origin creates a pending inspection and cannot auto-restock.
+17. RESTOCK is idempotent and creates an immutable inventory movement.
+18. COD COLLECTED remains Payment PENDING until explicit reconciliation.
+19. Railway catalog-api/storefront deployments reach SUCCESS.
 
 ## 20. Traceability
 
