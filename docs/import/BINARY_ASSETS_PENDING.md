@@ -54,3 +54,5 @@ These files are preserved in the Project Library. Their exact raw bytes could no
 | rm-adulam-storefront-v0.3.zip | `/Boutique/rm-adulam-storefront-v0.3.zip` | application/zip | 26084 |
 | SKILL-12-RM-Web-Architecture-Design.zip | `/Boutique/SKILL-12-RM-Web-Architecture-Design.zip` | application/zip | 11039 |
 | Tablero de Identidad de Lujo MR Adalam.png | `/Boutique/Tablero de Identidad de Lujo MR Adalam.png` | image/png | 2103532 |
+
+> Actualización: `4DE433C7-B240-4E4A-8F20-E33E6D815246.png` (lockup original) ya está en GitHub como `brand/source/mr-adulam-lockup-original.png` (bytes exactos).

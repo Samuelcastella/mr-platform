@@ -1,1 +1,1 @@
-{"name":"mr-storefront","version":"0.4.0","private":true,"scripts":{"start":"node server.js","build:function":"node patch-page.js && node build-function.js"},"engines":{"node":">=18"}}
+{"name":"mr-storefront","version":"0.4.0","private":true,"scripts":{"start":"node server.js"},"engines":{"node":">=18"}}
