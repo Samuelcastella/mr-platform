@@ -1,5 +1,6 @@
 import { SQL } from "bun";
 import { ensureOrdersSchema, handleOrders } from "./orders";
+import { ensureCheckoutSchema, handleCheckout } from "./checkout";
 
 const db = new SQL({
   hostname: Bun.env.PGHOST!,
@@ -126,6 +127,7 @@ CREATE INDEX IF NOT EXISTS idx_public_events_name_created
 ON public_events(event_name, created_at DESC)`;
 
 await ensureOrdersSchema(db);
+await ensureCheckoutSchema(db);
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, {
@@ -195,6 +197,9 @@ Bun.serve({
 
     const orderResponse = await handleOrders(req, url, db, clean);
     if (orderResponse) return orderResponse;
+
+    const checkoutResponse = await handleCheckout(req, url, db, clean);
+    if (checkoutResponse) return checkoutResponse;
 
     if (url.pathname === "/v1/inquiries" && req.method === "POST") {
       const length = Number(req.headers.get("content-length") || 0);
@@ -303,8 +308,8 @@ Bun.serve({
 
     return json({
       service: "MR עדולם Catalog API",
-      version: "0.4.0",
-      endpoints: ["/health", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
+      version: "0.5.0",
+      endpoints: ["/health", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/checkouts", "/v1/checkouts/:id", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
     });
   }
 });
