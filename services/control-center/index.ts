@@ -148,11 +148,12 @@ function csvCell(v:unknown){const x=String(v??"");return /[",\n]/.test(x)?'"'+x.
 async function dashboard(url:URL, session:any){
   await ensureSchema(); const sql=getDb();
   const status=(url.searchParams.get("status")||"").slice(0,32),kind=(url.searchParams.get("kind")||"").slice(0,32),q=(url.searchParams.get("q")||"").slice(0,120);
-  const summary=await sql`SELECT COUNT(*)::int total, COUNT(*) FILTER(WHERE status='new')::int new_count, COUNT(*) FILTER(WHERE kind='product_request')::int product_requests, COUNT(*) FILTER(WHERE kind='supplier')::int suppliers, COUNT(*) FILTER(WHERE created_at>=NOW()-INTERVAL '24 hours')::int last_24h FROM public_inquiries`;
+  const summary=await sql`SELECT COUNT(*)::int total, COUNT(*) FILTER(WHERE status='new')::int new_count, COUNT(*) FILTER(WHERE kind='product_request')::int product_requests, COUNT(*) FILTER(WHERE kind='supplier')::int suppliers, COUNT(*) FILTER(WHERE created_at>=NOW()-INTERVAL '24 hours')::int last_24h, COUNT(*) FILTER(WHERE assigned_to IS NULL AND status NOT IN ('closed','rejected','converted'))::int unassigned, COUNT(*) FILTER(WHERE status='new' AND created_at<NOW()-INTERVAL '24 hours')::int overdue_new FROM public_inquiries`;
   const events=await sql`SELECT event_name,COUNT(*)::int count FROM public_events WHERE created_at>=NOW()-INTERVAL '7 days' GROUP BY event_name`;
   const demand=await sql`SELECT COALESCE(NULLIF(i.metadata->>'requestedProduct',''),p.name,'Sin especificar') item,COUNT(*)::int count FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id WHERE i.kind='product_request' GROUP BY 1 ORDER BY count DESC LIMIT 5`;
   const restock=await sql`SELECT COALESCE(p.name,'Producto sin relación') item,COUNT(*)::int count FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id WHERE i.kind='notify' GROUP BY 1 ORDER BY count DESC LIMIT 5`;
   const supplierCats=await sql`SELECT COALESCE(NULLIF(metadata->>'categories',''),'Sin categoría') item,COUNT(*)::int count FROM public_inquiries WHERE kind='supplier' GROUP BY 1 ORDER BY count DESC LIMIT 5`;
+  const historyRows=await sql`SELECT inquiry_id,actor,action,from_status,to_status,note,created_at FROM inquiry_history ORDER BY created_at DESC LIMIT 500`;
   const rows=await sql`
     SELECT i.id,i.kind,i.name,i.contact,i.country_code,i.product_id,i.message,i.metadata,i.status,i.priority,i.assigned_to,i.internal_notes,i.created_at,i.updated_at,p.name product_name
     FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id
@@ -161,6 +162,7 @@ async function dashboard(url:URL, session:any){
       AND (${q||null}::text IS NULL OR i.name ILIKE '%'||${q||null}::text||'%' OR i.contact ILIKE '%'||${q||null}::text||'%' OR COALESCE(i.message,'') ILIKE '%'||${q||null}::text||'%')
     ORDER BY i.priority DESC,i.created_at DESC LIMIT 100`;
   const ev=Object.fromEntries(events.map((x:any)=>[x.event_name,x.count])); const s=summary[0];
+  const historyBy=new Map<number,any[]>(); for(const h of historyRows as any[]){const id=Number(h.inquiry_id);const arr=historyBy.get(id)||[];if(arr.length<8){arr.push(h);historyBy.set(id,arr)}}
   const list=(rows:any[])=>rows.length?`<ol>${rows.map(x=>`<li><b>${esc(x.item)}</b><span class="score">${x.count}</span></li>`).join("")}</ol>`:`<p class="meta">Aún sin señales suficientes.</p>`;
   const ctaRate=(ev.cta_click||0)?Math.round((ev.intent_submit||0)/(ev.cta_click||1)*100):0;
   const checkoutRate=(ev.add_to_cart||0)?Math.round((ev.checkout_start||0)/(ev.add_to_cart||1)*100):0;
@@ -170,7 +172,7 @@ async function dashboard(url:URL, session:any){
       <div class="metric"><span>Nuevas</span><b>${s.new_count}</b></div>
       <div class="metric"><span>Solicitudes producto</span><b>${s.product_requests}</b></div>
       <div class="metric"><span>Proveedores</span><b>${s.suppliers}</b></div>
-      <div class="metric"><span>Últimas 24 h</span><b>${s.last_24h}</b></div>
+      <div class="metric"><span>Últimas 24 h</span><b>${s.last_24h}</b></div><div class="metric"><span>Sin asignar</span><b>${s.unassigned}</b></div><div class="metric"><span>Nuevas &gt;24h</span><b>${s.overdue_new}</b></div>
     </div>
     <div class="panel" style="margin-top:12px"><div class="eyebrow">Embudo · 7 días</div><p class="meta">Vistas ${ev.page_view||0} · CTA ${ev.cta_click||0} · Intenciones ${ev.intent_submit||0} · Carrito ${ev.add_to_cart||0} · Checkout ${ev.checkout_start||0}</p></div>`;
   const opts=(set:string[],value:string)=>set.map(x=>`<option value="${x}" ${x===value?"selected":""}>${esc(labels[x]||x)}</option>`).join("");
@@ -179,7 +181,7 @@ async function dashboard(url:URL, session:any){
       <div class="item-head"><div><span class="pill ${r.priority>=2?"high":""}">${esc(labels[r.kind]||r.kind)}</span><h3>#${r.id} · ${esc(r.name)}</h3><div class="meta">${esc(r.contact)} · ${esc(r.country_code||"Sin país")} · ${new Date(r.created_at).toLocaleString("es-HN")}${r.product_name?" · "+esc(r.product_name):""}</div></div><span class="pill">${esc(labels[r.status]||r.status)}</span></div>
       <div class="message">${esc(r.message||"Sin mensaje")}</div>
       <div class="suggest"><b>Acción sugerida:</b> ${esc(suggestedAction(r.kind))}</div>
-      <details><summary class="meta">Datos estructurados</summary><pre class="meta">${esc(JSON.stringify(r.metadata||{},null,2))}</pre></details>
+      <details><summary class="meta">Datos estructurados</summary><pre class="meta">${esc(JSON.stringify(r.metadata||{},null,2))}</pre></details>${(historyBy.get(Number(r.id))||[]).length?`<details><summary class="meta">Historial interno</summary>${(historyBy.get(Number(r.id))||[]).map((h:any)=>`<div class="meta" style="padding:6px 0;border-bottom:1px solid #eee5d9"><b>${esc(h.actor)}</b> · ${esc(labels[h.from_status]||h.from_status||"—")} → ${esc(labels[h.to_status]||h.to_status||"—")} · ${new Date(h.created_at).toLocaleString("es-HN")}${h.note?`<br>${esc(h.note)}`:""}</div>`).join("")}</details>`:""}
       <form class="actions" method="post" action="/inquiries/${r.id}/update">
         <input type="hidden" name="csrf" value="${esc(session.csrf)}">
         <label>Estado<select name="status">${opts([...statuses],r.status)}</select></label>
