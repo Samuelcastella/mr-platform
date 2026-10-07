@@ -311,7 +311,10 @@ const codFulfillmentResp = await createFulfillment("ci-fulfillment-cod-001", cod
 const codFulfillment = codFulfillmentResp.body.fulfillment;
 const codCheckoutResp = await createCheckout("ci-fulfillment-checkout-cod", codOrder, "CASH_ON_DELIVERY");
 const codCheckout = codCheckoutResp.body.checkout;
-ok(codCheckout.response !== false && codCheckout.payment?.status === "PENDING", "COD Payment inicia PENDING");
+ok(codCheckout.payment?.status === "PENDING", "COD Payment inicia PENDING");
+const codBeforeDelivery = await db`SELECT id, status, expected_amount_minor FROM cod_collections WHERE payment_id = ${codCheckout.payment.id}`;
+ok(codBeforeDelivery[0]?.status === "PENDING", "CODCollection inicia PENDING y separado de Payment");
+const codCollectionId = Number(codBeforeDelivery[0].id);
 for (const status of ["PREPARING", "READY", "DISPATCHED", "OUT_FOR_DELIVERY"]) {
   const step = await transitionFulfillment(codFulfillment.id, status);
   ok(step.response.status === 200, "COD fulfillment avanza a " + status);
@@ -330,10 +333,6 @@ const codDelivery = await api("/v1/internal/fulfillments/" + codFulfillment.id +
   })
 });
 ok(codDelivery.response.status === 201 && codDelivery.body.fulfillment?.status === "DELIVERED", "entrega COD se registra mediante intento exitoso");
-const codCollectionRows = await db`SELECT id, status, expected_amount_minor FROM cod_collections WHERE payment_id = ${codCheckout.payment.id}`;
-ok(codCollectionRows[0]?.status === "PENDING", "CODCollection existe separado de Payment");
-const codCollectionId = Number(codCollectionRows[0].id);
-
 const codAfterDelivery = await db`SELECT id, status, expected_amount_minor, collected_amount_minor FROM cod_collections WHERE payment_id = ${codCheckout.payment.id}`;
 ok(codAfterDelivery[0]?.status === "COLLECTED", "entrega con cobro deja CODCollection COLLECTED");
 
