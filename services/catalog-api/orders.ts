@@ -221,52 +221,53 @@ async function consumeReservations(tx: DB, orderId: number) {
   }
 }
 
-async function transitionOrder(db: DB, orderId: number, target: string, actor: string, reason?: string | null) {
+export async function transitionOrderInTx(tx: DB, orderId: number, target: string, actor: string, reason?: string | null) {
   if (!ORDER_STATUSES.has(target)) return { error: "invalid_status", status: 400 };
 
+  const rows = await tx`
+    SELECT id, status
+    FROM orders
+    WHERE id = ${orderId}
+    FOR UPDATE`;
+  if (!rows.length) return { error: "not_found", status: 404 };
+
+  const current = rows[0].status;
+  if (!ALLOWED[current]?.has(target)) {
+    return { error: "invalid_transition", status: 409, current, target };
+  }
+
+  if (target === "CONFIRMED") {
+    await tx`
+      UPDATE inventory_reservations
+      SET expires_at = NULL, updated_at = NOW()
+      WHERE order_id = ${orderId} AND status = 'ACTIVE'`;
+  }
+
+  if (target === "CANCELLED") {
+    await releaseReservations(tx, orderId, "RELEASED");
+  }
+
+  if (current === "READY" && (target === "SHIPPED" || target === "COMPLETED")) {
+    await consumeReservations(tx, orderId);
+  }
+
+  await tx`
+    UPDATE orders
+    SET status = ${target},
+        cancellation_reason = CASE WHEN ${target} = 'CANCELLED' THEN ${reason || null} ELSE cancellation_reason END,
+        updated_at = NOW()
+    WHERE id = ${orderId}`;
+
+  await tx`
+    INSERT INTO order_status_history(order_id, from_status, to_status, actor, reason)
+    VALUES(${orderId}, ${current}, ${target}, ${actor}, ${reason || null})`;
+
+  return { ok: true, current, target };
+}
+
+async function transitionOrder(db: DB, orderId: number, target: string, actor: string, reason?: string | null) {
   try {
-    const result = await db.begin(async (tx: DB) => {
-      const rows = await tx`
-        SELECT id, status
-        FROM orders
-        WHERE id = ${orderId}
-        FOR UPDATE`;
-      if (!rows.length) return { error: "not_found", status: 404 };
-
-      const current = rows[0].status;
-      if (!ALLOWED[current]?.has(target)) {
-        return { error: "invalid_transition", status: 409, current, target };
-      }
-
-      if (target === "CONFIRMED") {
-        await tx`
-          UPDATE inventory_reservations
-          SET expires_at = NULL, updated_at = NOW()
-          WHERE order_id = ${orderId} AND status = 'ACTIVE'`;
-      }
-
-      if (target === "CANCELLED") {
-        await releaseReservations(tx, orderId, "RELEASED");
-      }
-
-      if (current === "READY" && (target === "SHIPPED" || target === "COMPLETED")) {
-        await consumeReservations(tx, orderId);
-      }
-
-      await tx`
-        UPDATE orders
-        SET status = ${target},
-            cancellation_reason = CASE WHEN ${target} = 'CANCELLED' THEN ${reason || null} ELSE cancellation_reason END,
-            updated_at = NOW()
-        WHERE id = ${orderId}`;
-
-      await tx`
-        INSERT INTO order_status_history(order_id, from_status, to_status, actor, reason)
-        VALUES(${orderId}, ${current}, ${target}, ${actor}, ${reason || null})`;
-
-      return { ok: true };
-    });
-    return result;
+    return await db.begin((tx: DB) => transitionOrderInTx(tx, orderId, target, actor, reason));
   } catch (error: any) {
     return { error: error?.message || "transition_failed", status: 409 };
   }
