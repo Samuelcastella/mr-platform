@@ -160,7 +160,7 @@ function constantTimeEqual(a: string, b: string) {
   return diff === 0;
 }
 
-function machineAuthorized(req: Request) {
+export function machineAuthorized(req: Request) {
   const expected = Bun.env.INTERNAL_API_TOKEN || "";
   const supplied = req.headers.get("x-internal-key") || "";
   return Boolean(expected) && constantTimeEqual(expected, supplied);
@@ -238,7 +238,7 @@ function fingerprint(value: string) {
   return sha256(`${salt}|${value}`);
 }
 
-async function audit(
+export async function writeAuditEvent(
   db: DB,
   input: {
     actorType: "USER" | "SERVICE" | "SYSTEM";
@@ -387,6 +387,47 @@ export async function requireStaffPermission(
   }
 
   return { ok: true as const, actor };
+}
+
+export type InternalActor =
+  | StaffActor
+  | {
+      type: "SERVICE";
+      service: string;
+    };
+
+export async function authorizeInternal(
+  req: Request,
+  db: DB,
+  permission: string,
+  options: { locationId?: number | null; mutation?: boolean } = {}
+) {
+  if (machineAuthorized(req)) {
+    return {
+      ok: true as const,
+      actor: { type: "SERVICE" as const, service: "internal-api" }
+    };
+  }
+
+  return requireStaffPermission(req, db, permission, {
+    locationId: options.locationId,
+    requireCsrf: options.mutation === true
+  });
+}
+
+export function auditActor(actor: InternalActor) {
+  if (actor.type === "SERVICE") {
+    return {
+      actorType: "SERVICE" as const,
+      actorService: actor.service,
+      actorUserId: null
+    };
+  }
+  return {
+    actorType: "USER" as const,
+    actorService: null,
+    actorUserId: actor.userId
+  };
 }
 
 export async function ensureAuthSchema(db: DB) {
@@ -561,7 +602,7 @@ async function bootstrap(req: Request, db: DB) {
         )
         VALUES(${Number(user.id)}, ${Number(roles[0].id)}, 'GLOBAL', NULL)`;
 
-      await audit(tx, {
+      await writeAuditEvent(tx, {
         actorType: "SERVICE",
         actorService: "bootstrap",
         action: "security.bootstrap_admin",
@@ -612,7 +653,7 @@ async function login(req: Request, db: DB) {
 
   const genericFailure = async (reason: string) => {
     recordLoginFailure(key);
-    await audit(db, {
+    await writeAuditEvent(db, {
       actorType: "SYSTEM",
       action: "security.login",
       outcome: "FAILURE",
@@ -658,7 +699,7 @@ async function login(req: Request, db: DB) {
     SET last_login_at = NOW(), updated_at = NOW()
     WHERE id = ${Number(user.id)}`;
 
-  await audit(db, {
+  await writeAuditEvent(db, {
     actorType: "USER",
     actorUserId: Number(user.id),
     action: "security.login",
@@ -719,7 +760,7 @@ async function logout(req: Request, db: DB) {
     SET status = 'REVOKED', revoked_at = NOW()
     WHERE id = ${actor.sessionId} AND status = 'ACTIVE'`;
 
-  await audit(db, {
+  await writeAuditEvent(db, {
     actorType: "USER",
     actorUserId: actor.userId,
     action: "security.logout",
