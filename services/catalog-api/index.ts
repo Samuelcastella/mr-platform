@@ -86,14 +86,47 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`;
 
+await db`
+CREATE TABLE IF NOT EXISTS public_inquiries (
+  id BIGSERIAL PRIMARY KEY,
+  kind TEXT NOT NULL,
+  name TEXT NOT NULL,
+  contact TEXT NOT NULL,
+  country_code TEXT,
+  product_id BIGINT REFERENCES products(id) ON DELETE SET NULL,
+  message TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'new',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (kind IN ('supplier','product_request','support','partnership','notify'))
+)`;
+
+await db`
+CREATE INDEX IF NOT EXISTS idx_public_inquiries_status_created
+ON public_inquiries(status, created_at DESC)`;
+
+const json = (body: unknown, status = 200) =>
+  Response.json(body, {
+    status,
+    headers: {
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff"
+    }
+  });
+
+const clean = (value: unknown, max: number) =>
+  typeof value === "string" ? value.trim().slice(0, max) : "";
+
 Bun.serve({
   port: Number(Bun.env.PORT || 3000),
   async fetch(req) {
     const url = new URL(req.url);
+
     if (url.pathname === "/health") {
       const result = await db`SELECT NOW() AS db_time`;
-      return Response.json({ ok: true, service: "MR עדולם Catalog API", database: "connected", dbTime: result[0].db_time });
+      return json({ ok: true, service: "MR עדולם Catalog API", database: "connected", dbTime: result[0].db_time });
     }
+
     if (url.pathname === "/v1/products" && req.method === "GET") {
       const status = url.searchParams.get("status");
       const rows = await db`
@@ -106,8 +139,65 @@ Bun.serve({
         WHERE (${status}::text IS NULL OR p.status = ${status}::text)
         GROUP BY p.id
         ORDER BY p.id DESC LIMIT 100`;
-      return Response.json({ data: rows });
+      return json({ data: rows });
     }
-    return Response.json({ service: "MR עדולם Catalog API", version: "0.1.0", endpoints: ["/health", "/v1/products"] });
+
+    if (url.pathname === "/v1/inquiries" && req.method === "POST") {
+      const length = Number(req.headers.get("content-length") || 0);
+      if (length > 16384) return json({ error: "payload_too_large" }, 413);
+
+      let body: any;
+      try {
+        body = await req.json();
+      } catch {
+        return json({ error: "invalid_json" }, 400);
+      }
+
+      if (clean(body.website, 120)) return json({ ok: true }, 202);
+
+      const allowed = new Set(["supplier", "product_request", "support", "partnership", "notify"]);
+      const kind = clean(body.kind, 32);
+      const name = clean(body.name, 120);
+      const contact = clean(body.contact, 180);
+      const countryCode = clean(body.countryCode, 2).toUpperCase() || null;
+      const message = clean(body.message, 2000) || null;
+      const rawProductId = Number(body.productId);
+      const productId = Number.isSafeInteger(rawProductId) && rawProductId > 0 ? rawProductId : null;
+      const metadata =
+        body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+          ? JSON.stringify(body.metadata).slice(0, 4000)
+          : "{}";
+
+      if (!allowed.has(kind)) return json({ error: "invalid_kind" }, 400);
+      if (name.length < 2) return json({ error: "name_required" }, 400);
+      if (contact.length < 4) return json({ error: "contact_required" }, 400);
+      if (countryCode && !/^[A-Z]{2}$/.test(countryCode)) return json({ error: "invalid_country" }, 400);
+
+      const rows = await db`
+        INSERT INTO public_inquiries
+          (kind, name, contact, country_code, product_id, message, metadata)
+        VALUES
+          (${kind}, ${name}, ${contact}, ${countryCode}, ${productId}, ${message}, ${metadata}::jsonb)
+        RETURNING id, status, created_at`;
+
+      return json({
+        ok: true,
+        inquiry: {
+          id: rows[0].id,
+          status: rows[0].status,
+          createdAt: rows[0].created_at
+        }
+      }, 201);
+    }
+
+    if (url.pathname === "/v1/inquiries") {
+      return json({ error: "method_not_allowed" }, 405);
+    }
+
+    return json({
+      service: "MR עדולם Catalog API",
+      version: "0.2.0",
+      endpoints: ["/health", "/v1/products", "/v1/inquiries"]
+    });
   }
 });
