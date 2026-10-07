@@ -32,6 +32,13 @@ Inventario completo y pendientes en [`docs/ops/RAILWAY.md`](docs/ops/RAILWAY.md)
 cd web/storefront && npm start   # http://localhost:3000
 ```
 
+## Calidad
+
+- `cd web/storefront && npm test`: prueba de humo (rutas, assets, manifest PWA, compresión, ETag, cabeceras, path traversal, sintaxis del script). Corre en CI (GitHub Actions) en cada PR y push a `main`.
+- Servidor: gzip/brotli, ETag, cabeceras de seguridad y CSP, solo GET/HEAD, assets confinados a `/assets`.
+- SEO y compartir: meta description, Open Graph/Twitter card (`og-image.jpg`), `robots.txt`. Las URLs absolutas de OG apuntan al dominio de Railway; actualizar al activar el dominio propio.
+- Instalable (PWA): `manifest.webmanifest` con iconos 192/512 y maskable.
+
 ## Marca
 
 - Nombre visible: **MR עדולם**; עדולם solo en hebreo, sin transliteración latina.
