@@ -151,15 +151,42 @@ Bun.serve({
     if (url.pathname === "/v1/products" && req.method === "GET") {
       const status = url.searchParams.get("status");
       const rows = await db`
-        SELECT p.id, p.name, p.slug, p.category, p.brand, p.status, p.created_at,
-               MIN(v.price) AS price, MIN(v.currency) AS currency,
-               COALESCE(SUM(i.quantity - i.reserved), 0)::int AS stock
+        SELECT
+          p.id, p.name, p.slug, p.category, p.brand, p.status, p.created_at,
+          COALESCE(MIN(v.price), 0) AS price,
+          COALESCE(MIN(v.currency), 'HNL') AS currency,
+          COALESCE(SUM(v.available), 0)::int AS stock,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', v.id,
+                'sku', v.sku,
+                'barcode', v.barcode,
+                'size', v.size,
+                'color', v.color,
+                'price', v.price,
+                'currency', v.currency,
+                'available', v.available
+              )
+              ORDER BY v.id
+            ) FILTER (WHERE v.id IS NOT NULL),
+            '[]'::json
+          ) AS variants
         FROM products p
-        LEFT JOIN product_variants v ON v.product_id = p.id AND v.active
-        LEFT JOIN inventory i ON i.variant_id = v.id
+        LEFT JOIN (
+          SELECT
+            pv.id, pv.product_id, pv.sku, pv.barcode, pv.size, pv.color,
+            pv.price, pv.currency,
+            COALESCE(SUM(i.quantity - i.reserved), 0)::int AS available
+          FROM product_variants pv
+          LEFT JOIN inventory i ON i.variant_id = pv.id
+          WHERE pv.active
+          GROUP BY pv.id
+        ) v ON v.product_id = p.id
         WHERE (${status}::text IS NULL OR p.status = ${status}::text)
         GROUP BY p.id
-        ORDER BY p.id DESC LIMIT 100`;
+        ORDER BY p.id DESC
+        LIMIT 100`;
       return json({ data: rows });
     }
 
