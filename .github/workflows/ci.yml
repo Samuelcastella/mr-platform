@@ -74,3 +74,23 @@ jobs:
           bun run services/catalog-api/test/fulfillment.integration.ts
       - name: Validar Control Center
         run: bun build services/control-center/index.ts --target=bun --outfile=/tmp/control-center.js
+
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Instalar dependencias mobile
+        working-directory: apps/mobile
+        run: npm install --no-audit --no-fund
+      - name: Typecheck mobile
+        working-directory: apps/mobile
+        run: npm run typecheck
+      - name: Exportar bundle Android
+        working-directory: apps/mobile
+        env:
+          CI: "1"
+        run: npx expo export --platform android --output-dir /tmp/mr-mobile-dist

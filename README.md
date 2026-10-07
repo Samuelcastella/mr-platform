@@ -7,7 +7,8 @@ Plataforma comercial de MR עדולם (Honduras): storefront web, API de catálo
 | Ruta | Qué es | Despliegue |
 |---|---|---|
 | `web/storefront/` | Storefront SPA (HTML + JS sin build) con corona 3D en three.js | Railway `storefront` ← rama `main`, root `web/storefront`, `npm start` |
-| `services/catalog-api/` | API de catálogo (Bun + Postgres): `/health`, `/v1/products` | Railway `catalog-api` (hoy como *Function* con este mismo código) |
+| `services/catalog-api/` | API de catálogo (Bun + Postgres): `/health`, `/v1/products` | Railway `catalog-api` |
+| `apps/mobile/` | App móvil Expo/React Native: catálogo conectado, iconos y splash de MR עדולם | Expo SDK 57; distribución móvil futura |
 | `brand/` | Pack de marca: SVG/PNG (tinta, crema, oro), iconos y splash de app, original y pipeline | — |
 | `web/legacy/` | Dashboard operativo antiguo (HTML estático) | no desplegado |
 | `docs/` | Arquitectura, blueprint, investigación, skills y manifiesto de importación | — |
@@ -30,6 +31,7 @@ Inventario completo y pendientes en [`docs/ops/RAILWAY.md`](docs/ops/RAILWAY.md)
 
 ```bash
 cd web/storefront && npm start   # http://localhost:3000
+cd apps/mobile && npm install && npm start
 ```
 
 ## Calidad
