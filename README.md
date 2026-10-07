@@ -1,62 +1,39 @@
-# RM עדולם — Storefront v0.3
+# MR עדולם
 
-Demo navegable y persistente del ecosistema web siguiendo SKILL-12.
+Plataforma comercial de MR עדולם (Honduras): storefront web, API de catálogo y sistema de marca.
 
-## Pantallas
+## Estructura
 
-- `#/` — Home
-- `#/catalog` — Catálogo con búsqueda y filtros
-- `#/product/p1` — Ficha de producto
-- `#/cart` — Carrito persistente
-- `#/checkout` — Checkout demo que crea pedidos
-- `#/account` — Cuenta
-- `#/orders` — Pedidos persistentes
-- `#/marketplace` — Marketplace + P2P
-- `#/admin` — Control Center con datos simulados
+| Ruta | Qué es | Despliegue |
+|---|---|---|
+| `web/storefront/` | Storefront SPA (HTML + JS sin build) con corona 3D en three.js | Railway `storefront` ← rama `main`, root `web/storefront`, `npm start` |
+| `services/catalog-api/` | API de catálogo (Bun + Postgres): `/health`, `/v1/products` | Railway `catalog-api` (hoy como *Function* con este mismo código) |
+| `brand/` | Pack de marca: SVG/PNG (tinta, crema, oro), iconos y splash de app, original y pipeline | — |
+| `web/legacy/` | Dashboard operativo antiguo (HTML estático) | no desplegado |
+| `docs/` | Arquitectura, blueprint, investigación, skills y manifiesto de importación | — |
 
-## Backend simulado
+## Producción (Railway, proyecto «MR עדולם», entorno `production`)
 
-Esta versión añade una capa de datos local que funciona sin servidor:
+- Storefront: https://storefront-production-e7b5.up.railway.app/
+- Catalog API: https://catalog-api-production-cc18.up.railway.app/
+- Postgres: servicio `Postgres` (credenciales solo en variables de Railway; nunca en el repo).
 
-- carrito persistente con `localStorage`
-- pedidos persistentes
-- checkout demo que genera ID de pedido
-- inventario simulado por ubicación
-- proveedores simulados de varios países
-- publicaciones Marketplace/P2P
-- KPIs administrativos derivados de esos datos
+Inventario completo y pendientes en [`docs/ops/RAILWAY.md`](docs/ops/RAILWAY.md).
 
-Nada de esto realiza cobros ni representa datos comerciales reales.
+## Flujo
 
-## Ejecutar
+1. Cambios en una rama → PR a `main`.
+2. Al fusionar, Railway despliega `storefront` automáticamente.
+3. `catalog-api` aún se despliega pegando `services/catalog-api/index.ts` en la Function; ver pendientes.
+
+## Desarrollo local
 
 ```bash
-npm install
-npm run dev
+cd web/storefront && npm start   # http://localhost:3000
 ```
 
-## Construir
+## Marca
 
-```bash
-npm run build
-```
-
-## Estado
-
-- Estructura del proyecto: generada.
-- Navegación SPA: implementada.
-- Persistencia local demo: implementada.
-- Flujo producto → carrito → checkout → pedido → panel: implementado.
-- Backend real/API/base de datos: todavía no implementado.
-- Compilación React/Vite: requiere instalar las dependencias del `package.json`.
-
-## Próxima etapa
-
-1. Reemplazar `demoStore` por una API real.
-2. Añadir base de datos.
-3. Autenticación y roles.
-4. Inventario multiubicación real.
-5. Proveedores y órdenes de compra.
-6. Pagos reales.
-7. Logística.
-8. Marketplace/P2P transaccional.
+- Nombre visible: **MR עדולם**; עדולם solo en hebreo, sin transliteración latina.
+- Logo, corona, monograma y wordmark en `brand/svg` y `brand/png`; iconos de app en `brand/app`.
+- La corona 3D del hero se arrastra para girar (doble clic = giro completo); si WebGL falla, se muestra la imagen plana.
