@@ -41,13 +41,14 @@ const get = (p, o) => fetch(base + p, o);
     // compresión
     const gz = await get('/', { headers: { 'accept-encoding': 'gzip' } });
     ok(gz.headers.get('content-encoding') === 'gzip' || gz.headers.get('content-encoding') === 'br', 'respuesta comprimida');
-    ok((await (await get('/', { headers: { 'accept-encoding': 'gzip' } })).text()).includes('Una tienda'), 'contenido íntegro tras descompresión');
+    ok((await (await get('/', { headers: { 'accept-encoding': 'gzip' } })).text()).includes('Descubre') && html.includes('function brandView()'), 'contenido Commerce First y ruta de marca presentes');
 
     // etag / 304
     const et = home.headers.get('etag');
     ok((await get('/', { headers: { 'if-none-match': et } })).status === 304, 'ETag → 304');
 
     // API sin configurar, método no permitido y path traversal
+    ok((await get('/ready')).status === 503, '/ready sin catálogo configurado → 503');
     ok((await get('/api/v1/products')).status === 503, '/api sin CATALOG_API_URL → 503');
     ok((await get('/', { method: 'POST' })).status === 405, 'POST → 405');
     const trav = await (await get('/assets/..%2fserver.js')).text();
