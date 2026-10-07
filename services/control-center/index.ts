@@ -45,6 +45,20 @@ async function ensureSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
   await sql`CREATE INDEX IF NOT EXISTS idx_inquiry_history_inquiry_created ON inquiry_history(inquiry_id, created_at DESC)`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS sourcing_opportunities (
+      id BIGSERIAL PRIMARY KEY,
+      inquiry_id BIGINT UNIQUE REFERENCES public_inquiries(id) ON DELETE SET NULL,
+      opportunity_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      priority SMALLINT NOT NULL DEFAULT 1,
+      owner TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_sourcing_opportunities_status_created ON sourcing_opportunities(status, created_at DESC)`;
   schemaReady = true;
 }
 
@@ -154,6 +168,8 @@ async function dashboard(url:URL, session:any){
   const restock=await sql`SELECT COALESCE(p.name,'Producto sin relación') item,COUNT(*)::int count FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id WHERE i.kind='notify' GROUP BY 1 ORDER BY count DESC LIMIT 5`;
   const supplierCats=await sql`SELECT COALESCE(NULLIF(metadata->>'categories',''),'Sin categoría') item,COUNT(*)::int count FROM public_inquiries WHERE kind='supplier' GROUP BY 1 ORDER BY count DESC LIMIT 5`;
   const historyRows=await sql`SELECT inquiry_id,actor,action,from_status,to_status,note,created_at FROM inquiry_history ORDER BY created_at DESC LIMIT 500`;
+  const opportunitySummary=await sql`SELECT COUNT(*)::int total, COUNT(*) FILTER(WHERE status='open')::int open_count FROM sourcing_opportunities`;
+  const opportunities=await sql`SELECT id,inquiry_id,opportunity_type,title,status,priority,owner,notes,created_at FROM sourcing_opportunities WHERE status='open' ORDER BY priority DESC,created_at DESC LIMIT 12`;
   const rows=await sql`
     SELECT i.id,i.kind,i.name,i.contact,i.country_code,i.product_id,i.message,i.metadata,i.status,i.priority,i.assigned_to,i.internal_notes,i.created_at,i.updated_at,p.name product_name
     FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id
@@ -161,7 +177,7 @@ async function dashboard(url:URL, session:any){
       AND (${kind||null}::text IS NULL OR i.kind=${kind||null}::text)
       AND (${q||null}::text IS NULL OR i.name ILIKE '%'||${q||null}::text||'%' OR i.contact ILIKE '%'||${q||null}::text||'%' OR COALESCE(i.message,'') ILIKE '%'||${q||null}::text||'%')
     ORDER BY i.priority DESC,i.created_at DESC LIMIT 100`;
-  const ev=Object.fromEntries(events.map((x:any)=>[x.event_name,x.count])); const s=summary[0];
+  const ev=Object.fromEntries(events.map((x:any)=>[x.event_name,x.count])); const s=summary[0]; const opp=opportunitySummary[0];
   const historyBy=new Map<number,any[]>(); for(const h of historyRows as any[]){const id=Number(h.inquiry_id);const arr=historyBy.get(id)||[];if(arr.length<8){arr.push(h);historyBy.set(id,arr)}}
   const list=(rows:any[])=>rows.length?`<ol>${rows.map(x=>`<li><b>${esc(x.item)}</b><span class="score">${x.count}</span></li>`).join("")}</ol>`:`<p class="meta">Aún sin señales suficientes.</p>`;
   const ctaRate=(ev.cta_click||0)?Math.round((ev.intent_submit||0)/(ev.cta_click||1)*100):0;
@@ -172,7 +188,7 @@ async function dashboard(url:URL, session:any){
       <div class="metric"><span>Nuevas</span><b>${s.new_count}</b></div>
       <div class="metric"><span>Solicitudes producto</span><b>${s.product_requests}</b></div>
       <div class="metric"><span>Proveedores</span><b>${s.suppliers}</b></div>
-      <div class="metric"><span>Últimas 24 h</span><b>${s.last_24h}</b></div><div class="metric"><span>Sin asignar</span><b>${s.unassigned}</b></div><div class="metric"><span>Nuevas &gt;24h</span><b>${s.overdue_new}</b></div>
+      <div class="metric"><span>Últimas 24 h</span><b>${s.last_24h}</b></div><div class="metric"><span>Sin asignar</span><b>${s.unassigned}</b></div><div class="metric"><span>Nuevas &gt;24h</span><b>${s.overdue_new}</b></div><div class="metric"><span>Oportunidades abiertas</span><b>${opp.open_count}</b></div>
     </div>
     <div class="panel" style="margin-top:12px"><div class="eyebrow">Embudo · 7 días</div><p class="meta">Vistas ${ev.page_view||0} · CTA ${ev.cta_click||0} · Intenciones ${ev.intent_submit||0} · Carrito ${ev.add_to_cart||0} · Checkout ${ev.checkout_start||0}</p></div>`;
   const opts=(set:string[],value:string)=>set.map(x=>`<option value="${x}" ${x===value?"selected":""}>${esc(labels[x]||x)}</option>`).join("");
@@ -189,7 +205,7 @@ async function dashboard(url:URL, session:any){
         <label>Asignado a<input name="assigned_to" maxlength="120" value="${esc(r.assigned_to||"")}"></label>
         <label>Notas internas<textarea name="internal_notes" maxlength="4000">${esc(r.internal_notes||"")}</textarea></label>
         <button>Guardar</button>
-      </form>
+      </form>${["product_request","notify","supplier","partnership"].includes(r.kind)?`<form method="post" action="/inquiries/${r.id}/opportunity" style="margin-top:10px"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Crear oportunidad</button></form>`:""}
     </article>`).join(""):`<div class="panel empty">No hay intenciones con estos filtros.</div>`;
   return shell(`
     <div class="eyebrow">Bandeja de Intenciones</div><h1>Señales del mercado convertidas en trabajo.</h1><p class="meta">Clientes, proveedores, reposición, soporte y alianzas en una cola operativa.</p>
@@ -220,6 +236,17 @@ Bun.serve({
     if(url.pathname==="/logout"&&req.method==="POST"){const fd=await req.formData();if(String(fd.get("csrf")||"")!==session.csrf)return html("Solicitud inválida",403);return redirect("/login",clearCookie())}
     if(url.pathname==="/"&&req.method==="GET")return html(await dashboard(url,session));
     if(url.pathname==="/export/inquiries.csv"&&req.method==="GET"){await ensureSchema();const rows=await getDb()`SELECT i.id,i.kind,i.status,i.priority,i.name,i.contact,i.country_code,p.name product_name,i.created_at FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id ORDER BY i.created_at DESC LIMIT 5000`;const head=["id","kind","status","priority","name","contact","country","product","created_at"];const csv=[head.join(","),...rows.map((r:any)=>[r.id,r.kind,r.status,r.priority,r.name,r.contact,r.country_code,r.product_name,r.created_at].map(csvCell).join(","))].join("\n");return new Response(csv,{headers:securityHeaders({"content-type":"text/csv; charset=utf-8","content-disposition":"attachment; filename=mr-intenciones.csv","cache-control":"no-store"})});}
+    const opportunityMatch=url.pathname.match(/^\/inquiries\/(\d+)\/opportunity$/);
+    if(opportunityMatch&&req.method==="POST"){
+      const fd=await req.formData();if(String(fd.get("csrf")||"")!==session.csrf)return html("Solicitud inválida",403);
+      await ensureSchema();const sql=getDb();const inquiry=await sql`SELECT id,kind,name,message,metadata FROM public_inquiries WHERE id=${Number(opportunityMatch[1])} LIMIT 1`;if(!inquiry.length)return html("Solicitud no encontrada",404);
+      const row:any=inquiry[0],meta=row.metadata||{};
+      const title=String(meta.requestedProduct||meta.categories||row.message||row.name||("Solicitud #"+row.id)).slice(0,180);
+      const type=row.kind==="supplier"?"supplier_lead":row.kind==="partnership"?"partnership":row.kind==="notify"?"restock":"product_demand";
+      await sql`INSERT INTO sourcing_opportunities(inquiry_id,opportunity_type,title,priority,owner,notes) VALUES(${row.id},${type},${title},1,${session.actor},${row.message||null}) ON CONFLICT(inquiry_id) DO UPDATE SET updated_at=NOW()`;
+      await sql`INSERT INTO inquiry_history(inquiry_id,actor,action,from_status,to_status,note) VALUES(${row.id},${session.actor},"create_opportunity",NULL,NULL,${"Converted to sourcing opportunity"})`;
+      return redirect("/");
+    }
     const m=url.pathname.match(/^\/inquiries\/(\d+)\/update$/);
     if(m&&req.method==="POST"){
       const fd=await req.formData();if(String(fd.get("csrf")||"")!==session.csrf)return html("Solicitud inválida",403);
