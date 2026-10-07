@@ -40,9 +40,9 @@ async function build(base) {
 
   const face = new THREE.MeshStandardMaterial({
     map: albedo, normalMap: normal, normalScale: new THREE.Vector2(0.9, 0.9),
-    color: 0xf4efe6, metalness: 1, roughness: 0.27, envMapIntensity: 1.6,
+    color: 0xffe6a0, metalness: 1, roughness: 0.22, envMapIntensity: 2.2,
   });
-  const edge = new THREE.MeshStandardMaterial({ color: 0xc9bea6, metalness: 1, roughness: 0.34, envMapIntensity: 1.4 });
+  const edge = new THREE.MeshStandardMaterial({ color: 0xd9ae50, metalness: 1, roughness: 0.3, envMapIntensity: 1.8 });
   const mesh = new THREE.Mesh(geo, [face, edge]);
   mesh.scale.setScalar(2 / W); // ancho = 2 unidades
   return { mesh, aspect: H / W };
