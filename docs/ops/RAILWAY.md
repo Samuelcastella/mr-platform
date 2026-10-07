@@ -12,6 +12,6 @@
 ## Pendientes
 
 1. Borrar el servicio `storefront-preview` (apagado y reemplazado). Irreversible: lo hace el propietario en el panel de Railway.
-2. Dominio propio para el storefront (falta decidir el dominio).
+2. **[PENDIENTE]** Dominio `mr-adulam.com`: agregado en Railway pero sin registrar ni verificar; ver issue con etiqueta `pendiente`.
 3. La base de datos del catálogo está vacía: el storefront muestra productos de demostración hasta que `/v1/products?status=active` devuelva datos.
 4. Postgres: sin proxy TCP público (verificado 2026-10-07).
