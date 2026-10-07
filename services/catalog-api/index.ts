@@ -3,6 +3,7 @@ import { ensureOrdersSchema, handleOrders } from "./orders";
 import { ensureCheckoutSchema, handleCheckout } from "./checkout";
 import { ensureFulfillmentSchema, handleFulfillment } from "./fulfillment";
 import { ensureAuthSchema, handleAuth } from "./auth";
+import { handleInternal } from "./internal-routes";
 
 const db = new SQL({
   hostname: Bun.env.PGHOST!,
@@ -210,6 +211,9 @@ Bun.serve({
 
     const checkoutResponse = await handleCheckout(req, url, db, clean);
     if (checkoutResponse) return checkoutResponse;
+
+    const internalResponse = await handleInternal(req, url, db, clean);
+    if (internalResponse) return internalResponse;
 
     if (url.pathname === "/v1/inquiries" && req.method === "POST") {
       const length = Number(req.headers.get("content-length") || 0);
