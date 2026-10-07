@@ -15,3 +15,4 @@
 2. **[PENDIENTE]** Dominio `mr-adulam.com`: agregado en Railway pero sin registrar ni verificar; ver issue con etiqueta `pendiente`.
 3. La base de datos del catálogo está vacía: el storefront muestra productos de demostración hasta que `/v1/products?status=active` devuelva datos.
 4. Postgres: sin proxy TCP público (verificado 2026-10-07).
+5. **[PENDIENTE]** App móvil: no existe todavía (M10 previsto); assets listos en `brand/app/`. Ver issue con etiqueta `pendiente`.
