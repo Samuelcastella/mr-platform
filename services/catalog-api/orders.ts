@@ -275,13 +275,17 @@ async function transitionOrder(db: DB, orderId: number, target: string, actor: s
 export async function expirePendingReservations(db: DB) {
   return db.begin(async (tx: DB) => {
     const expired = await tx`
-      SELECT DISTINCT o.id AS order_id
+      SELECT o.id AS order_id
       FROM orders o
-      JOIN inventory_reservations r ON r.order_id = o.id
       WHERE o.status = 'PENDING_CONFIRMATION'
-        AND r.status = 'ACTIVE'
-        AND r.expires_at IS NOT NULL
-        AND r.expires_at <= NOW()
+        AND EXISTS (
+          SELECT 1
+          FROM inventory_reservations r
+          WHERE r.order_id = o.id
+            AND r.status = 'ACTIVE'
+            AND r.expires_at IS NOT NULL
+            AND r.expires_at <= NOW()
+        )
       ORDER BY o.id
       FOR UPDATE OF o SKIP LOCKED`;
 
@@ -432,7 +436,9 @@ async function createOrder(req: Request, db: DB, clean: (v: unknown, max: number
 
       for (const item of normalized.value.items) {
         const rows = await tx`
-          SELECT pv.id, pv.sku, pv.size, pv.color, pv.price, pv.currency, p.name AS product_name,
+          SELECT pv.id, pv.sku, pv.size, pv.color,
+                 ROUND(pv.price * 100)::bigint AS price_minor,
+                 pv.currency, p.name AS product_name,
                  i.quantity, i.reserved
           FROM product_variants pv
           JOIN products p ON p.id = pv.product_id
@@ -451,7 +457,7 @@ async function createOrder(req: Request, db: DB, clean: (v: unknown, max: number
         if (currency && currency !== lineCurrency) return { error: "mixed_currency_not_supported", status: 409 };
         currency = lineCurrency;
 
-        const unitPriceMinor = Number(row.price) === 0 ? 0 : Math.round(Number(row.price) * 100);
+        const unitPriceMinor = Number(row.price_minor);
         const lineTotalMinor = unitPriceMinor * item.quantity;
         if (!Number.isSafeInteger(lineTotalMinor)) return { error: "amount_too_large", status: 400 };
 
@@ -470,7 +476,8 @@ async function createOrder(req: Request, db: DB, clean: (v: unknown, max: number
 
       const number = orderNumber();
       const token = crypto.randomUUID();
-      const ttlMinutes = Math.min(1440, Math.max(1, Number(Bun.env.ORDER_RESERVATION_TTL_MINUTES || 30)));
+      const configuredTtl = Number(Bun.env.ORDER_RESERVATION_TTL_MINUTES || 30);
+      const ttlMinutes = Number.isFinite(configuredTtl) ? Math.min(1440, Math.max(1, Math.trunc(configuredTtl))) : 30;
 
       const inserted = await tx`
         INSERT INTO orders (
