@@ -560,6 +560,103 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
   }
 }
 
+
+async function transitionFulfillmentInTx(
+  tx: DB,
+  id: number,
+  target: string,
+  actor: string,
+  reason: string | null,
+  proof: any
+) {
+  if (!STATUSES.has(target)) return { error: "invalid_status", status: 400 };
+
+  const rows = await tx`
+    SELECT f.id, f.order_id, f.type, f.status, o.status AS order_status
+    FROM fulfillments f
+    JOIN orders o ON o.id = f.order_id
+    WHERE f.id = ${id}
+    FOR UPDATE OF f, o`;
+  if (!rows.length) return { error: "not_found", status: 404 };
+
+  const f = rows[0];
+  const current = f.status;
+  if (!ALLOWED[current]?.has(target)) {
+    return { error: "invalid_transition", status: 409, current, target };
+  }
+
+  let orderTarget: string | null = null;
+  if (target === "PREPARING" && f.order_status === "CONFIRMED") orderTarget = "PROCESSING";
+  if (target === "READY" && f.order_status === "PROCESSING") orderTarget = "READY";
+  if (target === "DISPATCHED" && f.order_status === "READY") orderTarget = "SHIPPED";
+  if (target === "DELIVERED") {
+    if (f.type === "STORE_PICKUP" && f.order_status === "READY") orderTarget = "COMPLETED";
+    else if (f.order_status === "SHIPPED") orderTarget = "DELIVERED";
+  }
+  if (
+    target === "CANCELLED" &&
+    ["PENDING_CONFIRMATION", "CONFIRMED", "PROCESSING", "READY"].includes(f.order_status)
+  ) {
+    orderTarget = "CANCELLED";
+  }
+
+  if (["PREPARING", "READY", "DISPATCHED", "DELIVERED", "CANCELLED"].includes(target) && !orderTarget) {
+    return {
+      error: "order_state_mismatch",
+      status: 409,
+      orderStatus: f.order_status,
+      fulfillmentTarget: target
+    };
+  }
+
+  if (orderTarget) {
+    const orderResult: any = await transitionOrderInTx(
+      tx,
+      Number(f.order_id),
+      orderTarget,
+      "fulfillment",
+      reason || ("fulfillment:" + target)
+    );
+    if (orderResult.error) return orderResult;
+  }
+
+  const proofObject = target === "DELIVERED" ? normalizeProof(proof) : {};
+  await tx`
+    UPDATE fulfillments
+    SET status = ${target},
+        proof_of_delivery = CASE
+          WHEN ${target} = 'DELIVERED' THEN ${JSON.stringify(proofObject)}::jsonb
+          ELSE proof_of_delivery
+        END,
+        updated_at = NOW()
+    WHERE id = ${id}`;
+
+  await tx`
+    INSERT INTO fulfillment_status_history(fulfillment_id, from_status, to_status, actor, reason)
+    VALUES(${id}, ${current}, ${target}, ${actor}, ${reason})`;
+
+  await tx`
+    INSERT INTO fulfillment_tracking_events(
+      fulfillment_id, event_type, status, description
+    )
+    VALUES(
+      ${id}, 'STATUS_CHANGED', ${target}, ${"Fulfillment status changed to " + target}
+    )`;
+
+  if (target === "DISPATCHED") {
+    await ensureCodCollection(tx, id, Number(f.order_id));
+  }
+
+  if (target === "RETURNED") {
+    await tx`
+      INSERT INTO return_inspections(fulfillment_id, order_id, status)
+      VALUES(${id}, ${Number(f.order_id)}, 'PENDING')
+      ON CONFLICT (fulfillment_id) DO NOTHING`;
+  }
+
+  return { ok: true, orderTarget };
+}
+
 async function transitionFulfillment(
   db: DB,
   id: number,
@@ -571,62 +668,9 @@ async function transitionFulfillment(
   if (!STATUSES.has(target)) return { error: "invalid_status", status: 400 };
 
   try {
-    return await db.begin(async (tx: DB) => {
-      const rows = await tx`
-        SELECT id, order_id, type, status
-        FROM fulfillments
-        WHERE id = ${id}
-        FOR UPDATE`;
-      if (!rows.length) return { error: "not_found", status: 404 };
-
-      const f = rows[0];
-      const current = f.status;
-      if (!ALLOWED[current]?.has(target)) {
-        return { error: "invalid_transition", status: 409, current, target };
-      }
-
-      let orderTarget: string | null = null;
-      if (target === "PREPARING") orderTarget = "PROCESSING";
-      if (target === "READY") orderTarget = "READY";
-      if (target === "DISPATCHED") orderTarget = "SHIPPED";
-      if (target === "DELIVERED") orderTarget = f.type === "STORE_PICKUP" ? "COMPLETED" : "DELIVERED";
-
-      if (orderTarget) {
-        const orderResult: any = await transitionOrderInTx(
-          tx,
-          Number(f.order_id),
-          orderTarget,
-          "fulfillment",
-          "fulfillment:" + target
-        );
-        if (orderResult.error) return orderResult;
-      }
-
-      const proofObject = target === "DELIVERED" ? normalizeProof(proof) : {};
-      await tx`
-        UPDATE fulfillments
-        SET status = ${target},
-            proof_of_delivery = CASE
-              WHEN ${target} = 'DELIVERED' THEN ${JSON.stringify(proofObject)}::jsonb
-              ELSE proof_of_delivery
-            END,
-            updated_at = NOW()
-        WHERE id = ${id}`;
-
-      await tx`
-        INSERT INTO fulfillment_status_history(fulfillment_id, from_status, to_status, actor, reason)
-        VALUES(${id}, ${current}, ${target}, ${actor}, ${reason})`;
-
-      await tx`
-        INSERT INTO fulfillment_tracking_events(
-          fulfillment_id, event_type, status, description
-        )
-        VALUES(
-          ${id}, 'STATUS_CHANGED', ${target}, ${"Fulfillment status changed to " + target}
-        )`;
-
-      return { ok: true };
-    });
+    return await db.begin((tx: DB) =>
+      transitionFulfillmentInTx(tx, id, target, actor, reason, proof)
+    );
   } catch (error: any) {
     if (String(error?.message || "").includes("proof_too_large")) {
       return { error: "proof_too_large", status: 413 };
