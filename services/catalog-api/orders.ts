@@ -344,6 +344,18 @@ export async function ensureOrdersSchema(db: DB) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
 
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS seller_id BIGINT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS seller_agreement_id BIGINT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS seller_agreement_version INTEGER`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS commercial_mode TEXT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS economic_owner_type TEXT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS inventory_source_id BIGINT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS unit_cost_basis_minor BIGINT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS commission_basis TEXT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS commission_rate_bps INTEGER`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS fixed_fee_minor BIGINT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS commercial_snapshot_at TIMESTAMPTZ`;
+
   await db`
     CREATE TABLE IF NOT EXISTS inventory_reservations (
       id BIGSERIAL PRIMARY KEY,
@@ -436,10 +448,25 @@ async function createOrder(req: Request, db: DB, clean: (v: unknown, max: number
           SELECT pv.id, pv.sku, pv.size, pv.color,
                  ROUND(pv.price * 100)::bigint AS price_minor,
                  pv.currency, p.name AS product_name,
-                 i.quantity, i.reserved
+                 i.quantity, i.reserved,
+                 src.id AS inventory_source_id,
+                 src.commercial_mode,
+                 src.economic_owner_type,
+                 src.seller_id,
+                 src.seller_agreement_id,
+                 src.cost_basis_minor,
+                 sa.agreement_version AS seller_agreement_version,
+                 sa.commission_basis,
+                 sa.commission_rate_bps,
+                 sa.fixed_fee_minor
           FROM product_variants pv
           JOIN products p ON p.id = pv.product_id
           JOIN inventory i ON i.variant_id = pv.id AND i.location_id = ${locationId}
+          LEFT JOIN inventory_sources src
+            ON src.variant_id = pv.id
+           AND src.location_id = ${locationId}
+           AND src.status = 'ACTIVE'
+          LEFT JOIN seller_agreements sa ON sa.id = src.seller_agreement_id
           WHERE pv.id = ${item.variantId}
             AND pv.active
             AND p.status = 'active'
@@ -466,7 +493,18 @@ async function createOrder(req: Request, db: DB, clean: (v: unknown, max: number
           variant: { size: row.size || null, color: row.color || null },
           unitPriceMinor,
           currency: lineCurrency,
-          lineTotalMinor
+          lineTotalMinor,
+          inventorySourceId: row.inventory_source_id == null ? null : Number(row.inventory_source_id),
+          sellerId: row.seller_id == null ? null : Number(row.seller_id),
+          sellerAgreementId: row.seller_agreement_id == null ? null : Number(row.seller_agreement_id),
+          sellerAgreementVersion: row.seller_agreement_version == null ? null : Number(row.seller_agreement_version),
+          commercialMode: row.commercial_mode || null,
+          economicOwnerType: row.economic_owner_type || null,
+          unitCostBasisMinor: row.cost_basis_minor == null ? null : Number(row.cost_basis_minor),
+          commissionBasis: row.commission_basis || null,
+          commissionRateBps: row.commission_rate_bps == null ? null : Number(row.commission_rate_bps),
+          fixedFeeMinor: row.fixed_fee_minor == null ? null : Number(row.fixed_fee_minor),
+          commercialSnapshotAt: row.inventory_source_id == null ? null : new Date()
         });
         subtotalMinor += lineTotalMinor;
       }
@@ -494,11 +532,19 @@ async function createOrder(req: Request, db: DB, clean: (v: unknown, max: number
         await tx`
           INSERT INTO order_items (
             order_id, variant_id, sku_snapshot, product_name_snapshot, variant_snapshot,
-            quantity, unit_price_minor, currency, line_total_minor
+            quantity, unit_price_minor, currency, line_total_minor,
+            seller_id, seller_agreement_id, seller_agreement_version,
+            commercial_mode, economic_owner_type, inventory_source_id,
+            unit_cost_basis_minor, commission_basis, commission_rate_bps,
+            fixed_fee_minor, commercial_snapshot_at
           )
           VALUES (
             ${orderId}, ${line.variantId}, ${line.sku}, ${line.productName}, ${JSON.stringify(line.variant)}::jsonb,
-            ${line.quantity}, ${line.unitPriceMinor}, ${line.currency}, ${line.lineTotalMinor}
+            ${line.quantity}, ${line.unitPriceMinor}, ${line.currency}, ${line.lineTotalMinor},
+            ${line.sellerId}, ${line.sellerAgreementId}, ${line.sellerAgreementVersion},
+            ${line.commercialMode}, ${line.economicOwnerType}, ${line.inventorySourceId},
+            ${line.unitCostBasisMinor}, ${line.commissionBasis}, ${line.commissionRateBps},
+            ${line.fixedFeeMinor}, ${line.commercialSnapshotAt}
           )`;
 
         const inv = await tx`
