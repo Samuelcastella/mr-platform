@@ -59,6 +59,8 @@ jobs:
         run: bun build services/catalog-api/fulfillment.ts --target=bun --outfile=/tmp/fulfillment.js
       - name: Validar módulo de identidad y seguridad
         run: bun build services/catalog-api/auth.ts --target=bun --outfile=/tmp/auth.js
+      - name: Validar módulo de Customer CRM
+        run: bun build services/catalog-api/customers.ts --target=bun --outfile=/tmp/customers.js
       - name: Prueba de integración órdenes + reservas
         shell: bash
         run: |
@@ -77,6 +79,7 @@ jobs:
           bun run services/catalog-api/test/auth.integration.ts
           bun run services/catalog-api/test/rbac-internal.integration.ts
           bun run services/control-center/test/integration.ts
+          bun run services/catalog-api/test/customers.integration.ts
       - name: Validar Control Center
         run: bun build services/control-center/index.ts --target=bun --outfile=/tmp/control-center.js
 
