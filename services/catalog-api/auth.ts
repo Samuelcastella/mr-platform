@@ -36,6 +36,11 @@ const PERMISSIONS: Record<string, string> = {
   "inventory_adjustments.post": "Post inventory adjustments",
   "inventory_adjustments.audit": "Audit inventory adjustments",
   "inventory_adjustments.evidence.read": "Read inventory adjustment evidence",
+  "health.read": "Read operational health desk",
+  "health.incidents.manage": "Acknowledge and investigate operational incidents",
+  "health.incidents.assign": "Assign operational incidents",
+  "health.incidents.resolve": "Resolve operational incidents",
+  "health.admin": "Manage operational health configuration",
   "orders.read": "Read orders",
   "orders.create": "Create orders",
   "orders.confirm": "Confirm orders",
@@ -111,6 +116,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "inventory_adjustments.create",
       "inventory_adjustments.submit",
       "inventory_adjustments.evidence.read",
+      "health.read",
       "suppliers.read",
       "procurement.read",
       "procurement.receive",
@@ -129,6 +135,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "fulfillment.prepare",
       "fulfillment.dispatch",
       "fulfillment.deliver",
+      "health.read",
       "returns.read"
     ]
   },
@@ -142,6 +149,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "customers.write",
       "inquiries.read",
       "inquiries.write",
+      "health.read",
       "returns.read",
       "returns.create"
     ]
@@ -154,6 +162,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "orders.read",
       "payments.read",
       "fulfillment.read",
+      "health.read",
       "reports.read"
     ]
   }
