@@ -15,7 +15,32 @@ M06 v1 remains authoritative except where explicitly extended below.
 
 This amendment does not create new business logic for settlements, shrinkage, commissions, incidents or credit. It defines who may perform sensitive actions and how those actions remain attributable and auditable.
 
-## 2. Security principles added
+## 2. Verified implementation baseline — 2026-10-08
+
+The catalog-api already implements a real RBAC foundation, including:
+
+- StaffUser/session persistence;
+- permission records;
+- role bundles;
+- user-role assignments;
+- location scope;
+- audit events;
+- requireStaffPermission / internal authorization helpers;
+- existing permissions for catalog, inventory, orders, payments, fulfillment, customers, suppliers, procurement, returns, reports, users, roles, audit and settings.
+
+Current production code seeds role bundles for:
+
+- ADMIN;
+- MANAGER;
+- CASHIER;
+- INVENTORY_OPERATOR;
+- FULFILLMENT_OPERATOR;
+- CUSTOMER_SUPPORT;
+- ANALYST.
+
+Therefore M06 v2 is an additive permission/policy extension over an implemented authorization system, not a new identity subsystem.
+
+## 3. Security principles added
 
 Add the following principles:
 
@@ -28,7 +53,7 @@ Add the following principles:
 19. Permission expansion must remain default-deny.
 20. Human actions performed through the Control Center must resolve to a StaffUser actor after the M06 migration is active.
 
-## 3. New permission families
+## 4. New permission families
 
 ### Sellers and commercial agreements
 
@@ -82,7 +107,7 @@ Add the following principles:
 
 These permissions are additive to the M06 v1 vocabulary.
 
-## 4. Approval-capability separation
+## 5. Approval-capability separation
 
 The following capabilities must remain distinct:
 
@@ -119,7 +144,7 @@ manage
 
 Possessing seller_agreements.manage does not imply the user may bypass any M11 approval state machine.
 
-## 5. Segregation-of-duties policy
+## 6. Segregation-of-duties policy
 
 Introduce a policy layer independent from role bundles.
 
@@ -145,7 +170,7 @@ Example prohibitions:
 
 Thresholds are configuration and business policy, not hardcoded in this amendment.
 
-## 6. Step-up / MFA candidates expanded
+## 7. Step-up / MFA candidates expanded
 
 In addition to M06 v1 candidates, step-up authentication may be required for:
 
@@ -164,7 +189,7 @@ In addition to M06 v1 candidates, step-up authentication may be required for:
 
 Step-up policy can be activated later without changing permission names.
 
-## 7. Role-bundle guidance
+## 8. Role-bundle guidance
 
 Roles remain convenience bundles. The exact production mapping must be approved as operating policy.
 
@@ -220,7 +245,7 @@ Potential permissions:
 
 Creation of this role is optional and requires explicit operational approval. This amendment does not require it.
 
-## 8. External identities
+## 9. External identities
 
 ### Seller / provider identity
 
@@ -240,7 +265,7 @@ Provider callbacks are SERVICE actors, not StaffUser actors.
 
 LIRA identity remains independent as defined in M06 v1.
 
-## 9. Resource and location scoping
+## 10. Resource and location scoping
 
 New permissions must support resource/location scope where meaningful.
 
@@ -258,7 +283,7 @@ authorize(actor, permission, { locationId?, resourceType?, resourceId?, ownerUse
 
 Resource-specific policy may impose restrictions beyond role permission.
 
-## 10. Audit events added
+## 11. Audit events added
 
 At minimum, audit:
 
@@ -311,7 +336,7 @@ At minimum, audit:
 
 Audit metadata must follow M06 v1 redaction rules.
 
-## 11. Sensitive-data rules
+## 12. Sensitive-data rules
 
 Do not place in audit/logs:
 
@@ -326,7 +351,7 @@ Do not place in audit/logs:
 
 Audit may retain identifiers, statuses, reason codes, sanitized amounts and references as needed for traceability.
 
-## 12. Control Center requirements
+## 13. Control Center requirements
 
 The Control Center must derive action visibility from effective permissions but still rely on server-side authorization.
 
@@ -341,7 +366,7 @@ Examples:
 
 UI visibility is not authorization.
 
-## 13. Service-account transition
+## 14. Service-account transition
 
 The shared internal service credential may continue for trusted machine calls during migration, as defined in M06 v1.
 
@@ -354,7 +379,7 @@ However:
 
 Human approval events require StaffUser attribution after the relevant workflow is activated.
 
-## 14. Functional requirements added
+## 15. Functional requirements added
 
 - FR-SEC-016 Add permission vocabulary required by M11–M15.
 - FR-SEC-017 Support workflow-specific segregation-of-duties policies.
@@ -367,7 +392,7 @@ Human approval events require StaffUser attribution after the relevant workflow 
 - FR-SEC-024 Audit all sensitive M11–M15 lifecycle transitions.
 - FR-SEC-025 Allow future MFA/step-up policies without renaming permissions.
 
-## 15. Invariants added
+## 16. Invariants added
 
 SEC-016 — SellerAccount is not implicitly a StaffUser.
 SEC-017 — CreditProvider/service callback identity is not a StaffUser.
@@ -380,7 +405,7 @@ SEC-023 — Private seller economics require explicit seller/settlement permissi
 SEC-024 — Sensitive evidence access requires explicit permission.
 SEC-025 — Human approval events are attributable to StaffUser after workflow activation.
 
-## 16. Acceptance criteria added
+## 17. Acceptance criteria added
 
 1. Permission seed is idempotent with the expanded vocabulary.
 2. A user lacking settlements.approve cannot approve a settlement.
@@ -393,7 +418,7 @@ SEC-025 — Human approval events are attributable to StaffUser after workflow a
 9. Sensitive M11–M15 actions generate audit events with StaffUser/SERVICE/SYSTEM actor type as appropriate.
 10. Existing M06 v1 authentication/session/CSRF tests remain valid.
 
-## 17. Migration / implementation gate
+## 18. Migration / implementation gate
 
 Before implementation:
 
