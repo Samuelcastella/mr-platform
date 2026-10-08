@@ -400,6 +400,13 @@ export async function handleInternalCatalog(
     /^\/v1\/internal\/catalog\/variants\/(\d+)\/stock$/
   );
   if (stockMatch && req.method === "POST") {
+    if (Bun.env.ENFORCE_GOVERNED_INVENTORY_ADJUSTMENTS === "true") {
+      return json({
+        error: "governed_adjustment_required",
+        workflow: "/v1/internal/inventory-adjustments"
+      }, 409);
+    }
+
     const auth = await authorizeInternal(req, db, "inventory.adjust", { mutation: true });
     if (!auth.ok) return auth.response;
 
