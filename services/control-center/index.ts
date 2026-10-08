@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -532,6 +532,109 @@ async function returnsPage(url:URL,session:Session){
   return shell('<div class="eyebrow">Devoluciones</div><h1>Cambios y devoluciones</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
 }
 
+
+async function inventoryAdjustmentsPage(url:URL,session:Session){
+  const roles:any[]=Array.isArray(session.user?.roles)?session.user.roles:[];
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const scopedLocationIds=roles
+    .filter((r:any)=>r?.scopeType==="LOCATION"&&Number(r?.locationId)>0)
+    .map((r:any)=>Number(r.locationId));
+  const hasGlobal=roles.some((r:any)=>r?.scopeType==="GLOBAL");
+
+  const [locationsResult,catalogResultApi]=await Promise.all([
+    api("/v1/internal/locations",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(locationsResult.response?.status===403||catalogResultApi.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Faltan permisos de inventario/procurement para operar ajustes.</p></div>',session);
+  }
+  if(!locationsResult.response?.ok||!catalogResultApi.response?.ok){
+    return shell('<div class="panel empty"><h2>Ajustes no disponibles</h2><p>No se pudo consultar ubicaciones o catálogo.</p></div>',session);
+  }
+
+  const allLocations:any[]=Array.isArray(locationsResult.body?.data)?locationsResult.body.data:[];
+  const locations=hasGlobal?allLocations:allLocations.filter((l:any)=>scopedLocationIds.includes(Number(l.id)));
+  const requestedLocation=Number(url.searchParams.get("locationId")||0);
+  const selectedLocationId=
+    requestedLocation&&locations.some((l:any)=>Number(l.id)===requestedLocation)
+      ?requestedLocation
+      :Number(locations[0]?.id||0);
+
+  if(!selectedLocationId){
+    return shell('<div class="panel empty"><h2>Sin ubicación autorizada</h2><p>Tu usuario no tiene una ubicación operativa disponible para ajustes.</p></div>',session);
+  }
+
+  const adjustmentsResult=await api(
+    "/v1/internal/inventory-adjustments?locationId="+selectedLocationId,
+    {cookieHeader:session.cookieHeader}
+  );
+  if(adjustmentsResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso inventory_adjustments.read para esta ubicación.</p></div>',session);
+  }
+
+  const adjustments:any[]=Array.isArray(adjustmentsResult.body?.data)?adjustmentsResult.body.data:[];
+  const products:any[]=Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+  const variants=products.flatMap((p:any)=>
+    (Array.isArray(p.variants)?p.variants:[]).map((v:any)=>({
+      id:Number(v.id),
+      label:String(v.sku||("Variante "+v.id))+" · "+String(p.name||"Producto"),
+      available:Number(v.available||0)
+    }))
+  );
+
+  const selectedVariantId=Number(url.searchParams.get("variantId")||0);
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Solicitud de ajuste creada.",
+    submitted:"Solicitud enviada a aprobación.",
+    approved:"Ajuste aprobado.",
+    rejected:"Ajuste rechazado.",
+    posted:"Ajuste aplicado al Kardex.",
+    evidence:"Evidencia registrada.",
+    cancelled:"Solicitud cancelada.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const locationOptions=locations.map((l:any)=>
+    '<option value="'+Number(l.id)+'" '+(Number(l.id)===selectedLocationId?'selected':'')+'>'+esc(l.name)+' · '+esc(l.type||"")+'</option>'
+  ).join("");
+
+  const variantOptions=variants.map((v:any)=>
+    '<option value="'+v.id+'" '+(v.id===selectedVariantId?'selected':'')+'>'+esc(v.label)+' · disp. '+v.available+'</option>'
+  ).join("");
+
+  const canApprove=permissions.has("inventory_adjustments.approve");
+  const canPost=permissions.has("inventory_adjustments.post");
+
+  const cards=adjustments.length?adjustments.map((a:any)=>{
+    let actions="";
+    if(a.status==="DRAFT"){
+      actions='<form method="post" action="/inventory-adjustments/'+Number(a.id)+'/submit"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="locationId" value="'+selectedLocationId+'"><button>Enviar a aprobación</button></form>';
+    }else if(a.status==="SUBMITTED"&&canApprove){
+      actions='<div class="toolbar"><form method="post" action="/inventory-adjustments/'+Number(a.id)+'/approve"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="locationId" value="'+selectedLocationId+'"><button>Aprobar</button></form><form method="post" action="/inventory-adjustments/'+Number(a.id)+'/reject" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="locationId" value="'+selectedLocationId+'"><input name="reason" maxlength="500" placeholder="Motivo de rechazo" required><button class="ghost">Rechazar</button></form></div>';
+    }else if(a.status==="APPROVED"&&canPost){
+      actions='<form method="post" action="/inventory-adjustments/'+Number(a.id)+'/post"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="locationId" value="'+selectedLocationId+'"><button>Aplicar al Kardex</button></form>';
+    }
+
+    const evidenceForm=(a.status==="DRAFT"||a.status==="SUBMITTED")
+      ?'<details style="margin-top:12px"><summary>Agregar evidencia</summary><form method="post" action="/inventory-adjustments/'+Number(a.id)+'/evidence" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="locationId" value="'+selectedLocationId+'"><label>Tipo<select name="evidenceType"><option>DOCUMENT</option><option>PHOTO</option><option>COUNT_SHEET</option><option>COURIER_REPORT</option><option>POLICE_REPORT_REFERENCE</option><option>OTHER</option></select></label><label>Referencia privada<input name="objectReference" maxlength="1000" required placeholder="private://..."></label><label>Descripción<input name="description" maxlength="500"></label><button>Registrar evidencia</button></form></details>'
+      :"";
+
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(a.requestNumber)+'</h3><div class="meta">'+esc(a.reasonCode)+' · riesgo '+esc(a.riskLevel)+' · ubicación '+Number(a.locationId)+'</div></div><span class="pill '+(a.riskLevel==="HIGH"||a.riskLevel==="CRITICAL"?'high':'')+'">'+esc(a.status)+'</span></div>'+actions+evidenceForm+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay solicitudes de ajuste en esta ubicación.</div>';
+
+  return shell(
+    '<div class="eyebrow">Inventario</div><h1>Ajustes y merma</h1><p class="meta">Los cambios excepcionales pasan por solicitud, aprobación y posting auditable antes de modificar el Kardex.</p>'+
+    notice+
+    '<section class="panel" style="margin-bottom:18px"><form method="get" action="/inventory-adjustments" class="toolbar"><label>Ubicación<select name="locationId">'+locationOptions+'</select></label><button>Ver ubicación</button></form></section>'+
+    '<section class="panel" style="margin-bottom:18px"><h3>Nueva solicitud</h3><form method="post" action="/inventory-adjustments" class="actions"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Ubicación<select name="locationId">'+locationOptions+'</select></label><label>Variante<select name="variantId" required>'+variantOptions+'</select></label><label>Delta<input name="quantityDelta" type="number" step="1" required placeholder="-1 o 1"></label><label>Motivo<select name="reasonCode"><option>COUNT_VARIANCE_NEGATIVE</option><option>COUNT_VARIANCE_POSITIVE</option><option>DAMAGE</option><option>THEFT_SUSPECTED</option><option>THEFT_CONFIRMED</option><option>LOSS_IN_TRANSIT</option><option>LOST_IN_STORE</option><option>EXPIRED</option><option>CONTAMINATED</option><option>DESTRUCTION</option><option>ADMIN_CORRECTION</option><option>RECOVERY_FOUND</option><option>OTHER</option></select></label><label>Detalle<input name="reasonText" maxlength="500"></label><button>Crear solicitud</button></form></section>'+
+    '<section class="queue">'+cards+'</section>',
+    session
+  );
+}
+
 async function catalogPage(url:URL,session:Session){
   const result=await api("/v1/internal/catalog",{cookieHeader:session.cookieHeader});
   if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso catalog.read.</p></div>',session);
@@ -549,11 +652,7 @@ async function catalogPage(url:URL,session:Session){
     const vars=variants.length?variants.map((v:any)=>`
       <div class="item" style="margin-top:10px">
         <div class="item-head"><div><b>${esc(v.sku)}</b><div class="meta">${esc(v.size||"Sin talla")} · ${esc(v.color||"Sin color")} · L ${Number(v.price||0).toFixed(2)} · Stock ${Number(v.available||0)}</div></div>
-        <form method="post" action="/catalog/variants/${Number(v.id)}/stock" style="display:flex;gap:8px;align-items:end">
-          <input type="hidden" name="csrf" value="${esc(session.csrf)}">
-          <label>Stock<input name="quantity" type="number" min="0" step="1" value="${Number(v.available||0)}" required></label>
-          <button>Guardar</button>
-        </form></div>
+        <a class="ghost" href="/inventory-adjustments?variantId=${Number(v.id)}" style="display:inline-flex;align-items:center;text-decoration:none;border-radius:999px;padding:11px 14px;font-weight:900">Solicitar ajuste</a></div>
       </div>`).join(""):'<p class="meta">Sin variantes.</p>';
 
     return `<section class="panel" style="margin-bottom:14px">
@@ -860,6 +959,72 @@ Bun.serve({
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
     if(url.pathname==="/fulfillment"&&req.method==="GET")return html(await fulfillmentPage(url,session));
     if(url.pathname==="/returns"&&req.method==="GET")return html(await returnsPage(url,session));
+    if(url.pathname==="/inventory-adjustments"&&req.method==="GET")return html(await inventoryAdjustmentsPage(url,session));
+
+
+    if(url.pathname==="/inventory-adjustments"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const locationId=Number(fd.get("locationId")||0);
+      const result=await api("/v1/internal/inventory-adjustments",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          locationId,
+          reasonCode:String(fd.get("reasonCode")||""),
+          reasonText:String(fd.get("reasonText")||"").trim()||null,
+          lines:[{
+            variantId:Number(fd.get("variantId")||0),
+            quantityDelta:Number(fd.get("quantityDelta")||0)
+          }]
+        }
+      });
+      return redirect("/inventory-adjustments?locationId="+locationId+"&n="+catalogResult(result,"created"));
+    }
+
+    const adjustmentAction=url.pathname.match(/^\/inventory-adjustments\/(\d+)\/(submit|approve|post)$/);
+    if(adjustmentAction&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(adjustmentAction[1]);
+      const action=adjustmentAction[2];
+      const locationId=Number(fd.get("locationId")||0);
+      const result=await api("/v1/internal/inventory-adjustments/"+id+"/"+action,{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        idempotencyKey:action==="post"?"cc-m12-post-"+id:undefined,
+        body:{}
+      });
+      return redirect("/inventory-adjustments?locationId="+locationId+"&n="+catalogResult(result,action==="submit"?"submitted":action==="approve"?"approved":"posted"));
+    }
+
+    const adjustmentReject=url.pathname.match(/^\/inventory-adjustments\/(\d+)\/reject$/);
+    if(adjustmentReject&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(adjustmentReject[1]);
+      const locationId=Number(fd.get("locationId")||0);
+      const result=await api("/v1/internal/inventory-adjustments/"+id+"/reject",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{reason:String(fd.get("reason")||"").trim()}
+      });
+      return redirect("/inventory-adjustments?locationId="+locationId+"&n="+catalogResult(result,"rejected"));
+    }
+
+    const adjustmentEvidence=url.pathname.match(/^\/inventory-adjustments\/(\d+)\/evidence$/);
+    if(adjustmentEvidence&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(adjustmentEvidence[1]);
+      const locationId=Number(fd.get("locationId")||0);
+      const result=await api("/v1/internal/inventory-adjustments/"+id+"/evidence",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          evidenceType:String(fd.get("evidenceType")||"OTHER"),
+          objectReference:String(fd.get("objectReference")||"").trim(),
+          description:String(fd.get("description")||"").trim()||null
+        }
+      });
+      return redirect("/inventory-adjustments?locationId="+locationId+"&n="+catalogResult(result,"evidence"));
+    }
 
     if(url.pathname==="/catalog"&&req.method==="GET"){
       return html(await catalogPage(url,session));
