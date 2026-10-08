@@ -207,11 +207,13 @@ async function createAdjustment(req: Request, db: DB) {
     lines.push({ variantId, quantityDelta, notes: clean(item?.notes, 500) || null });
   }
 
-  const variants = await db`
-    SELECT id FROM product_variants WHERE id IN ${db(lines.map(x => x.variantId))}`;
-  const found = new Set(variants.map((x: any) => Number(x.id)));
-  const missing = lines.find(x => !found.has(x.variantId));
-  if (missing) return json({ error: "variant_not_found", variantId: missing.variantId }, 404);
+  for (const line of lines) {
+    const variant = await db`
+      SELECT id FROM product_variants WHERE id = ${line.variantId} LIMIT 1`;
+    if (!variant.length) {
+      return json({ error: "variant_not_found", variantId: line.variantId }, 404);
+    }
+  }
 
   const riskLevel =
     ["THEFT_SUSPECTED","THEFT_CONFIRMED","LOSS_IN_TRANSIT","LOST_IN_STORE","DESTRUCTION"].includes(reasonCode)
