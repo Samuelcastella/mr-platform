@@ -1,6 +1,9 @@
+// bootstrap-ui-v2
 const API_BASE = (Bun.env.CATALOG_API_URL || "").replace(/\/+$/, "");
 const SESSION_COOKIE = "mrstaff";
 const CSRF_COOKIE = "mrcc_csrf";
+const VENDOR_COOKIE = "mrvendor";
+const VENDOR_CSRF_COOKIE = "mrvc_csrf";
 const statuses = new Set(["new","reviewing","contacted","qualified","converted","closed","rejected"]);
 
 const labels: Record<string,string> = {
@@ -67,6 +70,15 @@ function sessionCookieHeader(req:Request){
 
 function csrfCookie(value:string,maxAge=28800){
   return `${CSRF_COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+function vendorCsrfCookie(value:string,maxAge=28800){
+  return `${VENDOR_CSRF_COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+function vendorSessionCookieHeader(req:Request){
+  const token=cookie(req,VENDOR_COOKIE);
+  return token ? `${VENDOR_COOKIE}=${token}` : "";
 }
 
 function clearCookie(name:string){
@@ -137,6 +149,28 @@ function requireFormCsrf(fd:FormData,session:Session){
   return Boolean(supplied)&&safeEqual(supplied,session.csrf);
 }
 
+type VendorSession = {
+  csrf:string;
+  cookieHeader:string;
+  user:any;
+};
+
+async function readVendorSession(req:Request):Promise<VendorSession|null>{
+  const cookieHeader=vendorSessionCookieHeader(req);
+  const csrf=cookie(req,VENDOR_CSRF_COOKIE);
+  if(!cookieHeader||!csrf)return null;
+
+  const result=await api("/v1/vendor/auth/me",{cookieHeader});
+  if(!result.response?.ok||!result.body?.user)return null;
+
+  return {csrf,cookieHeader,user:result.body.user};
+}
+
+function requireVendorCsrf(fd:FormData,session:VendorSession){
+  const supplied=String(fd.get("csrf")||"");
+  return Boolean(supplied)&&safeEqual(supplied,session.csrf);
+}
+
 const css=`
 :root{--ink:#171513;--cream:#f4efe7;--gold:#b7923b;--line:#ded5c8;--muted:#6c645a}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,system-ui,sans-serif}
@@ -160,7 +194,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -169,6 +203,40 @@ function loginPage(message=""){
 
 function setupPage(){
   return loginPage("El Control Center requiere CATALOG_API_URL para usar la identidad de StaffUser del Commerce Core.");
+}
+
+function vendorLoginPage(message=""){
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Portal de proveedor · MR</title><style>'+css+'</style></head><body><main class="login"><div class="eyebrow">Portal de proveedor</div><h1>Tu catálogo en MR</h1><p class="meta">Este acceso es independiente del Control Center administrativo.</p>'+(message?'<div class="notice">'+esc(message)+'</div>':'')+'<form method="post" action="/vendor/login"><label>Correo<input type="email" name="email" required maxlength="254"></label><label>Contraseña<input type="password" name="password" required maxlength="256"></label><button>Entrar</button></form></main></body></html>';
+}
+
+function vendorAcceptPage(token:string,invitation:any,message=""){
+  const email=String(invitation?.email||"");
+  const supplier=String(invitation?.supplierName||"Proveedor");
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Activar catálogo · MR</title><style>'+css+'</style></head><body><main class="login"><div class="eyebrow">Invitación de proveedor</div><h1>'+esc(supplier)+'</h1><p class="meta">Crea tu acceso para administrar únicamente el catálogo de tu negocio.</p>'+(message?'<div class="notice">'+esc(message)+'</div>':'')+'<form method="post" action="/vendor/accept"><input type="hidden" name="token" value="'+esc(token)+'"><label>Correo<input type="email" name="email" value="'+esc(email)+'" required maxlength="254"></label><label>Nombre<input name="displayName" required maxlength="120"></label><label>Contraseña<input type="password" name="password" required minlength="12" maxlength="256"></label><label>Confirmar contraseña<input type="password" name="confirmPassword" required minlength="12" maxlength="256"></label><button>Crear acceso</button></form></main></body></html>';
+}
+
+async function vendorCatalogPage(url:URL,session:VendorSession){
+  const result=await api("/v1/vendor/catalog",{cookieHeader:session.cookieHeader});
+  if(!result.response?.ok)return vendorLoginPage("No se pudo cargar tu catálogo.");
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const n=url.searchParams.get("n")||"";
+  const msg=n==="created"?"Producto guardado como borrador.":n==="submitted"?"Producto enviado a revisión.":n==="error"?"No se pudo completar la acción.":"";
+  const cards=rows.length?rows.map((p:any)=>{
+    const variants=Array.isArray(p.variants)?p.variants:[];
+    const images=Array.isArray(p.images)?p.images:[];
+    const first=variants[0]||{};
+    const submit=(p.review_status==="DRAFT"||p.review_status==="REJECTED")
+      ?'<form method="post" action="/vendor/products/'+Number(p.id)+'/submit"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Enviar a revisión</button></form>'
+      :"";
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(session.user.supplierName||"Proveedor")+'</div><h3>'+esc(p.name)+'</h3><div class="meta">'+esc(p.category||"Sin categoría")+' · '+esc(p.brand||"Sin marca")+' · SKU '+esc(first.sku||"—")+' · '+esc(first.currency||"HNL")+' '+esc(first.price||"0")+'</div><div class="meta">'+images.length+' imagen(es)</div></div><span class="pill">'+esc(p.review_status||p.status)+'</span></div>'+(p.review_note?'<div class="notice">'+esc(p.review_note)+'</div>':'')+'<div style="margin-top:10px">'+submit+'</div></article>';
+  }).join(""):'<div class="panel empty">Todavía no has agregado productos.</div>';
+
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mi catálogo · MR</title><style>'+css+'</style></head><body><header><b>MR · Portal de proveedor</b><span class="user">'+esc(session.user.displayName||session.user.email)+'</span><form method="post" action="/vendor/logout"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button class="ghost">Salir</button></form></header><main class="wrap"><div class="eyebrow">Mi catálogo</div><h1>'+esc(session.user.supplierName||"Proveedor")+'</h1>'+(msg?'<div class="notice">'+esc(msg)+'</div>':'')+'<section class="panel" style="margin-bottom:14px"><h3>Agregar producto</h3><p class="meta">Se guarda como borrador. Al enviarlo a revisión, MR decide si se publica.</p><form method="post" action="/vendor/products" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="name" required maxlength="180"></label><label>Categoría<input name="category" maxlength="120"></label><label>Marca<input name="brand" maxlength="120"></label><label>SKU<input name="sku" required maxlength="100"></label><label>Precio HNL<input name="price" type="number" min="0" step=".01" required></label><label>Costo<input name="cost" type="number" min="0" step=".01"></label><label>Talla<input name="size" maxlength="80"></label><label>Color<input name="color" maxlength="80"></label><label>Stock<input name="stock" type="number" min="0" step="1" value="0"></label><label>Imagen (URL)<input name="imageUrl" type="url" required maxlength="1000" placeholder="https://..."></label><button>Guardar borrador</button></form></section><section class="queue">'+cards+'</section></main></body></html>';
+}
+
+
+function bootstrapPage(message=""){
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Crear administrador · MR עדולם</title><style>'+css+'</style></head><body><main class="login"><div class="eyebrow">Configuración inicial</div><h1>Crear primer administrador</h1><p class="meta">Este formulario funciona una sola vez. Tu contraseña se envía directamente al Commerce Core y no se guarda en el Control Center.</p>'+(message?'<div class="notice">'+esc(message)+'</div>':'')+'<form method="post"><label>Correo<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Nombre<input type="text" name="displayName" autocomplete="name" required maxlength="120"></label><label>Contraseña de administrador<input type="password" name="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><label>Confirmar contraseña<input type="password" name="confirmPassword" autocomplete="new-password" required minlength="12" maxlength="256"></label><button>Crear administrador</button></form><p class="meta" style="margin-top:16px"><a href="/login">Volver al inicio de sesión</a></p></main></body></html>';
 }
 
 function suggestedAction(kind:string){
@@ -291,6 +359,212 @@ async function dashboard(url:URL,session:Session){
   `,session);
 }
 
+
+function opsNotice(url:URL){
+  const n=url.searchParams.get("n")||"";
+  const messages:Record<string,string>={
+    created:"Creado correctamente.",
+    updated:"Actualizado correctamente.",
+    action:"Acción completada.",
+    error:"No se pudo completar la acción."
+  };
+  return messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+}
+
+function hnlMinor(value:unknown,currency="HNL"){
+  const amount=(Number(value)||0)/100;
+  return (currency==="HNL"?"L ":currency+" ")+amount.toLocaleString("es-HN",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+async function ordersPage(url:URL,session:Session){
+  const result=await api("/v1/internal/orders",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso orders.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Pedidos no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const next:Record<string,string[]>={
+    PENDING_CONFIRMATION:["CONFIRMED","CANCELLED"],
+    CONFIRMED:["PROCESSING","CANCELLED"],
+    PROCESSING:["READY","CANCELLED"],
+    READY:["SHIPPED","COMPLETED","CANCELLED"],
+    SHIPPED:["DELIVERED"],
+    DELIVERED:["COMPLETED"],
+    COMPLETED:[],
+    CANCELLED:[]
+  };
+  const cards=rows.length?rows.map((r:any)=>{
+    const targets=next[String(r.status)]||[];
+    const form=targets.length
+      ?'<form method="post" action="/orders/'+Number(r.id)+'/status" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nuevo estado<select name="status">'+targets.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join("")+'</select></label><label>Motivo<input name="reason" maxlength="240" placeholder="Opcional"></label><button>Actualizar</button></form>'
+      :"";
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(r.channel||"WEB")+'</div><h3>'+esc(r.order_number||("#"+r.id))+'</h3><div class="meta">'+esc(r.customer_name||"Cliente sin nombre")+' · '+esc(r.customer_phone||"Sin teléfono")+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div style="margin-top:8px">'+esc(hnlMinor(r.grand_total_minor,r.currency||"HNL"))+'</div></div></div>'+form+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay pedidos.</div>';
+  return shell('<div class="eyebrow">Pedidos</div><h1>Ventas y estados de pedido</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
+}
+
+async function customersPage(url:URL,session:Session){
+  const result=await api("/v1/internal/customers",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso customers.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Clientes no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const cards=rows.length?rows.map((r:any)=>{
+    const contacts=Array.isArray(r.contacts)?r.contacts:[];
+    return '<article class="item"><h3>'+esc(r.displayName)+'</h3><div class="meta">Cliente #'+esc(r.id)+' · '+esc(r.customerType||"PERSON")+' · '+esc(r.status)+'</div><div class="meta">'+(contacts.length?contacts.map((x:any)=>esc(x.type)+": "+esc(x.value)).join(" · "):"Sin contactos registrados")+'</div></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay clientes.</div>';
+  return shell('<div class="eyebrow">Clientes</div><h1>Directorio de clientes</h1>'+opsNotice(url)+'<section class="panel" style="margin-bottom:14px"><h3>Nuevo cliente</h3><form method="post" action="/customers" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="displayName" required maxlength="160"></label><label>Tipo<select name="customerType"><option value="PERSON">Persona</option><option value="BUSINESS">Empresa</option></select></label><button>Crear cliente</button></form></section><section class="queue">'+cards+'</section>',session);
+}
+
+async function suppliersPage(url:URL,session:Session){
+  const result=await api("/v1/internal/suppliers",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso suppliers.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Proveedores no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const invite=url.searchParams.get("invite")||"";
+  const cards=rows.length?rows.map((r:any)=>{
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.name)+'</h3><div class="meta">'+esc(r.contactName||"Sin contacto")+' · '+esc(r.phone||"Sin teléfono")+' · '+esc(r.email||"Sin correo")+'</div></div><span class="pill">'+(r.active?"Activo":"Inactivo")+'</span></div><form method="post" action="/suppliers/'+Number(r.id)+'/invite" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Correo de invitación<input name="email" type="email" maxlength="254" placeholder="Opcional"></label><button>Crear enlace de catálogo</button></form></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay proveedores.</div>';
+  return shell('<div class="eyebrow">Proveedores</div><h1>Abastecimiento y catálogos externos</h1>'+opsNotice(url)+(invite?'<div class="notice"><b>Enlace de proveedor:</b><br><span style="word-break:break-all">'+esc(invite)+'</span></div>':"")+'<section class="panel" style="margin-bottom:14px"><h3>Nuevo proveedor</h3><form method="post" action="/suppliers" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="name" required maxlength="180"></label><label>Contacto<input name="contactName" maxlength="160"></label><label>Teléfono<input name="phone" maxlength="80"></label><label>Correo<input name="email" type="email" maxlength="254"></label><label>País<input name="countryCode" value="HN" maxlength="2"></label><label>Moneda<input name="defaultCurrency" value="HNL" maxlength="3"></label><button>Crear proveedor</button></form></section><section class="queue">'+cards+'</section>',session);
+}
+
+async function vendorReviewPage(url:URL,session:Session){
+  const result=await api("/v1/internal/vendor-products",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso catalog.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Revisión de proveedores no disponible</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const cards=rows.length?rows.map((r:any)=>{
+    const actions=r.reviewStatus==="SUBMITTED"
+      ?'<div class="toolbar"><form method="post" action="/vendor-review/'+Number(r.id)+'/approve"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button> Aprobar y publicar </button></form><form method="post" action="/vendor-review/'+Number(r.id)+'/reject" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input name="note" maxlength="2000" placeholder="Motivo de rechazo" required><button class="ghost">Rechazar</button></form></div>'
+      :"";
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(r.supplierName)+'</div><h3>'+esc(r.name)+'</h3><div class="meta">'+esc(r.category||"Sin categoría")+' · '+esc(r.brand||"Sin marca")+' · '+esc(r.variantCount)+' variantes · '+esc(r.imageCount)+' imágenes</div></div><span class="pill">'+esc(r.reviewStatus)+'</span></div>'+actions+'</article>';
+  }).join(""):'<div class="panel empty">No hay productos de proveedores para revisar.</div>';
+  return shell('<div class="eyebrow">Revisión</div><h1>Catálogos de terceros</h1>'+opsNotice(url)+'<p class="meta">Los productos externos permanecen en borrador hasta que el equipo los apruebe.</p><section class="queue">'+cards+'</section>',session);
+}
+
+async function purchasesPage(url:URL,session:Session){
+  const result=await api("/v1/internal/procurement/purchase-orders",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso procurement.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Compras no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const cards=rows.length?rows.map((r:any)=>{
+    const actions:any[]=[];
+    if(r.status==="DRAFT")actions.push(["approve","Aprobar"],["cancel","Cancelar"]);
+    if(r.status==="APPROVED")actions.push(["order","Marcar ordenada"],["cancel","Cancelar"]);
+    if(r.status==="ORDERED")actions.push(["cancel","Cancelar"]);
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.poNumber)+'</h3><div class="meta">'+esc(r.supplierName)+' · Destino #'+esc(r.destinationLocationId)+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div>'+esc(hnlMinor(r.grandTotalMinor,r.currency))+'</div></div></div><div class="toolbar">'+actions.map((a:any)=>'<form method="post" action="/purchases/'+Number(r.id)+'/'+esc(a[0])+'"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button class="'+(a[0]==="cancel"?"ghost":"")+'">'+esc(a[1])+'</button></form>').join("")+'</div></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay órdenes de compra.</div>';
+  return shell('<div class="eyebrow">Compras</div><h1>Órdenes a proveedores</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
+}
+
+async function fulfillmentPage(url:URL,session:Session){
+  const result=await api("/v1/internal/fulfillments",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso fulfillment.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Entregas no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const next:Record<string,string[]>={
+    PENDING:["PREPARING","CANCELLED"],
+    PREPARING:["READY","CANCELLED"],
+    READY:["DISPATCHED","DELIVERED","CANCELLED"],
+    DISPATCHED:["OUT_FOR_DELIVERY","FAILED"],
+    OUT_FOR_DELIVERY:["DELIVERED","FAILED"],
+    FAILED:["OUT_FOR_DELIVERY","RETURNING"],
+    RETURNING:["RETURNED"]
+  };
+  const cards=rows.length?rows.map((r:any)=>{
+    const targets=next[String(r.status)]||[];
+    const form=targets.length?'<form method="post" action="/fulfillment/'+Number(r.id)+'/status" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nuevo estado<select name="status">'+targets.map(x=>'<option>'+esc(x)+'</option>').join("")+'</select></label><label>Motivo<input name="reason" maxlength="300"></label><button>Actualizar</button></form>':"";
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.order_number)+'</h3><div class="meta">'+esc(r.type)+' · '+esc(r.department||"")+' · '+esc(r.municipality||"")+' · '+esc(r.provider||"Sin proveedor")+'</div></div><span class="pill">'+esc(r.status)+'</span></div>'+form+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay entregas.</div>';
+  return shell('<div class="eyebrow">Entregas</div><h1>Preparación y despacho</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
+}
+
+async function returnsPage(url:URL,session:Session){
+  const result=await api("/v1/internal/returns",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso returns.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Devoluciones no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const cards=rows.length?rows.map((r:any)=>{
+    let actions="";
+    if(r.status==="REQUESTED")actions='<div class="toolbar"><form method="post" action="/returns/'+Number(r.id)+'/approve"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Aprobar</button></form><form method="post" action="/returns/'+Number(r.id)+'/reject" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input name="reason" maxlength="500" placeholder="Motivo" required><button class="ghost">Rechazar</button></form></div>';
+    if(r.status==="INSPECTED")actions='<form method="post" action="/returns/'+Number(r.id)+'/complete"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Completar</button></form>';
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.returnNumber)+'</h3><div class="meta">Pedido '+esc(r.orderNumber)+' · '+esc(r.requestedResolution)+' · '+esc(r.reasonCode)+'</div></div><span class="pill">'+esc(r.status)+'</span></div>'+actions+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay devoluciones.</div>';
+  return shell('<div class="eyebrow">Devoluciones</div><h1>Cambios y devoluciones</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
+}
+
+async function catalogPage(url:URL,session:Session){
+  const result=await api("/v1/internal/catalog",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso catalog.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Catálogo no disponible</h2><p>No se pudo consultar el Commerce Core.</p></div>',session);
+
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const n=url.searchParams.get("n")||"";
+  const messages:any={created:"Producto creado.",updated:"Estado actualizado.",variant:"Variante agregada.",stock:"Stock actualizado.",error:"No se pudo completar la acción."};
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const cards=rows.length?rows.map((p:any)=>{
+    const variants=Array.isArray(p.variants)?p.variants:[];
+    const vars=variants.length?variants.map((v:any)=>`
+      <div class="item" style="margin-top:10px">
+        <div class="item-head"><div><b>${esc(v.sku)}</b><div class="meta">${esc(v.size||"Sin talla")} · ${esc(v.color||"Sin color")} · L ${Number(v.price||0).toFixed(2)} · Stock ${Number(v.available||0)}</div></div>
+        <form method="post" action="/catalog/variants/${Number(v.id)}/stock" style="display:flex;gap:8px;align-items:end">
+          <input type="hidden" name="csrf" value="${esc(session.csrf)}">
+          <label>Stock<input name="quantity" type="number" min="0" step="1" value="${Number(v.available||0)}" required></label>
+          <button>Guardar</button>
+        </form></div>
+      </div>`).join(""):'<p class="meta">Sin variantes.</p>';
+
+    return `<section class="panel" style="margin-bottom:14px">
+      <div class="item-head">
+        <div><div class="eyebrow">${esc(p.category||"Sin categoría")}</div><h3>${esc(p.name)}</h3><p class="meta">${esc(p.brand||"Sin marca")} · ${p.status==="active"?"Publicado":"Borrador"}</p></div>
+        <form method="post" action="/catalog/products/${Number(p.id)}/status">
+          <input type="hidden" name="csrf" value="${esc(session.csrf)}">
+          <input type="hidden" name="status" value="${p.status==="active"?"draft":"active"}">
+          <button class="ghost">${p.status==="active"?"Pasar a borrador":"Publicar"}</button>
+        </form>
+      </div>
+      ${vars}
+      <details style="margin-top:12px"><summary>Agregar variante</summary>
+        <form method="post" action="/catalog/products/${Number(p.id)}/variants" class="actions" style="margin-top:10px">
+          <input type="hidden" name="csrf" value="${esc(session.csrf)}">
+          <label>SKU<input name="sku" required></label>
+          <label>Precio HNL<input name="price" type="number" min="0" step="0.01" required></label>
+          <label>Talla<input name="size"></label>
+          <label>Color<input name="color"></label>
+          <label>Costo HNL<input name="cost" type="number" min="0" step="0.01"></label>
+          <label>Stock<input name="stock" type="number" min="0" step="1" value="0" required></label>
+          <button>Agregar</button>
+        </form>
+      </details>
+    </section>`;
+  }).join(""):'<div class="panel empty"><h3>Aún no hay productos</h3></div>';
+
+  return shell(`
+    <div class="head"><div><div class="eyebrow">Catálogo</div><h2>Productos e inventario</h2><p>Crea en borrador y publica cuando esté listo.</p></div></div>
+    ${notice}
+    <section class="panel" style="margin-bottom:18px">
+      <h3>Nuevo producto</h3>
+      <form method="post" action="/catalog/products" class="actions">
+        <input type="hidden" name="csrf" value="${esc(session.csrf)}">
+        <label>Nombre<input name="name" required maxlength="180"></label>
+        <label>Categoría<input name="category" maxlength="120"></label>
+        <label>Marca<input name="brand" maxlength="120" value="MR עדולם"></label>
+        <label>Estado<select name="status"><option value="draft">Borrador</option><option value="active">Publicar ahora</option></select></label>
+        <label>SKU<input name="sku" required maxlength="100"></label>
+        <label>Precio HNL<input name="price" type="number" min="0" step="0.01" required></label>
+        <label>Talla<input name="size"></label>
+        <label>Color<input name="color"></label>
+        <label>Costo HNL<input name="cost" type="number" min="0" step="0.01"></label>
+        <label>Stock inicial<input name="stock" type="number" min="0" step="1" value="0" required></label>
+        <button>Crear producto</button>
+      </form>
+    </section>
+    ${cards}
+  `,session);
+}
+
+function catalogResult(result:any,ok:string){
+  return result.response?.ok?ok:"error";
+}
+
 Bun.serve({
   port:Number(Bun.env.PORT||3000),
   async fetch(req){
@@ -311,9 +585,159 @@ Bun.serve({
 
     if(!configured)return html(setupPage(),503);
 
+    const setupSegment=String(Bun.env.CONTROL_CENTER_SETUP_PATH||"").split("/").filter(Boolean).join("");
+    const setupPath=setupSegment?"/"+setupSegment:"";
+    if(setupPath!=="/"&&url.pathname===setupPath&&req.method==="GET"){
+      const existing=await readSession(req);
+      return existing?redirect("/"):html(bootstrapPage());
+    }
+
+    if(setupPath!=="/"&&url.pathname===setupPath&&req.method==="POST"){
+      const fd=await req.formData();
+      const email=String(fd.get("email")||"").trim().slice(0,254);
+      const displayName=String(fd.get("displayName")||"").trim().slice(0,120);
+      const password=String(fd.get("password")||"").slice(0,256);
+      const confirmPassword=String(fd.get("confirmPassword")||"").slice(0,256);
+      const bootstrapToken=String(Bun.env.BOOTSTRAP_API_TOKEN||"");
+
+      if(!bootstrapToken)return html(bootstrapPage("La configuración inicial no está habilitada."),503);
+      if(!displayName)return html(bootstrapPage("Escribe tu nombre."),400);
+      if(password!==confirmPassword)return html(bootstrapPage("Las contraseñas no coinciden."),400);
+      if(password.length<12)return html(bootstrapPage("La contraseña debe tener al menos 12 caracteres."),400);
+
+      let response:Response;
+      let body:any={};
+      try{
+        response=await fetch(API_BASE+"/v1/security/bootstrap",{
+          method:"POST",
+          headers:{
+            "accept":"application/json",
+            "content-type":"application/json",
+            "x-internal-key":bootstrapToken
+          },
+          body:JSON.stringify({email,displayName,password}),
+          redirect:"manual"
+        });
+        body=await response.json().catch(()=>({}));
+      }catch{
+        return html(bootstrapPage("No se pudo conectar con el Commerce Core."),502);
+      }
+
+      if(response.status===201)return redirect("/login?created=1");
+      if(response.status===409)return html(loginPage("El administrador inicial ya fue creado. Inicia sesión."),200);
+
+      const messages:Record<string,string>={
+        invalid_email:"El correo no es válido.",
+        display_name_required:"Escribe tu nombre.",
+        invalid_password_length:"La contraseña debe tener entre 12 y 256 caracteres.",
+        bootstrap_failed:"No se pudo crear el administrador."
+      };
+      const key=String(body&&body.error||"");
+      return html(bootstrapPage(messages[key]||"No se pudo completar la configuración inicial."),response.status||400);
+    }
+
+    if(url.pathname==="/vendor/accept"&&req.method==="GET"){
+      const token=String(url.searchParams.get("token")||"").slice(0,256);
+      if(!token)return html(vendorLoginPage("Invitación inválida."),400);
+      const result=await api("/v1/vendor/invitation?token="+encodeURIComponent(token));
+      if(!result.response?.ok)return html(vendorLoginPage("La invitación no existe, venció o ya fue utilizada."),result.response?.status||400);
+      return html(vendorAcceptPage(token,result.body?.invitation||{}));
+    }
+
+    if(url.pathname==="/vendor/accept"&&req.method==="POST"){
+      const fd=await req.formData();
+      const token=String(fd.get("token")||"").slice(0,256);
+      const email=String(fd.get("email")||"").trim().slice(0,254);
+      const displayName=String(fd.get("displayName")||"").trim().slice(0,120);
+      const password=String(fd.get("password")||"").slice(0,256);
+      const confirm=String(fd.get("confirmPassword")||"").slice(0,256);
+      if(password!==confirm){
+        const inv=await api("/v1/vendor/invitation?token="+encodeURIComponent(token));
+        return html(vendorAcceptPage(token,inv.body?.invitation||{},"Las contraseñas no coinciden."),400);
+      }
+      const result=await api("/v1/vendor/invitation/accept",{method:"POST",body:{token,email,displayName,password}});
+      if(!result.response?.ok){
+        const inv=await api("/v1/vendor/invitation?token="+encodeURIComponent(token));
+        return html(vendorAcceptPage(token,inv.body?.invitation||{},"No se pudo crear el acceso."),result.response?.status||400);
+      }
+      return redirect("/vendor/login?created=1");
+    }
+
+    if(url.pathname==="/vendor/login"&&req.method==="GET"){
+      const existing=await readVendorSession(req);
+      if(existing)return redirect("/vendor/catalog");
+      return html(vendorLoginPage(url.searchParams.get("created")==="1"?"Acceso creado. Ya puedes iniciar sesión.":""));
+    }
+
+    if(url.pathname==="/vendor/login"&&req.method==="POST"){
+      const fd=await req.formData();
+      const result=await api("/v1/vendor/auth/login",{
+        method:"POST",
+        body:{email:String(fd.get("email")||"").trim(),password:String(fd.get("password")||"")}
+      });
+      if(!result.response?.ok)return html(vendorLoginPage("Credenciales incorrectas o acceso no disponible."),401);
+      const upstream=result.response.headers.get("set-cookie")||"";
+      const csrf=String(result.body?.csrfToken||"");
+      if(!upstream.startsWith(VENDOR_COOKIE+"=")||!csrf)return html(vendorLoginPage("No se pudo establecer la sesión."),502);
+      return redirect("/vendor/catalog",[upstream,vendorCsrfCookie(csrf)]);
+    }
+
+    if(url.pathname==="/vendor/catalog"&&req.method==="GET"){
+      const vendor=await readVendorSession(req);
+      if(!vendor)return redirect("/vendor/login");
+      return html(await vendorCatalogPage(url,vendor));
+    }
+
+    if(url.pathname==="/vendor/logout"&&req.method==="POST"){
+      const vendor=await readVendorSession(req);
+      if(!vendor)return redirect("/vendor/login");
+      const fd=await req.formData();
+      if(!requireVendorCsrf(fd,vendor))return html("Solicitud inválida",403);
+      await api("/v1/vendor/auth/logout",{method:"POST",cookieHeader:vendor.cookieHeader,csrf:vendor.csrf,body:{}});
+      return redirect("/vendor/login",[clearCookie(VENDOR_COOKIE),clearCookie(VENDOR_CSRF_COOKIE)]);
+    }
+
+    if(url.pathname==="/vendor/products"&&req.method==="POST"){
+      const vendor=await readVendorSession(req);
+      if(!vendor)return redirect("/vendor/login");
+      const fd=await req.formData();
+      if(!requireVendorCsrf(fd,vendor))return html("Solicitud inválida",403);
+      const cost=String(fd.get("cost")||"").trim();
+      const result=await api("/v1/vendor/catalog/products",{
+        method:"POST",cookieHeader:vendor.cookieHeader,csrf:vendor.csrf,
+        body:{
+          name:String(fd.get("name")||"").trim(),
+          category:String(fd.get("category")||"").trim()||null,
+          brand:String(fd.get("brand")||"").trim()||null,
+          sku:String(fd.get("sku")||"").trim(),
+          price:Number(fd.get("price")||0),
+          cost:cost?Number(cost):null,
+          size:String(fd.get("size")||"").trim()||null,
+          color:String(fd.get("color")||"").trim()||null,
+          stock:Number(fd.get("stock")||0),
+          imageUrl:String(fd.get("imageUrl")||"").trim()
+        }
+      });
+      return redirect("/vendor/catalog?n="+(result.response?.ok?"created":"error"));
+    }
+
+    const vendorSubmit=url.pathname.match(/^\/vendor\/products\/(\d+)\/submit$/);
+    if(vendorSubmit&&req.method==="POST"){
+      const vendor=await readVendorSession(req);
+      if(!vendor)return redirect("/vendor/login");
+      const fd=await req.formData();
+      if(!requireVendorCsrf(fd,vendor))return html("Solicitud inválida",403);
+      const result=await api("/v1/vendor/catalog/products/"+Number(vendorSubmit[1])+"/submit",{
+        method:"POST",cookieHeader:vendor.cookieHeader,csrf:vendor.csrf,body:{}
+      });
+      return redirect("/vendor/catalog?n="+(result.response?.ok?"submitted":"error"));
+    }
+
     if(url.pathname==="/login"&&req.method==="GET"){
       const existing=await readSession(req);
-      return existing?redirect("/"):html(loginPage());
+      if(existing)return redirect("/");
+      const created=url.searchParams.get("created")==="1";
+      return html(loginPage(created?"Administrador creado. Inicia sesión con tu correo y contraseña.":""));
     }
 
     if(url.pathname==="/login"&&req.method==="POST"){
@@ -370,6 +794,182 @@ Bun.serve({
 
     if(url.pathname==="/"&&req.method==="GET"){
       return html(await dashboard(url,session));
+    }
+
+
+    if(url.pathname==="/orders"&&req.method==="GET")return html(await ordersPage(url,session));
+    if(url.pathname==="/customers"&&req.method==="GET")return html(await customersPage(url,session));
+    if(url.pathname==="/suppliers"&&req.method==="GET")return html(await suppliersPage(url,session));
+    if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
+    if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
+    if(url.pathname==="/fulfillment"&&req.method==="GET")return html(await fulfillmentPage(url,session));
+    if(url.pathname==="/returns"&&req.method==="GET")return html(await returnsPage(url,session));
+
+    if(url.pathname==="/catalog"&&req.method==="GET"){
+      return html(await catalogPage(url,session));
+    }
+
+    if(url.pathname==="/catalog/products"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const cost=String(fd.get("cost")||"").trim();
+      const result=await api("/v1/internal/catalog/products",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          name:String(fd.get("name")||"").trim(),
+          category:String(fd.get("category")||"").trim(),
+          brand:String(fd.get("brand")||"").trim(),
+          status:String(fd.get("status")||"draft"),
+          variants:[{
+            sku:String(fd.get("sku")||"").trim(),
+            price:Number(fd.get("price")||0),
+            cost:cost?Number(cost):null,
+            size:String(fd.get("size")||"").trim(),
+            color:String(fd.get("color")||"").trim(),
+            currency:"HNL",
+            stock:Number(fd.get("stock")||0)
+          }]
+        }
+      });
+      return redirect("/catalog?n="+catalogResult(result,"created"));
+    }
+
+    const cps=url.pathname.match(/^\/catalog\/products\/(\d+)\/status$/);
+    if(cps&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/catalog/products/"+Number(cps[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{status:String(fd.get("status")||"draft")}
+      });
+      return redirect("/catalog?n="+catalogResult(result,"updated"));
+    }
+
+    const cpv=url.pathname.match(/^\/catalog\/products\/(\d+)\/variants$/);
+    if(cpv&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const cost=String(fd.get("cost")||"").trim();
+      const result=await api("/v1/internal/catalog/products/"+Number(cpv[1])+"/variants",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          sku:String(fd.get("sku")||"").trim(),
+          price:Number(fd.get("price")||0),
+          cost:cost?Number(cost):null,
+          size:String(fd.get("size")||"").trim(),
+          color:String(fd.get("color")||"").trim(),
+          currency:"HNL",
+          stock:Number(fd.get("stock")||0)
+        }
+      });
+      return redirect("/catalog?n="+catalogResult(result,"variant"));
+    }
+
+    const csv=url.pathname.match(/^\/catalog\/variants\/(\d+)\/stock$/);
+    if(csv&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/catalog/variants/"+Number(csv[1])+"/stock",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{quantity:Number(fd.get("quantity")||0)}
+      });
+      return redirect("/catalog?n="+catalogResult(result,"stock"));
+    }
+
+    const orderStatus=url.pathname.match(/^\/orders\/(\d+)\/status$/);
+    if(orderStatus&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/orders/"+Number(orderStatus[1])+"/status",{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{status:String(fd.get("status")||""),reason:String(fd.get("reason")||"").trim()||null}
+      });
+      return redirect("/orders?n="+catalogResult(result,"action"));
+    }
+
+    if(url.pathname==="/customers"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/customers",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{displayName:String(fd.get("displayName")||"").trim(),customerType:String(fd.get("customerType")||"PERSON")}
+      });
+      return redirect("/customers?n="+catalogResult(result,"created"));
+    }
+
+    if(url.pathname==="/suppliers"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/suppliers",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          name:String(fd.get("name")||"").trim(),
+          contactName:String(fd.get("contactName")||"").trim()||null,
+          phone:String(fd.get("phone")||"").trim()||null,
+          email:String(fd.get("email")||"").trim()||null,
+          countryCode:String(fd.get("countryCode")||"HN").trim().toUpperCase(),
+          defaultCurrency:String(fd.get("defaultCurrency")||"HNL").trim().toUpperCase()
+        }
+      });
+      return redirect("/suppliers?n="+catalogResult(result,"created"));
+    }
+
+    const inviteSupplier=url.pathname.match(/^\/suppliers\/(\d+)\/invite$/);
+    if(inviteSupplier&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/vendor-invitations",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{supplierId:Number(inviteSupplier[1]),email:String(fd.get("email")||"").trim()||null}
+      });
+      if(!result.response?.ok)return redirect("/suppliers?n=error");
+      const token=String(result.body?.invitation?.token||"");
+      const link=url.origin+"/vendor/accept?token="+encodeURIComponent(token);
+      return redirect("/suppliers?invite="+encodeURIComponent(link));
+    }
+
+    const vendorReview=url.pathname.match(/^\/vendor-review\/(\d+)\/(approve|reject)$/);
+    if(vendorReview&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const action=vendorReview[2]==="approve"?"APPROVE":"REJECT";
+      const result=await api("/v1/internal/vendor-products/"+Number(vendorReview[1])+"/review",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{decision:action,note:String(fd.get("note")||"").trim()||null}
+      });
+      return redirect("/vendor-review?n="+catalogResult(result,"action"));
+    }
+
+    const purchaseAction=url.pathname.match(/^\/purchases\/(\d+)\/(approve|order|cancel)$/);
+    if(purchaseAction&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/procurement/purchase-orders/"+Number(purchaseAction[1])+"/"+purchaseAction[2],{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,body:{}
+      });
+      return redirect("/purchases?n="+catalogResult(result,"action"));
+    }
+
+    const fulfillmentStatus=url.pathname.match(/^\/fulfillment\/(\d+)\/status$/);
+    if(fulfillmentStatus&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/fulfillments/"+Number(fulfillmentStatus[1])+"/status",{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{status:String(fd.get("status")||""),reason:String(fd.get("reason")||"").trim()||null}
+      });
+      return redirect("/fulfillment?n="+catalogResult(result,"action"));
+    }
+
+    const returnAction=url.pathname.match(/^\/returns\/(\d+)\/(approve|reject|complete)$/);
+    if(returnAction&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/returns/"+Number(returnAction[1])+"/"+returnAction[2],{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{reason:String(fd.get("reason")||"").trim()||null}
+      });
+      return redirect("/returns?n="+catalogResult(result,"action"));
     }
 
     if(url.pathname==="/export/inquiries.csv"&&req.method==="GET"){

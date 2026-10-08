@@ -8,6 +8,7 @@ import { ensureProcurementSchema, handleProcurement } from "./procurement";
 import { ensureReturnsSchema, handleReturns } from "./returns";
 import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 import { handleInternalCatalog } from "./catalog-internal";
+import { ensureVendorPortalSchema, handleVendorPortal } from "./vendor-portal";
 
 const db = new SQL({
   hostname: Bun.env.PGHOST!,
@@ -141,6 +142,7 @@ await ensureCustomersSchema(db);
 await ensureProcurementSchema(db);
 await ensureReturnsSchema(db);
 await ensureInternalOpsSchema(db);
+await ensureVendorPortalSchema(db);
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, {
@@ -177,6 +179,9 @@ Bun.serve({
 
     const returnsResponse = await handleReturns(req, url, db);
     if (returnsResponse) return returnsResponse;
+
+    const vendorResponse = await handleVendorPortal(req, url, db);
+    if (vendorResponse) return vendorResponse;
 
     if (url.pathname === "/v1/products" && req.method === "GET") {
       const status = url.searchParams.get("status");

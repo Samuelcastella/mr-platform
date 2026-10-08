@@ -53,6 +53,8 @@ jobs:
         run: bun build services/catalog-api/internal-routes.ts --target=bun --outfile=/tmp/internal-routes.js
       - name: Validar módulo de catálogo interno
         run: bun build services/catalog-api/catalog-internal.ts --target=bun --outfile=/tmp/catalog-internal.js
+      - name: Validar portal de proveedores
+        run: bun build services/catalog-api/vendor-portal.ts --target=bun --outfile=/tmp/vendor-portal.js
       - name: Validar módulo de órdenes
         run: bun build services/catalog-api/orders.ts --target=bun --outfile=/tmp/orders.js
       - name: Validar módulo de checkout
@@ -81,6 +83,7 @@ jobs:
           bun run services/catalog-api/test/auth.integration.ts
           bun run services/catalog-api/test/rbac-internal.integration.ts
           bun run services/catalog-api/test/catalog.integration.ts
+          bun run services/catalog-api/test/vendor-portal.integration.ts
           bun run services/control-center/test/integration.ts
           bun run services/catalog-api/test/customers.integration.ts
       - name: Validar Control Center
