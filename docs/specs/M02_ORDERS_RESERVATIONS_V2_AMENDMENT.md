@@ -13,7 +13,24 @@ Amend M02 so authoritative orders preserve the commercial facts required for hyb
 
 M02 v1 remains authoritative except where explicitly extended below.
 
-## 2. OrderItem commercial snapshot
+## 2. Verified implementation baseline — 2026-10-08
+
+The current catalog-api already has authoritative server-side tables for:
+
+- orders;
+- order_items;
+- inventory_reservations;
+- order_status_history.
+
+The current order_items table already snapshots SKU, product name, variant JSON, quantity, unit price, currency and line total.
+
+The current inventory_reservations table is keyed to order, variant and location, but does not yet carry inventory_source_id.
+
+The current order state machine and reservation invariants remain the baseline and are not replaced by this amendment.
+
+Therefore the v2 work is primarily an additive migration for commercial ownership and staff attribution, not a rewrite of the existing order domain.
+
+## 3. OrderItem commercial snapshot
 
 Each OrderItem must be able to preserve the economic context resolved at order creation or commercial commitment.
 
@@ -40,7 +57,7 @@ Rules:
 5. Later SellerAgreement edits do not rewrite historical OrderItems.
 6. MR-owned lines may have seller fields null.
 
-## 3. Mixed commercial ownership orders
+## 4. Mixed commercial ownership orders
 
 One customer Order MAY contain:
 
@@ -58,7 +75,7 @@ This amendment does not require:
 
 Customer order remains one commercial order unless a later marketplace SPEC requires decomposition.
 
-## 4. Inventory source allocation
+## 5. Inventory source allocation
 
 Reservation must ultimately identify the inventory source used for each reserved quantity where ownership attribution is required.
 
@@ -74,7 +91,7 @@ Rules:
 - source allocation must remain consistent with availability;
 - consumed quantity must preserve the same commercial ownership context used for OrderItem snapshot or record an explicit audited reallocation before commitment.
 
-## 5. Staff attribution
+## 6. Staff attribution
 
 Add a normalized attribution mechanism for commercial staff.
 
@@ -115,7 +132,7 @@ Rules:
 4. For compatibility, a primary salesperson projection may expose `primary_salesperson_user_id` to M13, but the normalized attribution record remains authoritative when multiple staff are involved.
 5. If only one salesperson is supported initially, implementation may expose a simplified field backed by a migration path to the normalized model.
 
-## 6. Order entity extension
+## 7. Order entity extension
 
 Order may add:
 
@@ -125,7 +142,7 @@ Order may add:
 
 These fields do not replace existing channel.
 
-## 7. Reservation and idempotency invariants
+## 8. Reservation and idempotency invariants
 
 All M02 v1 reservation and idempotency invariants remain unchanged.
 
@@ -133,7 +150,7 @@ Additional invariant:
 
 The same idempotent Order creation retry must return the same commercial snapshot and staff attribution result unless the original request had not yet committed and the server explicitly rolled back.
 
-## 8. Cancellation / return interaction
+## 9. Cancellation / return interaction
 
 Cancellation before inventory consumption:
 
@@ -147,7 +164,7 @@ M11 and M13 consume stable M09 events to create seller/commission reversals.
 
 M02 does not rewrite historical OrderItems after a return.
 
-## 9. Privacy / API projection
+## 10. Privacy / API projection
 
 Public order tracking may expose:
 
@@ -165,7 +182,7 @@ Public APIs must not expose:
 - staff commission attribution;
 - internal staff IDs unless explicitly needed for customer service display later.
 
-## 10. Functional requirements added
+## 11. Functional requirements added
 
 - FR-ORD-013 Snapshot seller/economic context per OrderItem.
 - FR-ORD-014 Preserve inventory-source attribution for hybrid stock.
@@ -176,7 +193,7 @@ Public APIs must not expose:
 - FR-RES-005 Preserve source allocation across reservation consumption.
 - FR-IDEM-004 Idempotent retries preserve identical commercial snapshot outcome.
 
-## 11. Acceptance criteria added
+## 12. Acceptance criteria added
 
 1. OrderItem seller/economic data cannot be forged by the client.
 2. Historical OrderItem economics do not change when SellerAgreement changes.
@@ -189,7 +206,7 @@ Public APIs must not expose:
 9. M13 can calculate accrual from stable staff attribution and order events.
 10. Existing M02 concurrency, reservation and idempotency tests remain valid.
 
-## 12. Migration / implementation gate
+## 13. Migration / implementation gate
 
 Before implementation:
 
