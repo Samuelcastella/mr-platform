@@ -221,6 +221,17 @@ export async function fetchFulfillment(
   );
 }
 
+export async function fetchCheckout(
+  checkout: Pick<CheckoutResult, "id" | "token">,
+) {
+  return jsonRequest<{ checkout: CheckoutResult }>(
+    "/v1/checkouts/" +
+      checkout.id +
+      "?token=" +
+      encodeURIComponent(checkout.token),
+  );
+}
+
 export async function createAppOrder(
   input: {
     customerName: string;
