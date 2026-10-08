@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -635,6 +635,82 @@ async function inventoryAdjustmentsPage(url:URL,session:Session){
   );
 }
 
+
+async function healthDeskPage(url:URL,session:Session){
+  const result=await api("/v1/internal/health-desk",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso health.read.</p></div>',session);
+  }
+  if(!result.response?.ok){
+    return shell('<div class="panel empty"><h2>Health Desk no disponible</h2><p>No se pudo consultar el Commerce Core.</p></div>',session);
+  }
+
+  const summary=result.body?.summary||{};
+  const signals:any[]=Array.isArray(result.body?.signals)?result.body.signals:[];
+  const incidents:any[]=Array.isArray(result.body?.incidents)?result.body.incidents:[];
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canManage=permissions.has("health.incidents.manage");
+  const canResolve=permissions.has("health.incidents.resolve");
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    refreshed:"Señales actualizadas.",
+    acknowledged:"Incidente reconocido.",
+    investigating:"Incidente en investigación.",
+    resolved:"Incidente resuelto.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const metrics='<section class="grid" style="margin-bottom:18px">'+
+    '<div class="metric"><span>Estado</span><b>'+esc(result.body?.overall||"UNKNOWN")+'</b></div>'+
+    '<div class="metric"><span>Señales activas</span><b>'+Number(summary.activeSignals||0)+'</b></div>'+
+    '<div class="metric"><span>Críticas</span><b>'+Number(summary.criticalSignals||0)+'</b></div>'+
+    '<div class="metric"><span>Incidentes abiertos</span><b>'+Number(summary.openIncidents||0)+'</b></div>'+
+  '</section>';
+
+  const signalCards=signals.length?signals.map((s:any)=>
+    '<article class="item"><div class="item-head"><div><h3>'+esc(s.signalType)+'</h3>'+
+    '<div class="meta">'+esc(s.sourceType)+' · '+esc(s.message)+'</div></div>'+
+    '<span class="pill '+(s.severity==="CRITICAL"?'high':'')+'">'+esc(s.status)+' · '+esc(s.severity)+'</span></div>'+
+    '<div class="meta">Valor: '+(s.observedValue==null?'—':Number(s.observedValue))+
+    (s.unit?' '+esc(s.unit):'')+' · Última lectura: '+esc(String(s.lastSeenAt||"—"))+'</div></article>'
+  ).join(""):'<div class="panel empty">Todavía no hay señales. Usa Actualizar señales.</div>';
+
+  const incidentCards=incidents.length?incidents.map((i:any)=>{
+    let actions="";
+    if(["OPEN","ACKNOWLEDGED","INVESTIGATING"].includes(i.status)){
+      const parts:string[]=[];
+      if(canManage&&i.status==="OPEN"){
+        parts.push('<form method="post" action="/health-desk/incidents/'+Number(i.id)+'/acknowledge"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Reconocer</button></form>');
+      }
+      if(canManage&&i.status!=="INVESTIGATING"){
+        parts.push('<form method="post" action="/health-desk/incidents/'+Number(i.id)+'/investigate"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button class="ghost">Investigar</button></form>');
+      }
+      if(canResolve){
+        parts.push('<form method="post" action="/health-desk/incidents/'+Number(i.id)+'/resolve" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input name="note" maxlength="500" placeholder="Resolución / nota"><button>Resolver</button></form>');
+      }
+      actions='<div class="toolbar">'+parts.join("")+'</div>';
+    }
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(i.incidentNumber)+'</h3>'+
+      '<div class="meta">'+esc(i.incidentType)+' · '+esc(i.summary)+'</div></div>'+
+      '<span class="pill '+(i.severity==="CRITICAL"?'high':'')+'">'+esc(i.status)+' · '+esc(i.severity)+'</span></div>'+
+      actions+'</article>';
+  }).join(""):'<div class="panel empty">No hay incidentes persistidos.</div>';
+
+  const refresh=canManage
+    ?'<form method="post" action="/health-desk/refresh" style="margin:14px 0"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Actualizar señales</button></form>'
+    :'';
+
+  return shell(
+    '<div class="eyebrow">Operación</div><h1>Health Desk</h1>'+
+    '<p class="meta">Observabilidad operativa. Esta pantalla no modifica inventario, pagos, pedidos ni fulfillment.</p>'+
+    notice+refresh+metrics+
+    '<section style="margin-bottom:24px"><h2>Señales</h2><div class="queue">'+signalCards+'</div></section>'+
+    '<section><h2>Incidentes</h2><div class="queue">'+incidentCards+'</div></section>',
+    session
+  );
+}
+
 async function catalogPage(url:URL,session:Session){
   const result=await api("/v1/internal/catalog",{cookieHeader:session.cookieHeader});
   if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso catalog.read.</p></div>',session);
@@ -960,7 +1036,32 @@ Bun.serve({
     if(url.pathname==="/fulfillment"&&req.method==="GET")return html(await fulfillmentPage(url,session));
     if(url.pathname==="/returns"&&req.method==="GET")return html(await returnsPage(url,session));
     if(url.pathname==="/inventory-adjustments"&&req.method==="GET")return html(await inventoryAdjustmentsPage(url,session));
+    if(url.pathname==="/health-desk"&&req.method==="GET")return html(await healthDeskPage(url,session));
 
+
+
+    if(url.pathname==="/health-desk/refresh"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/health-desk/refresh",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,body:{}
+      });
+      return redirect("/health-desk?n="+catalogResult(result,"refreshed"));
+    }
+
+    const healthAction=url.pathname.match(/^\/health-desk\/incidents\/(\d+)\/(acknowledge|investigate|resolve)$/);
+    if(healthAction&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(healthAction[1]);
+      const action=healthAction[2];
+      const result=await api("/v1/internal/health-desk/incidents/"+id+"/"+action,{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{note:String(fd.get("note")||"").trim()||null}
+      });
+      const ok=action==="acknowledge"?"acknowledged":action==="investigate"?"investigating":"resolved";
+      return redirect("/health-desk?n="+catalogResult(result,ok));
+    }
 
     if(url.pathname==="/inventory-adjustments"&&req.method==="POST"){
       const fd=await req.formData();
