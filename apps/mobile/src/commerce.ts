@@ -71,6 +71,31 @@ export type FulfillmentResult = {
     etaMinDays: number | null;
     etaMaxDays: number | null;
   };
+  proofOfDelivery?: Record<string, unknown>;
+  codCollection?: {
+    id: number;
+    status: string;
+    expectedAmountMinor: number;
+    collectedAmountMinor: number | null;
+    currency: string;
+  } | null;
+  events?: Array<{
+    id: number;
+    eventType: string;
+    status: string;
+    description: string;
+    locationText: string | null;
+    occurredAt: string;
+  }>;
+  attempts?: Array<{
+    id: number;
+    attemptNumber: number;
+    status: string;
+    reason: string | null;
+    occurredAt: string;
+  }>;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type PaymentMethod =
@@ -182,6 +207,17 @@ export async function fetchOrder(
       order.id +
       "?token=" +
       encodeURIComponent(order.token),
+  );
+}
+
+export async function fetchFulfillment(
+  fulfillment: Pick<FulfillmentResult, "id" | "token">,
+) {
+  return jsonRequest<{ fulfillment: FulfillmentResult }>(
+    "/v1/fulfillments/" +
+      fulfillment.id +
+      "?token=" +
+      encodeURIComponent(fulfillment.token),
   );
 }
 
