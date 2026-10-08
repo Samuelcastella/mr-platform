@@ -263,7 +263,11 @@ async function listAdjustments(req: Request, url: URL, db: DB) {
   const status = clean(url.searchParams.get("status"), 24).toUpperCase();
   if (status && !STATUSES.has(status)) return json({ error: "invalid_status" }, 400);
 
-  const auth = await authorizeInternal(req, db, "inventory_adjustments.read");
+  const locationRaw = clean(url.searchParams.get("locationId"), 24);
+  const locationId = locationRaw ? positiveInt(locationRaw) : null;
+  if (locationRaw && !locationId) return json({ error: "invalid_location" }, 400);
+
+  const auth = await authorizeInternal(req, db, "inventory_adjustments.read", { locationId });
   if (!auth.ok) return auth.response;
 
   const rows = await db`
@@ -271,6 +275,7 @@ async function listAdjustments(req: Request, url: URL, db: DB) {
            evidence_required, requested_at, submitted_at, approved_at, posted_at
     FROM inventory_adjustment_requests
     WHERE (${status || null}::text IS NULL OR status = ${status || null}::text)
+      AND (${locationId}::bigint IS NULL OR location_id = ${locationId}::bigint)
     ORDER BY created_at DESC
     LIMIT 100`;
 
