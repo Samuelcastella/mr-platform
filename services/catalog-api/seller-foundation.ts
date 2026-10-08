@@ -358,6 +358,91 @@ async function createInventorySource(req:Request,db:DB){
   }
 }
 
+
+async function listAgreements(req:Request,db:DB,sellerId:number){
+  const auth=await authorizeInternal(req,db,"seller_agreements.read");
+  if(!auth.ok)return auth.response;
+
+  const rows=await db`
+    SELECT id,seller_id,commercial_mode,agreement_version,effective_from,effective_to,
+           currency,commission_basis,commission_rate_bps,fixed_fee_minor,
+           discount_allocation_rule,return_allocation_rule,shipping_allocation_rule,
+           payment_fee_allocation_rule,shrinkage_liability_rule,settlement_frequency,
+           settlement_delay_days,status,created_at,approved_at,updated_at
+    FROM seller_agreements
+    WHERE seller_id=${sellerId}
+    ORDER BY agreement_version DESC`;
+
+  return json({data:rows.map((r:any)=>({
+    id:Number(r.id),sellerId:Number(r.seller_id),commercialMode:r.commercial_mode,
+    agreementVersion:Number(r.agreement_version),effectiveFrom:r.effective_from,
+    effectiveTo:r.effective_to||null,currency:r.currency,commissionBasis:r.commission_basis||null,
+    commissionRateBps:r.commission_rate_bps==null?null:Number(r.commission_rate_bps),
+    fixedFeeMinor:r.fixed_fee_minor==null?null:Number(r.fixed_fee_minor),
+    discountAllocationRule:r.discount_allocation_rule||null,
+    returnAllocationRule:r.return_allocation_rule||null,
+    shippingAllocationRule:r.shipping_allocation_rule||null,
+    paymentFeeAllocationRule:r.payment_fee_allocation_rule||null,
+    shrinkageLiabilityRule:r.shrinkage_liability_rule||null,
+    settlementFrequency:r.settlement_frequency||null,
+    settlementDelayDays:Number(r.settlement_delay_days||0),
+    status:r.status,createdAt:r.created_at,approvedAt:r.approved_at||null,updatedAt:r.updated_at
+  }))});
+}
+
+async function transitionAgreement(req:Request,db:DB,id:number,target:"APPROVED"|"ACTIVE"|"TERMINATED"){
+  const auth=await authorizeInternal(req,db,"seller_agreements.manage",{mutation:true});
+  if(!auth.ok)return auth.response;
+  if(auth.actor.type!=="USER")return json({error:"staff_approval_required"},403);
+
+  const result:any=await db.begin(async(tx:DB)=>{
+    const rows=await tx`
+      SELECT id,seller_id,status,created_by_user_id
+      FROM seller_agreements
+      WHERE id=${id}
+      FOR UPDATE`;
+    if(!rows.length)return {error:"not_found",status:404};
+
+    const current=String(rows[0].status);
+    if(target==="APPROVED"){
+      if(current!=="DRAFT")return {error:"invalid_transition",status:409,current,target};
+      if(rows[0].created_by_user_id!=null&&Number(rows[0].created_by_user_id)===auth.actor.userId)
+        return {error:"self_approval_forbidden",status:409};
+      await tx`
+        UPDATE seller_agreements
+        SET status='APPROVED',approved_by_user_id=${auth.actor.userId},
+            approved_at=NOW(),updated_at=NOW()
+        WHERE id=${id}`;
+    }else if(target==="ACTIVE"){
+      if(current!=="APPROVED")return {error:"invalid_transition",status:409,current,target};
+      await tx`
+        UPDATE seller_agreements
+        SET status='ACTIVE',updated_at=NOW()
+        WHERE id=${id}`;
+    }else{
+      if(!["APPROVED","ACTIVE"].includes(current))
+        return {error:"invalid_transition",status:409,current,target};
+      await tx`
+        UPDATE seller_agreements
+        SET status='TERMINATED',updated_at=NOW()
+        WHERE id=${id}`;
+    }
+
+    await writeAuditEvent(tx,{
+      ...auditActor(auth.actor),
+      action:"seller_agreement."+target.toLowerCase(),
+      resourceType:"SellerAgreement",
+      resourceId:id,
+      outcome:"SUCCESS",
+      metadata:{fromStatus:current,toStatus:target,sellerId:Number(rows[0].seller_id)}
+    });
+
+    return {ok:true,status:target};
+  });
+
+  return result.error?json(result,result.status||409):json(result);
+}
+
 export async function handleSellerFoundation(req:Request,url:URL,db:DB){
   if(url.pathname==="/v1/internal/sellers"){
     if(req.method==="GET")return listSellers(req,db);
@@ -365,8 +450,20 @@ export async function handleSellerFoundation(req:Request,url:URL,db:DB){
   }
 
   const agreement=url.pathname.match(/^\/v1\/internal\/sellers\/(\d+)\/agreements$/);
-  if(agreement&&req.method==="POST"){
-    return createAgreement(req,db,Number(agreement[1]));
+  if(agreement){
+    if(req.method==="GET")return listAgreements(req,db,Number(agreement[1]));
+    if(req.method==="POST")return createAgreement(req,db,Number(agreement[1]));
+  }
+
+  const agreementAction=url.pathname.match(
+    /^\/v1\/internal\/seller-agreements\/(\d+)\/(approve|activate|terminate)$/
+  );
+  if(agreementAction&&req.method==="POST"){
+    const id=Number(agreementAction[1]);
+    const action=agreementAction[2];
+    if(action==="approve")return transitionAgreement(req,db,id,"APPROVED");
+    if(action==="activate")return transitionAgreement(req,db,id,"ACTIVE");
+    if(action==="terminate")return transitionAgreement(req,db,id,"TERMINATED");
   }
 
   if(url.pathname==="/v1/internal/inventory-sources"&&req.method==="POST"){
@@ -375,6 +472,7 @@ export async function handleSellerFoundation(req:Request,url:URL,db:DB){
 
   if(
     url.pathname.startsWith("/v1/internal/sellers") ||
+    url.pathname.startsWith("/v1/internal/seller-agreements") ||
     url.pathname.startsWith("/v1/internal/inventory-sources")
   ){
     return json({error:"not_found"},404);
