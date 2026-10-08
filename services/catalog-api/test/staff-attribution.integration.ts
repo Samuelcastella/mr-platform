@@ -256,12 +256,15 @@ const publicPayload = JSON.stringify(orderAfter.body.order || {});
 ok(!publicPayload.includes("staffAttribution"), "respuesta pública no expone atribución interna");
 ok(!publicPayload.includes("PRIMARY_SALESPERSON"), "respuesta pública no expone rol interno");
 
-const audit = await db`
-  SELECT action,resource_id
+const auditRows = await db`
+  SELECT action,resource_id,metadata
   FROM audit_events
   WHERE action IN ('commission_attribution.assigned','commission_attribution.corrected')
-    AND metadata->>'orderId'=${String(orderId)}
+    AND resource_type='OrderStaffAttribution'
   ORDER BY id`;
+const audit = auditRows.filter(
+  (x: any) => Number((x.metadata || {}).orderId) === orderId
+);
 ok(audit.length >= 3, "asignaciones y corrección quedan auditadas");
 ok(
   audit.some((x: any) => x.action === "commission_attribution.corrected"),
