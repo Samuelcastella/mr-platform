@@ -131,12 +131,31 @@ async function requireVendor(req: Request, db: DB, mutation = false) {
   return { ok: true as const, actor };
 }
 
-async function defaultLocation(db: DB) {
-  const rows = await db`SELECT id FROM locations WHERE active ORDER BY id LIMIT 1`;
-  if (rows.length) return Number(rows[0].id);
+async function vendorLocation(db: DB, supplierId: number) {
+  const existing = await db`
+    SELECT id
+    FROM locations
+    WHERE active AND supplier_id=${supplierId}
+    ORDER BY id
+    LIMIT 1`;
+  if (existing.length) return Number(existing[0].id);
+
+  const suppliers = await db`
+    SELECT name, COALESCE(country_code,'HN') AS country_code
+    FROM suppliers
+    WHERE id=${supplierId}
+    LIMIT 1`;
+  if (!suppliers.length) throw new Error("supplier_not_found");
+
   const created = await db`
-    INSERT INTO locations(name,country_code,type,active)
-    VALUES('Puerto Cortés','HN','store',TRUE)
+    INSERT INTO locations(name,country_code,type,active,supplier_id)
+    VALUES(
+      ${"Proveedor: " + suppliers[0].name},
+      ${suppliers[0].country_code},
+      'vendor',
+      TRUE,
+      ${supplierId}
+    )
     RETURNING id`;
   return Number(created[0].id);
 }
@@ -205,6 +224,11 @@ export async function ensureVendorPortalSchema(db: DB) {
       active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+  await db`ALTER TABLE locations ADD COLUMN IF NOT EXISTS supplier_id BIGINT REFERENCES suppliers(id) ON DELETE RESTRICT`;
+  await db`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_supplier_unique
+    ON locations(supplier_id)
+    WHERE supplier_id IS NOT NULL`;
   await db`CREATE INDEX IF NOT EXISTS idx_products_owner_supplier ON products(owner_supplier_id, updated_at DESC)`;
 }
 
@@ -503,7 +527,7 @@ async function createProduct(req: Request, db: DB) {
       RETURNING id,sku,size,color,cost,price,currency`;
 
     if (stock > 0) {
-      const locationId = await defaultLocation(tx);
+      const locationId = await vendorLocation(tx, auth.actor.supplierId);
       await tx`
         INSERT INTO inventory(variant_id,location_id,quantity,reserved)
         VALUES(${Number(variants[0].id)},${locationId},${stock},0)`;
@@ -533,15 +557,84 @@ async function submitProduct(req: Request, db: DB, productId: number) {
   const auth = await requireVendor(req, db, true);
   if (!auth.ok) return auth.response;
 
+  const owned = await db`
+    SELECT id,review_status
+    FROM products
+    WHERE id=${productId} AND owner_supplier_id=${auth.actor.supplierId}
+    LIMIT 1`;
+  if (!owned.length) return json({ error: "not_found" }, 404);
+  if (!["DRAFT","REJECTED"].includes(owned[0].review_status)) {
+    return json({ error: "product_not_submittable" }, 409);
+  }
+
+  const readiness = await db`
+    SELECT
+      (SELECT COUNT(*)::int FROM product_variants WHERE product_id=${productId} AND active) AS variants,
+      (SELECT COUNT(*)::int FROM product_images WHERE product_id=${productId} AND active) AS images`;
+  if (Number(readiness[0]?.variants || 0) < 1) return json({ error: "variant_required" }, 409);
+  if (Number(readiness[0]?.images || 0) < 1) return json({ error: "image_required" }, 409);
+
   const rows = await db`
     UPDATE products
-    SET review_status='SUBMITTED',review_note=NULL,updated_at=NOW()
+    SET review_status='SUBMITTED',review_note=NULL,status='draft',updated_at=NOW()
     WHERE id=${productId}
       AND owner_supplier_id=${auth.actor.supplierId}
-      AND review_status IN ('DRAFT','REJECTED')
-    RETURNING id,name,review_status`;
-  if (!rows.length) return json({ error: "product_not_submittable" }, 409);
+    RETURNING id,name,review_status,status`;
   return json({ product: rows[0] });
+}
+
+async function listVendorProductsForReview(req: Request, url: URL, db: DB) {
+  const auth = await authorizeInternal(req, db, "catalog.read");
+  if (!auth.ok) return auth.response;
+
+  const status = clean(url.searchParams.get("status"), 24).toUpperCase();
+  const allowed = new Set(["DRAFT","SUBMITTED","APPROVED","REJECTED"]);
+  if (status && !allowed.has(status)) return json({ error: "invalid_status" }, 400);
+
+  const rows = await db`
+    SELECT
+      p.id,p.name,p.slug,p.category,p.brand,p.status,p.review_status,p.review_note,
+      p.owner_supplier_id,s.name AS supplier_name,p.created_at,p.updated_at,
+      COALESCE(
+        (SELECT COUNT(*)::int FROM product_variants v WHERE v.product_id=p.id),
+        0
+      ) AS variant_count,
+      COALESCE(
+        (SELECT COUNT(*)::int FROM product_images i WHERE i.product_id=p.id AND i.active),
+        0
+      ) AS image_count
+    FROM products p
+    JOIN suppliers s ON s.id=p.owner_supplier_id
+    WHERE p.owner_supplier_id IS NOT NULL
+      AND (${status || null}::text IS NULL OR p.review_status=${status || null}::text)
+    ORDER BY
+      CASE p.review_status
+        WHEN 'SUBMITTED' THEN 0
+        WHEN 'REJECTED' THEN 1
+        WHEN 'DRAFT' THEN 2
+        ELSE 3
+      END,
+      p.updated_at DESC
+    LIMIT 200`;
+
+  return json({
+    data: rows.map((row:any)=>({
+      id:Number(row.id),
+      name:row.name,
+      slug:row.slug,
+      category:row.category||null,
+      brand:row.brand||null,
+      publicationStatus:row.status,
+      reviewStatus:row.review_status,
+      reviewNote:row.review_note||null,
+      supplierId:Number(row.owner_supplier_id),
+      supplierName:row.supplier_name,
+      variantCount:Number(row.variant_count),
+      imageCount:Number(row.image_count),
+      createdAt:row.created_at,
+      updatedAt:row.updated_at
+    }))
+  });
 }
 
 async function reviewProduct(req: Request, db: DB, productId: number) {
@@ -582,6 +675,10 @@ async function reviewProduct(req: Request, db: DB, productId: number) {
 export async function handleVendorPortal(req: Request, url: URL, db: DB) {
   if (url.pathname === "/v1/internal/vendor-invitations" && req.method === "POST") {
     return createInvitation(req, db);
+  }
+
+  if (url.pathname === "/v1/internal/vendor-products" && req.method === "GET") {
+    return listVendorProductsForReview(req, url, db);
   }
 
   const reviewMatch = url.pathname.match(/^\/v1\/internal\/vendor-products\/(\d+)\/review$/);
