@@ -33,7 +33,7 @@ jobs:
       ORDER_RESERVATION_TTL_MINUTES: 30
       ALLOW_DESTRUCTIVE_TEST_DB: "true"
       AUTH_COOKIE_SECURE: "false"
-      ENFORCE_GOVERNED_INVENTORY_ADJUSTMENTS: "false"
+      ENFORCE_GOVERNED_INVENTORY_ADJUSTMENTS: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -41,6 +41,8 @@ jobs:
           bun-version: latest
       - name: Build M12 module
         run: bun build services/catalog-api/inventory-adjustments.ts --target=bun --outfile=/tmp/m12.js
+      - name: Build Control Center
+        run: bun build services/control-center/index.ts --target=bun --outfile=/tmp/control-center.js
       - name: Run M12 integration
         shell: bash
         run: |
