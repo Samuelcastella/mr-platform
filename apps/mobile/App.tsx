@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -29,6 +29,7 @@ import {
   createOrderFulfillment,
   fetchCatalog,
   fetchDeliveryOptions,
+  fetchFulfillment,
   fetchHondurasSubdivisions,
   fetchOrder,
   makeOperationKey,
@@ -48,7 +49,7 @@ type CartLine = {
 };
 
 type FulfillmentType = "STORE_PICKUP" | "LOCAL_DELIVERY" | "COURIER";
-type ViewName = "catalog" | "detail" | "cart" | "delivery" | "complete";
+type ViewName = "catalog" | "detail" | "cart" | "delivery" | "complete" | "tracking";
 
 const STOREFRONT_URL =
   process.env.EXPO_PUBLIC_STOREFRONT_URL ??
@@ -79,6 +80,31 @@ function whatsappHandoffUrl(orderNumber: string) {
     `Hola, quiero continuar la confirmación de la orden ${orderNumber} de MR עדולם.`;
   const separator = WHATSAPP_URL.includes("?") ? "&" : "?";
   return `${WHATSAPP_URL}${separator}text=${encodeURIComponent(message)}`;
+}
+
+function fulfillmentStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: "Pendiente de preparación",
+    PREPARING: "Preparando",
+    READY: "Listo",
+    DISPATCHED: "Despachado",
+    OUT_FOR_DELIVERY: "En ruta",
+    DELIVERED: "Entregado",
+    FAILED: "Intento no completado",
+    RETURNING: "Regresando a origen",
+    RETURNED: "Devuelto a origen",
+    CANCELLED: "Cancelado",
+  };
+  return labels[status] || status;
+}
+
+function formatTrackingDate(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return new Intl.DateTimeFormat("es-HN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 export default function App() {
@@ -141,6 +167,10 @@ export default function App() {
   const [submittingCheckout, setSubmittingCheckout] = useState(false);
   const [checkoutResult, setCheckoutResult] =
     useState<CheckoutResult | null>(null);
+
+  const [trackingRefreshing, setTrackingRefreshing] = useState(false);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const trackingBusyRef = useRef(false);
 
   const load = useCallback(async (refresh = false) => {
     refresh ? setRefreshing(true) : setLoading(true);
@@ -616,6 +646,51 @@ export default function App() {
     }
   }, [orderResult]);
 
+  const refreshTracking = useCallback(async () => {
+    if (!orderResult || !fulfillmentResult || trackingBusyRef.current) return;
+
+    trackingBusyRef.current = true;
+    setTrackingRefreshing(true);
+
+    const [orderRead, fulfillmentRead] = await Promise.all([
+      fetchOrder(orderResult),
+      fetchFulfillment(fulfillmentResult),
+    ]);
+
+    let failed = false;
+
+    if (orderRead.ok) {
+      setOrderResult(orderRead.body.order);
+    } else {
+      failed = true;
+    }
+
+    if (fulfillmentRead.ok) {
+      setFulfillmentResult(fulfillmentRead.body.fulfillment);
+    } else {
+      failed = true;
+    }
+
+    setTrackingError(
+      failed
+        ? "No pudimos actualizar todo el seguimiento. Conservamos la última información recibida."
+        : null,
+    );
+    setTrackingRefreshing(false);
+    trackingBusyRef.current = false;
+  }, [fulfillmentResult, orderResult]);
+
+  useEffect(() => {
+    if (view !== "tracking" || !orderResult || !fulfillmentResult) return;
+
+    void refreshTracking();
+    const timer = setInterval(() => {
+      void refreshTracking();
+    }, 30_000);
+
+    return () => clearInterval(timer);
+  }, [fulfillmentResult?.id, orderResult?.id, refreshTracking, view]);
+
   const canBack = view === "detail" || view === "cart";
 
   const header = (
@@ -653,7 +728,9 @@ export default function App() {
                 ? "Entrega y pago"
                 : view === "complete"
                   ? "Orden confirmada"
-                  : "Catálogo móvil"}
+                  : view === "tracking"
+                    ? "Seguimiento"
+                    : "Catálogo móvil"}
         </Text>
       </View>
 
@@ -1683,10 +1760,22 @@ export default function App() {
           ) : null}
 
           <Pressable
-            onPress={() => void openHandoff()}
+            onPress={() => setView("tracking")}
             style={[styles.primaryButtonWide, { backgroundColor: theme.text }]}
           >
             <Text style={[styles.primaryButtonText, { color: theme.background }]}>
+              Ver seguimiento
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => void openHandoff()}
+            style={[
+              styles.secondaryButtonWide,
+              { borderColor: theme.border },
+            ]}
+          >
+            <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
               {WHATSAPP_URL
                 ? "Contactar por WhatsApp"
                 : "Abrir tienda web"}
@@ -1714,6 +1803,284 @@ export default function App() {
       </View>
     );
 
+  const trackingView =
+    orderResult && fulfillmentResult && checkoutResult ? (
+      <ScrollView
+        contentContainerStyle={styles.screen}
+        refreshControl={
+          <RefreshControl
+            refreshing={trackingRefreshing}
+            onRefresh={() => void refreshTracking()}
+            tintColor={theme.accent}
+          />
+        }
+      >
+        <Text style={[styles.kicker, { color: theme.accent }]}>
+          {orderResult.orderNumber}
+        </Text>
+        <Text style={[styles.title, { color: theme.text }]}>
+          Seguimiento de entrega
+        </Text>
+        <Text style={[styles.body, { color: theme.muted }]}>
+          Actualizamos el estado operativo cada 30 segundos mientras esta
+          pantalla está abierta. La app no promete ubicación GPS del repartidor.
+        </Text>
+
+        {trackingError ? (
+          <View
+            style={[
+              styles.errorBox,
+              {
+                borderColor: theme.danger,
+                backgroundColor: theme.surface,
+              },
+            ]}
+          >
+            <Text style={[styles.errorText, { color: theme.danger }]}>
+              {trackingError}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.stateGrid}>
+          <View
+            style={[
+              styles.stateBox,
+              {
+                backgroundColor: theme.surfaceAlt,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text style={[styles.summaryLabel, { color: theme.muted }]}>
+              Orden
+            </Text>
+            <Text style={[styles.stateBoxValue, { color: theme.text }]}>
+              {orderResult.status}
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.stateBox,
+              {
+                backgroundColor: theme.surfaceAlt,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text style={[styles.summaryLabel, { color: theme.muted }]}>
+              Entrega
+            </Text>
+            <Text style={[styles.stateBoxValue, { color: theme.text }]}>
+              {fulfillmentStatusLabel(fulfillmentResult.status)}
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.stateBox,
+              {
+                backgroundColor: theme.surfaceAlt,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text style={[styles.summaryLabel, { color: theme.muted }]}>
+              Pago
+            </Text>
+            <Text style={[styles.stateBoxValue, { color: theme.text }]}>
+              {checkoutResult.payment.status}
+            </Text>
+          </View>
+        </View>
+
+        <View
+          style={[
+            styles.trackingCard,
+            {
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Datos de entrega
+          </Text>
+          <Text style={[styles.trackingLine, { color: theme.muted }]}>
+            Proveedor: {fulfillmentResult.provider || "MR"}
+          </Text>
+          <Text style={[styles.trackingLine, { color: theme.muted }]}>
+            Referencia: {fulfillmentResult.trackingReference || "Pendiente"}
+          </Text>
+          {fulfillmentResult.destination.department ? (
+            <Text style={[styles.trackingLine, { color: theme.muted }]}>
+              Destino: {[
+                fulfillmentResult.destination.municipality,
+                fulfillmentResult.destination.department,
+              ].filter(Boolean).join(", ")}
+            </Text>
+          ) : (
+            <Text style={[styles.trackingLine, { color: theme.muted }]}>
+              Modalidad: recogida en tienda
+            </Text>
+          )}
+          {fulfillmentResult.quote.etaMinDays != null &&
+          fulfillmentResult.quote.etaMaxDays != null ? (
+            <Text style={[styles.trackingLine, { color: theme.muted }]}>
+              ETA original: {fulfillmentResult.quote.etaMinDays}–
+              {fulfillmentResult.quote.etaMaxDays} día(s)
+            </Text>
+          ) : null}
+        </View>
+
+        <Text style={[styles.sectionTitleSpaced, { color: theme.text }]}>
+          Historial
+        </Text>
+
+        {(fulfillmentResult.events || []).length ? (
+          <View style={styles.timeline}>
+            {(fulfillmentResult.events || []).map((event) => (
+              <View
+                key={event.id}
+                style={[
+                  styles.timelineItem,
+                  {
+                    borderColor: theme.border,
+                    backgroundColor: theme.surface,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.timelineDot,
+                    { backgroundColor: theme.accent },
+                  ]}
+                />
+                <View style={styles.timelineCopy}>
+                  <Text style={[styles.timelineTitle, { color: theme.text }]}>
+                    {event.description || fulfillmentStatusLabel(event.status)}
+                  </Text>
+                  <Text style={[styles.timelineMeta, { color: theme.muted }]}>
+                    {formatTrackingDate(event.occurredAt)}
+                    {event.locationText ? ` · ${event.locationText}` : ""}
+                  </Text>
+                  <Text style={[styles.timelineCode, { color: theme.muted }]}>
+                    {event.eventType} · {event.status}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.notice,
+              {
+                backgroundColor: theme.surfaceAlt,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text style={[styles.noticeTitle, { color: theme.text }]}>
+              Aún no hay eventos de transporte
+            </Text>
+            <Text style={[styles.noticeText, { color: theme.muted }]}>
+              El pedido conserva su estado actual y aparecerán eventos cuando
+              el equipo o proveedor actualice la entrega.
+            </Text>
+          </View>
+        )}
+
+        {(fulfillmentResult.attempts || []).length ? (
+          <>
+            <Text style={[styles.sectionTitleSpaced, { color: theme.text }]}>
+              Intentos de entrega
+            </Text>
+            <View style={styles.attemptStack}>
+              {(fulfillmentResult.attempts || []).map((attempt) => (
+                <View
+                  key={attempt.id}
+                  style={[
+                    styles.attemptCard,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.noticeTitle, { color: theme.text }]}>
+                    Intento {attempt.attemptNumber} · {attempt.status}
+                  </Text>
+                  <Text style={[styles.noticeText, { color: theme.muted }]}>
+                    {formatTrackingDate(attempt.occurredAt)}
+                    {attempt.reason ? ` · ${attempt.reason}` : ""}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        {fulfillmentResult.status === "DELIVERED" &&
+        checkoutResult.payment.status !== "PAID" ? (
+          <View
+            style={[
+              styles.notice,
+              {
+                backgroundColor: theme.surfaceAlt,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text style={[styles.noticeTitle, { color: theme.text }]}>
+              Entrega completada; pago separado
+            </Text>
+            <Text style={[styles.noticeText, { color: theme.muted }]}>
+              La entrega figura como completada, pero el estado de pago sigue
+              siendo {checkoutResult.payment.status}. No se modifica
+              automáticamente desde seguimiento.
+            </Text>
+          </View>
+        ) : null}
+
+        <Pressable
+          disabled={trackingRefreshing}
+          onPress={() => void refreshTracking()}
+          style={[
+            styles.primaryButtonWide,
+            {
+              backgroundColor: trackingRefreshing ? theme.border : theme.text,
+            },
+          ]}
+        >
+          {trackingRefreshing ? (
+            <ActivityIndicator color={theme.background} />
+          ) : (
+            <Text style={[styles.primaryButtonText, { color: theme.background }]}>
+              Actualizar seguimiento
+            </Text>
+          )}
+        </Pressable>
+
+        <Pressable
+          onPress={() => setView("complete")}
+          style={[
+            styles.secondaryButtonWide,
+            { borderColor: theme.border },
+          ]}
+        >
+          <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
+            Volver al resumen
+          </Text>
+        </Pressable>
+      </ScrollView>
+    ) : (
+      <View style={styles.center}>
+        <Text style={[styles.stateText, { color: theme.muted }]}>
+          No hay una entrega activa para seguir.
+        </Text>
+      </View>
+    );
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <StatusBar
@@ -1729,7 +2096,9 @@ export default function App() {
             ? cartView
             : view === "delivery"
               ? deliveryView
-              : completeView}
+              : view === "tracking"
+                ? trackingView
+                : completeView}
     </SafeAreaView>
   );
 }
@@ -2044,4 +2413,31 @@ const styles = StyleSheet.create({
     padding: 13,
   },
   stateBoxValue: { fontSize: 14, fontWeight: "900", marginTop: 4 },
+  trackingCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 18,
+    marginTop: 20,
+  },
+  trackingLine: { fontSize: 13, lineHeight: 20, marginTop: 5 },
+  timeline: { gap: 10 },
+  timelineItem: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 15,
+    flexDirection: "row",
+    gap: 12,
+  },
+  timelineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 5,
+  },
+  timelineCopy: { flex: 1 },
+  timelineTitle: { fontSize: 14, fontWeight: "800", lineHeight: 20 },
+  timelineMeta: { fontSize: 12, lineHeight: 18, marginTop: 3 },
+  timelineCode: { fontSize: 10, lineHeight: 16, marginTop: 4 },
+  attemptStack: { gap: 9 },
+  attemptCard: { borderWidth: 1, borderRadius: 14, padding: 14 },
 });
