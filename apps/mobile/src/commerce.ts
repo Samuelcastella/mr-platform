@@ -174,6 +174,17 @@ export async function fetchDeliveryOptions(department: string) {
   );
 }
 
+export async function fetchOrder(
+  order: Pick<OrderResult, "id" | "token">,
+) {
+  return jsonRequest<{ order: OrderResult }>(
+    "/v1/orders/" +
+      order.id +
+      "?token=" +
+      encodeURIComponent(order.token),
+  );
+}
+
 export async function createAppOrder(
   input: {
     customerName: string;
