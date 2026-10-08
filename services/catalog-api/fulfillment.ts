@@ -788,6 +788,19 @@ export async function handleFulfillment(
   db: DB,
   clean: (v: unknown, max: number) => string
 ) {
+  if (
+    url.pathname === "/v1/geography/countries/HN/subdivisions" &&
+    req.method === "GET"
+  ) {
+    return json({
+      countryCode: "HN",
+      subdivisions: HONDURAS_DEPARTMENTS.map(name => ({
+        code: name,
+        name
+      }))
+    });
+  }
+
   if (url.pathname === "/v1/fulfillment/options" && req.method === "GET") {
     return getOptions(url, db, clean);
   }
