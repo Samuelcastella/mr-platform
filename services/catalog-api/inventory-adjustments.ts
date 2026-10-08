@@ -207,6 +207,10 @@ async function createAdjustment(req: Request, db: DB) {
     lines.push({ variantId, quantityDelta, notes: clean(item?.notes, 500) || null });
   }
 
+  const location = await db`
+    SELECT id FROM locations WHERE id = ${locationId} AND active LIMIT 1`;
+  if (!location.length) return json({ error: "location_not_found" }, 404);
+
   for (const line of lines) {
     const variant = await db`
       SELECT id FROM product_variants WHERE id = ${line.variantId} LIMIT 1`;
@@ -409,6 +413,16 @@ async function addEvidence(req: Request, db: DB, id: number) {
   const objectReference = clean(body.objectReference, 1000);
   if (!objectReference) return json({ error: "object_reference_required" }, 400);
 
+  const adjustment = await db`
+    SELECT status
+    FROM inventory_adjustment_requests
+    WHERE id = ${id}
+    LIMIT 1`;
+  if (!adjustment.length) return json({ error: "not_found" }, 404);
+  if (!["DRAFT","SUBMITTED"].includes(adjustment[0].status)) {
+    return json({ error: "adjustment_closed", status: adjustment[0].status }, 409);
+  }
+
   const rows = await db`
     INSERT INTO inventory_adjustment_evidence(
       adjustment_request_id, evidence_type, object_reference, description,
@@ -466,11 +480,29 @@ async function postAdjustment(req: Request, db: DB, id: number) {
     if (adjustment.status !== "APPROVED")
       return { error: "invalid_transition", status: 409, current: adjustment.status, target: "POSTED" };
 
+    const usedKey = await tx`
+      SELECT id
+      FROM inventory_adjustment_requests
+      WHERE post_idempotency_key = ${key} AND id <> ${id}
+      LIMIT 1`;
+    if (usedKey.length) {
+      return { error: "idempotency_conflict", status: 409 };
+    }
+
     const lines = await tx`
       SELECT variant_id, quantity_delta
       FROM inventory_adjustment_lines
       WHERE adjustment_request_id=${id}
       ORDER BY id`;
+
+    const prepared: Array<{
+      variantId: number;
+      delta: number;
+      before: number;
+      reserved: number;
+      after: number;
+      exists: boolean;
+    }> = [];
 
     for (const line of lines) {
       const variantId = Number(line.variant_id);
@@ -489,14 +521,18 @@ async function postAdjustment(req: Request, db: DB, id: number) {
       if (after < reserved)
         return { error: "reserved_exceeds_quantity", status: 409, variantId, reserved, after };
 
-      if (inv.length) {
+      prepared.push({ variantId, delta, before, reserved, after, exists: inv.length > 0 });
+    }
+
+    for (const line of prepared) {
+      if (line.exists) {
         await tx`
-          UPDATE inventory SET quantity=${after}, updated_at=NOW()
-          WHERE variant_id=${variantId} AND location_id=${locationId}`;
+          UPDATE inventory SET quantity=${line.after}, updated_at=NOW()
+          WHERE variant_id=${line.variantId} AND location_id=${locationId}`;
       } else {
         await tx`
           INSERT INTO inventory(variant_id,location_id,quantity,reserved)
-          VALUES(${variantId},${locationId},${after},0)`;
+          VALUES(${line.variantId},${locationId},${line.after},0)`;
       }
 
       await tx`
@@ -504,7 +540,7 @@ async function postAdjustment(req: Request, db: DB, id: number) {
           variant_id,location_id,movement_type,quantity,reference,notes
         )
         VALUES(
-          ${variantId},${locationId},${movementType(adjustment.reason_code)},${delta},
+          ${line.variantId},${locationId},${movementType(adjustment.reason_code)},${line.delta},
           ${"inventory_adjustment:" + adjustment.request_number},
           ${adjustment.reason_text || adjustment.reason_code}
         )`;
