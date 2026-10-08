@@ -213,12 +213,12 @@ ok(machineList.response.status === 200, "credencial técnica sigue compatible");
 const audits = await db`
   SELECT actor_type, actor_user_id, action, resource_id
   FROM audit_events
-  WHERE action IN ('inquiry.status_changed','order.status_changed')
+  WHERE action IN ('inquiry.updated','order.status_changed')
   ORDER BY id`;
 ok(
   audits.some(
     (x: any) =>
-      x.action === "inquiry.status_changed" &&
+      x.action === "inquiry.updated" &&
       x.actor_type === "USER" &&
       Number(x.actor_user_id) === Number(bootstrap.body.user.id)
   ),
