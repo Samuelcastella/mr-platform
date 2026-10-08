@@ -102,7 +102,7 @@ async function listAttributions(req: Request, url: URL, db: DB, orderId: number)
   if (!order) return json({ error: "not_found" }, 404);
 
   const auth = await authorizeInternal(req, db, "commissions.attribution.read", {
-    locationId: order.locationId
+    locationId: lockedOrder.locationId
   });
   if (!auth.ok) return auth.response;
 
@@ -122,9 +122,9 @@ async function listAttributions(req: Request, url: URL, db: DB, orderId: number)
     order: {
       id: order.id,
       orderNumber: order.orderNumber,
-      status: order.status,
-      channel: order.channel,
-      locationId: order.locationId
+      status: lockedOrder.status,
+      channel: lockedOrder.channel,
+      locationId: lockedOrder.locationId
     },
     data: rows.map(mapAttribution)
   });
@@ -135,7 +135,7 @@ async function assignAttribution(req: Request, db: DB, orderId: number) {
   if (!order) return json({ error: "not_found" }, 404);
 
   const auth = await authorizeInternal(req, db, "commissions.attribution.manage", {
-    locationId: order.locationId,
+    locationId: lockedOrder.locationId,
     mutation: true
   });
   if (!auth.ok) return auth.response;
@@ -161,14 +161,6 @@ async function assignAttribution(req: Request, db: DB, orderId: number) {
   }
   if (!SOURCES.has(sourceType)) return json({ error: "invalid_source_type" }, 400);
 
-  const committed = order.status !== "PENDING_CONFIRMATION";
-  if (committed && auth.actor.type === "USER") {
-    sourceType = "MANUAL_OVERRIDE";
-    if (!reason || reason.length < 8) {
-      return json({ error: "correction_reason_required" }, 409);
-    }
-  }
-
   const staff = await db`
     SELECT id,display_name,email_normalized,status
     FROM staff_users
@@ -178,6 +170,20 @@ async function assignAttribution(req: Request, db: DB, orderId: number) {
   if (staff[0].status !== "ACTIVE") return json({ error: "staff_user_not_active" }, 409);
 
   const result: any = await db.begin(async (tx: DB) => {
+    const lockedOrders = await tx`
+      SELECT id,status,channel,location_id,order_number,grand_total_minor,currency
+      FROM orders
+      WHERE id=${orderId}
+      FOR UPDATE`;
+    if (!lockedOrders.length) return { error: "not_found", status: 404 };
+
+    const lockedOrder = {
+      status: String(lockedOrders[0].status),
+      channel: String(lockedOrders[0].channel),
+      locationId: Number(lockedOrders[0].location_id)
+    };
+    const committed = lockedOrder.status !== "PENDING_CONFIRMATION";
+
     const current = await tx`
       SELECT id,staff_user_id,attribution_role,status
       FROM order_staff_attributions
@@ -194,6 +200,16 @@ async function assignAttribution(req: Request, db: DB, orderId: number) {
       return { ok: true, replayed: true, attributionId: Number(current[0].id) };
     }
 
+    const isPrimaryCorrection = role === "PRIMARY_SALESPERSON" && current.length > 0;
+    if (committed && auth.actor.type === "USER") {
+      sourceType = "MANUAL_OVERRIDE";
+      if (!reason || reason.length < 8) {
+        return { error: "correction_reason_required", status: 409 };
+      }
+    } else if (committed && isPrimaryCorrection && (!reason || reason.length < 8)) {
+      return { error: "correction_reason_required", status: 409 };
+    }
+
     let supersedesId: number | null = null;
     if (role === "PRIMARY_SALESPERSON" && current.length) {
       supersedesId = Number(current[0].id);
@@ -204,9 +220,9 @@ async function assignAttribution(req: Request, db: DB, orderId: number) {
     }
 
     const snapshot = {
-      orderStatus: order.status,
-      originatingChannel: order.channel,
-      originatingLocationId: order.locationId,
+      orderStatus: lockedOrder.status,
+      originatingChannel: lockedOrder.channel,
+      originatingLocationId: lockedOrder.locationId,
       staffUserId,
       staffDisplayName: staff[0].display_name,
       staffEmail: staff[0].email_normalized
@@ -234,12 +250,12 @@ async function assignAttribution(req: Request, db: DB, orderId: number) {
         : "commission_attribution.assigned",
       resourceType: "OrderStaffAttribution",
       resourceId: attributionId,
-      locationId: order.locationId,
+      locationId: lockedOrder.locationId,
       outcome: "SUCCESS",
       reason,
       metadata: {
         orderId,
-        orderStatus: order.status,
+        orderStatus: lockedOrder.status,
         staffUserId,
         attributionRole: role,
         sourceType,
