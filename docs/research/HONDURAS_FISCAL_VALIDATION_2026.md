@@ -491,3 +491,91 @@ Fiscal implementation can move from DESIGN to IMPLEMENTATION only when:
 
 This protects MR from turning market-research assumptions into tax behavior while preserving a clean path to Honduras-native fiscal compliance.
 
+
+
+## 12. Revalidation — 2026-10-08
+
+A fresh review of current official SAR materials was completed on 2026-10-08 to verify whether the implementation gate above should change.
+
+### 12.1 Facturación regime remains operationally current
+
+The current SAR Facturación portal continues to publish 2026 materials for:
+
+- enrollment in the Régimen de Facturación;
+- authorization of printing through printer / self-printer workflows;
+- notification of unused fiscal documents;
+- fiscal-document validation and verification.
+
+Official source:
+
+- SAR — Facturación: https://www.sar.gob.hn/facturacion/
+- SAR — Trámites Facturación: https://www.sar.gob.hn/tramitesfacturacion/
+
+**Decision:** the existing M05 architecture around FiscalAuthorization, document type, establishment, point of issue, authorization/range and immutable fiscal history remains appropriate.
+
+### 12.2 Existing enrollment is recognized in the new SAR Virtual Office
+
+The current SAR home/FAQ content states that taxpayers already enrolled in the Régimen de Facturación do not need to enroll again solely because of the new Oficina Virtual.
+
+Official source:
+
+- SAR — Inicio / FAQ: https://www.sar.gob.hn/
+
+**Decision:** migration to a new SAR interface must not be treated as proof that MR needs a new fiscal identity or a new authorization. Current business-side evidence remains authoritative.
+
+### 12.3 Electronic invoicing is not safe to assume as a production API obligation
+
+SAR's institutional memory published in 2026 describes the electronic-invoicing project as being in technical formulation, with future model validation, pilot execution, interoperability work and later national scaling.
+
+Official source:
+
+- SAR — Memoria Institucional 2025, published 2026:
+  https://www.sar.gob.hn/wp-content/uploads/2026/01/memoria-institucional-2025.pdf
+
+**Decision:** keep the FiscalProvider adapter boundary, but do not implement or claim a generalized mandatory SAR real-time e-invoicing API until SAR publishes an applicable production contract and MR's taxpayer profile is confirmed to require it.
+
+### 12.4 Simplified ISV regime remains an active 2026 path
+
+SAR continues to publish 2026 guidance for the Régimen Simplificado del Impuesto Sobre Ventas and states that this regime uses an annual sales declaration due by January 31 of the following fiscal year instead of the ordinary monthly affidavit behavior.
+
+Official source:
+
+- SAR — Régimen Simplificado del ISV:
+  https://www.sar.gob.hn/regimen-simplificado-del-impuesto-sobre-ventasimpuesto-sobre-ventas-isv/
+
+**Decision:** MR software still cannot infer general-vs-simplified ISV status from the fact that the business is a retailer.
+
+### 12.5 2026 revalidation outcome
+
+No evidence found in the current official SAR materials justifies relaxing the production gate in Sections 5, 9 and 10.
+
+The following remain **required before live fiscal issuance**:
+
+- verified taxpayer/issuer identity;
+- verified current SAR obligations and ISV regime;
+- verified current Facturación enrollment;
+- verified active document type and issuance method;
+- verified CAI / authorization data where applicable;
+- verified establishment / point of issue;
+- verified authorized range / expiration / current sequence ownership;
+- accountant/SAR-confirmed product tax classification;
+- approved fiscal treatment for shipping, discounts, returns and exchanges.
+
+The following remain **safe to implement before those values are available**:
+
+- FiscalAuthorization/FiscalDocument domain model;
+- validation and fail-closed behavior;
+- fake non-production fixtures;
+- provider abstraction;
+- concurrency-safe sequence model;
+- audit model;
+- operational Health Desk projection that reports fiscal state as UNKNOWN until M05 has authoritative production data.
+
+### 12.6 Roadmap implication
+
+The M05 gate remains correctly positioned before live third-party seller activation because hybrid commercial modes introduce an additional unresolved question:
+
+> Which party is the fiscal issuer / seller of record for each commercial mode (OWNED, CONSIGNMENT, COMMISSION, WHOLESALE_MARGIN, future marketplace)?
+
+M11 must not infer the answer. It requires current tax/legal/accounting validation before production settlement and fiscal behavior are coupled.
+
