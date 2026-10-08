@@ -1,3 +1,4 @@
+// bootstrap-ui-v2
 const API_BASE = (Bun.env.CATALOG_API_URL || "").replace(/\/+$/, "");
 const SESSION_COOKIE = "mrstaff";
 const CSRF_COOKIE = "mrcc_csrf";
@@ -160,7 +161,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -169,6 +170,10 @@ function loginPage(message=""){
 
 function setupPage(){
   return loginPage("El Control Center requiere CATALOG_API_URL para usar la identidad de StaffUser del Commerce Core.");
+}
+
+function bootstrapPage(message=""){
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Crear administrador · MR עדולם</title><style>'+css+'</style></head><body><main class="login"><div class="eyebrow">Configuración inicial</div><h1>Crear primer administrador</h1><p class="meta">Este formulario funciona una sola vez. Tu contraseña se envía directamente al Commerce Core y no se guarda en el Control Center.</p>'+(message?'<div class="notice">'+esc(message)+'</div>':'')+'<form method="post"><label>Correo<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Nombre<input type="text" name="displayName" autocomplete="name" required maxlength="120"></label><label>Contraseña de administrador<input type="password" name="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><label>Confirmar contraseña<input type="password" name="confirmPassword" autocomplete="new-password" required minlength="12" maxlength="256"></label><button>Crear administrador</button></form><p class="meta" style="margin-top:16px"><a href="/login">Volver al inicio de sesión</a></p></main></body></html>';
 }
 
 function suggestedAction(kind:string){
@@ -291,6 +296,81 @@ async function dashboard(url:URL,session:Session){
   `,session);
 }
 
+async function catalogPage(url:URL,session:Session){
+  const result=await api("/v1/internal/catalog",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso catalog.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Catálogo no disponible</h2><p>No se pudo consultar el Commerce Core.</p></div>',session);
+
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const n=url.searchParams.get("n")||"";
+  const messages:any={created:"Producto creado.",updated:"Estado actualizado.",variant:"Variante agregada.",stock:"Stock actualizado.",error:"No se pudo completar la acción."};
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const cards=rows.length?rows.map((p:any)=>{
+    const variants=Array.isArray(p.variants)?p.variants:[];
+    const vars=variants.length?variants.map((v:any)=>`
+      <div class="item" style="margin-top:10px">
+        <div class="item-head"><div><b>${esc(v.sku)}</b><div class="meta">${esc(v.size||"Sin talla")} · ${esc(v.color||"Sin color")} · L ${Number(v.price||0).toFixed(2)} · Stock ${Number(v.available||0)}</div></div>
+        <form method="post" action="/catalog/variants/${Number(v.id)}/stock" style="display:flex;gap:8px;align-items:end">
+          <input type="hidden" name="csrf" value="${esc(session.csrf)}">
+          <label>Stock<input name="quantity" type="number" min="0" step="1" value="${Number(v.available||0)}" required></label>
+          <button>Guardar</button>
+        </form></div>
+      </div>`).join(""):'<p class="meta">Sin variantes.</p>';
+
+    return `<section class="panel" style="margin-bottom:14px">
+      <div class="item-head">
+        <div><div class="eyebrow">${esc(p.category||"Sin categoría")}</div><h3>${esc(p.name)}</h3><p class="meta">${esc(p.brand||"Sin marca")} · ${p.status==="active"?"Publicado":"Borrador"}</p></div>
+        <form method="post" action="/catalog/products/${Number(p.id)}/status">
+          <input type="hidden" name="csrf" value="${esc(session.csrf)}">
+          <input type="hidden" name="status" value="${p.status==="active"?"draft":"active"}">
+          <button class="ghost">${p.status==="active"?"Pasar a borrador":"Publicar"}</button>
+        </form>
+      </div>
+      ${vars}
+      <details style="margin-top:12px"><summary>Agregar variante</summary>
+        <form method="post" action="/catalog/products/${Number(p.id)}/variants" class="actions" style="margin-top:10px">
+          <input type="hidden" name="csrf" value="${esc(session.csrf)}">
+          <label>SKU<input name="sku" required></label>
+          <label>Precio HNL<input name="price" type="number" min="0" step="0.01" required></label>
+          <label>Talla<input name="size"></label>
+          <label>Color<input name="color"></label>
+          <label>Costo HNL<input name="cost" type="number" min="0" step="0.01"></label>
+          <label>Stock<input name="stock" type="number" min="0" step="1" value="0" required></label>
+          <button>Agregar</button>
+        </form>
+      </details>
+    </section>`;
+  }).join(""):'<div class="panel empty"><h3>Aún no hay productos</h3></div>';
+
+  return shell(`
+    <div class="head"><div><div class="eyebrow">Catálogo</div><h2>Productos e inventario</h2><p>Crea en borrador y publica cuando esté listo.</p></div></div>
+    ${notice}
+    <section class="panel" style="margin-bottom:18px">
+      <h3>Nuevo producto</h3>
+      <form method="post" action="/catalog/products" class="actions">
+        <input type="hidden" name="csrf" value="${esc(session.csrf)}">
+        <label>Nombre<input name="name" required maxlength="180"></label>
+        <label>Categoría<input name="category" maxlength="120"></label>
+        <label>Marca<input name="brand" maxlength="120" value="MR עדולם"></label>
+        <label>Estado<select name="status"><option value="draft">Borrador</option><option value="active">Publicar ahora</option></select></label>
+        <label>SKU<input name="sku" required maxlength="100"></label>
+        <label>Precio HNL<input name="price" type="number" min="0" step="0.01" required></label>
+        <label>Talla<input name="size"></label>
+        <label>Color<input name="color"></label>
+        <label>Costo HNL<input name="cost" type="number" min="0" step="0.01"></label>
+        <label>Stock inicial<input name="stock" type="number" min="0" step="1" value="0" required></label>
+        <button>Crear producto</button>
+      </form>
+    </section>
+    ${cards}
+  `,session);
+}
+
+function catalogResult(result:any,ok:string){
+  return result.response?.ok?ok:"error";
+}
+
 Bun.serve({
   port:Number(Bun.env.PORT||3000),
   async fetch(req){
@@ -311,9 +391,62 @@ Bun.serve({
 
     if(!configured)return html(setupPage(),503);
 
+    const setupSegment=String(Bun.env.CONTROL_CENTER_SETUP_PATH||"").split("/").filter(Boolean).join("");
+    const setupPath=setupSegment?"/"+setupSegment:"";
+    if(setupPath!=="/"&&url.pathname===setupPath&&req.method==="GET"){
+      const existing=await readSession(req);
+      return existing?redirect("/"):html(bootstrapPage());
+    }
+
+    if(setupPath!=="/"&&url.pathname===setupPath&&req.method==="POST"){
+      const fd=await req.formData();
+      const email=String(fd.get("email")||"").trim().slice(0,254);
+      const displayName=String(fd.get("displayName")||"").trim().slice(0,120);
+      const password=String(fd.get("password")||"").slice(0,256);
+      const confirmPassword=String(fd.get("confirmPassword")||"").slice(0,256);
+      const bootstrapToken=String(Bun.env.BOOTSTRAP_API_TOKEN||"");
+
+      if(!bootstrapToken)return html(bootstrapPage("La configuración inicial no está habilitada."),503);
+      if(!displayName)return html(bootstrapPage("Escribe tu nombre."),400);
+      if(password!==confirmPassword)return html(bootstrapPage("Las contraseñas no coinciden."),400);
+      if(password.length<12)return html(bootstrapPage("La contraseña debe tener al menos 12 caracteres."),400);
+
+      let response:Response;
+      let body:any={};
+      try{
+        response=await fetch(API_BASE+"/v1/security/bootstrap",{
+          method:"POST",
+          headers:{
+            "accept":"application/json",
+            "content-type":"application/json",
+            "x-internal-key":bootstrapToken
+          },
+          body:JSON.stringify({email,displayName,password}),
+          redirect:"manual"
+        });
+        body=await response.json().catch(()=>({}));
+      }catch{
+        return html(bootstrapPage("No se pudo conectar con el Commerce Core."),502);
+      }
+
+      if(response.status===201)return redirect("/login?created=1");
+      if(response.status===409)return html(loginPage("El administrador inicial ya fue creado. Inicia sesión."),200);
+
+      const messages:Record<string,string>={
+        invalid_email:"El correo no es válido.",
+        display_name_required:"Escribe tu nombre.",
+        invalid_password_length:"La contraseña debe tener entre 12 y 256 caracteres.",
+        bootstrap_failed:"No se pudo crear el administrador."
+      };
+      const key=String(body&&body.error||"");
+      return html(bootstrapPage(messages[key]||"No se pudo completar la configuración inicial."),response.status||400);
+    }
+
     if(url.pathname==="/login"&&req.method==="GET"){
       const existing=await readSession(req);
-      return existing?redirect("/"):html(loginPage());
+      if(existing)return redirect("/");
+      const created=url.searchParams.get("created")==="1";
+      return html(loginPage(created?"Administrador creado. Inicia sesión con tu correo y contraseña.":""));
     }
 
     if(url.pathname==="/login"&&req.method==="POST"){
@@ -370,6 +503,78 @@ Bun.serve({
 
     if(url.pathname==="/"&&req.method==="GET"){
       return html(await dashboard(url,session));
+    }
+
+
+    if(url.pathname==="/catalog"&&req.method==="GET"){
+      return html(await catalogPage(url,session));
+    }
+
+    if(url.pathname==="/catalog/products"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const cost=String(fd.get("cost")||"").trim();
+      const result=await api("/v1/internal/catalog/products",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          name:String(fd.get("name")||"").trim(),
+          category:String(fd.get("category")||"").trim(),
+          brand:String(fd.get("brand")||"").trim(),
+          status:String(fd.get("status")||"draft"),
+          variants:[{
+            sku:String(fd.get("sku")||"").trim(),
+            price:Number(fd.get("price")||0),
+            cost:cost?Number(cost):null,
+            size:String(fd.get("size")||"").trim(),
+            color:String(fd.get("color")||"").trim(),
+            currency:"HNL",
+            stock:Number(fd.get("stock")||0)
+          }]
+        }
+      });
+      return redirect("/catalog?n="+catalogResult(result,"created"));
+    }
+
+    const cps=url.pathname.match(/^\/catalog\/products\/(\d+)\/status$/);
+    if(cps&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/catalog/products/"+Number(cps[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{status:String(fd.get("status")||"draft")}
+      });
+      return redirect("/catalog?n="+catalogResult(result,"updated"));
+    }
+
+    const cpv=url.pathname.match(/^\/catalog\/products\/(\d+)\/variants$/);
+    if(cpv&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const cost=String(fd.get("cost")||"").trim();
+      const result=await api("/v1/internal/catalog/products/"+Number(cpv[1])+"/variants",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          sku:String(fd.get("sku")||"").trim(),
+          price:Number(fd.get("price")||0),
+          cost:cost?Number(cost):null,
+          size:String(fd.get("size")||"").trim(),
+          color:String(fd.get("color")||"").trim(),
+          currency:"HNL",
+          stock:Number(fd.get("stock")||0)
+        }
+      });
+      return redirect("/catalog?n="+catalogResult(result,"variant"));
+    }
+
+    const csv=url.pathname.match(/^\/catalog\/variants\/(\d+)\/stock$/);
+    if(csv&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/catalog/variants/"+Number(csv[1])+"/stock",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{quantity:Number(fd.get("quantity")||0)}
+      });
+      return redirect("/catalog?n="+catalogResult(result,"stock"));
     }
 
     if(url.pathname==="/export/inquiries.csv"&&req.method==="GET"){
