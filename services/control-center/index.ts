@@ -98,6 +98,7 @@ async function api(
     method?:string;
     cookieHeader?:string;
     csrf?:string;
+    idempotencyKey?:string;
     body?:unknown;
   }={}
 ){
@@ -105,6 +106,7 @@ async function api(
   const headers:Record<string,string>={"accept":"application/json"};
   if(options.cookieHeader)headers.cookie=options.cookieHeader;
   if(options.csrf)headers["x-csrf-token"]=options.csrf;
+  if(options.idempotencyKey)headers["idempotency-key"]=options.idempotencyKey;
   if(options.body!==undefined)headers["content-type"]="application/json";
 
   try{
@@ -440,18 +442,58 @@ async function vendorReviewPage(url:URL,session:Session){
 }
 
 async function purchasesPage(url:URL,session:Session){
-  const result=await api("/v1/internal/procurement/purchase-orders",{cookieHeader:session.cookieHeader});
-  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso procurement.read.</p></div>',session);
-  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Compras no disponibles</h2></div>',session);
-  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const [ordersResult,suppliersResult,catalogResultApi,locationsResult]=await Promise.all([
+    api("/v1/internal/procurement/purchase-orders",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/suppliers?active=true",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/locations",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(ordersResult.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso procurement.read.</p></div>',session);
+  if(!ordersResult.response?.ok)return shell('<div class="panel empty"><h2>Compras no disponibles</h2></div>',session);
+
+  const rows:any[]=Array.isArray(ordersResult.body?.data)?ordersResult.body.data:[];
+  const suppliers:any[]=Array.isArray(suppliersResult.body?.data)?suppliersResult.body.data:[];
+  const products:any[]=Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+  const locations:any[]=Array.isArray(locationsResult.body?.data)?locationsResult.body.data:[];
+  const variants:any[]=products.flatMap((p:any)=>
+    (Array.isArray(p.variants)?p.variants:[]).map((v:any)=>({...v,productName:p.name}))
+  );
+
+  const receivable=rows.filter((r:any)=>["ORDERED","PARTIALLY_RECEIVED"].includes(r.status));
+  const detailPairs=await Promise.all(receivable.map(async(r:any)=>{
+    const x=await api("/v1/internal/procurement/purchase-orders/"+Number(r.id),{cookieHeader:session.cookieHeader});
+    return [Number(r.id),x.response?.ok?x.body?.purchaseOrder:null] as const;
+  }));
+  const detailById=new Map<number,any>(detailPairs);
+
+  const supplierOptions=suppliers.map((s:any)=>'<option value="'+Number(s.id)+'">'+esc(s.name)+'</option>').join("");
+  const locationOptions=locations.map((l:any)=>'<option value="'+Number(l.id)+'">'+esc(l.name)+' · '+esc(l.type)+'</option>').join("");
+  const variantOptions=variants.map((v:any)=>'<option value="'+Number(v.id)+'">'+esc(v.productName)+' · '+esc(v.sku)+' · '+esc(v.size||"Sin talla")+' · '+esc(v.color||"Sin color")+'</option>').join("");
+
+  const createForm=suppliers.length&&locations.length&&variants.length
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Registrar compra de mercadería</h3><p class="meta">Crea la orden, apruébala y luego registra la recepción. Al recibir, el inventario aumenta automáticamente.</p><form method="post" action="/purchases" class="actions"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Proveedor<select name="supplierId" required>'+supplierOptions+'</select></label><label>Destino<select name="destinationLocationId" required>'+locationOptions+'</select></label><label>Producto / variante<select name="variantId" required>'+variantOptions+'</select></label><label>Cantidad<input name="quantityOrdered" type="number" min="1" step="1" required></label><label>Costo unitario HNL<input name="unitCost" type="number" min="0" step="0.01" required></label><label>SKU proveedor<input name="supplierSku" maxlength="160"></label><label>País origen<input name="originCountryCode" maxlength="2" placeholder="HN"></label><label>Referencia proveedor<input name="supplierReference" maxlength="180"></label><label>Flete estimado HNL<input name="shippingEstimate" type="number" min="0" step="0.01" value="0"></label><label>Impuestos estimados HNL<input name="taxEstimate" type="number" min="0" step="0.01" value="0"></label><label>Otros costos HNL<input name="otherCosts" type="number" min="0" step="0.01" value="0"></label><button>Crear orden</button></form></section>'
+    :'<div class="notice">Para registrar una compra necesitas un proveedor activo, una ubicación operativa y al menos una variante creada en Catálogo.</div>';
+
   const cards=rows.length?rows.map((r:any)=>{
     const actions:any[]=[];
     if(r.status==="DRAFT")actions.push(["approve","Aprobar"],["cancel","Cancelar"]);
     if(r.status==="APPROVED")actions.push(["order","Marcar ordenada"],["cancel","Cancelar"]);
     if(r.status==="ORDERED")actions.push(["cancel","Cancelar"]);
-    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.poNumber)+'</h3><div class="meta">'+esc(r.supplierName)+' · Destino #'+esc(r.destinationLocationId)+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div>'+esc(hnlMinor(r.grandTotalMinor,r.currency))+'</div></div></div><div class="toolbar">'+actions.map((a:any)=>'<form method="post" action="/purchases/'+Number(r.id)+'/'+esc(a[0])+'"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button class="'+(a[0]==="cancel"?"ghost":"")+'">'+esc(a[1])+'</button></form>').join("")+'</div></article>';
+
+    const detail=detailById.get(Number(r.id));
+    let receipt="";
+    if(detail&&["ORDERED","PARTIALLY_RECEIVED"].includes(r.status)){
+      const remaining=(Array.isArray(detail.items)?detail.items:[]).filter((i:any)=>Number(i.quantityRemaining)>0);
+      if(remaining.length){
+        receipt='<details style="margin-top:12px"><summary>Recibir mercadería</summary><form method="post" action="/purchases/'+Number(r.id)+'/receive" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Referencia entrega<input name="supplierDeliveryReference" maxlength="200"></label>'+remaining.map((i:any)=>'<label>'+esc(i.productName)+' · '+esc(i.sku)+'<input name="qty_'+Number(i.id)+'" type="number" min="0" max="'+Number(i.quantityRemaining)+'" step="1" value="'+Number(i.quantityRemaining)+'"></label>').join("")+'<button>Registrar recepción</button></form></details>';
+      }
+    }
+
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.poNumber)+'</h3><div class="meta">'+esc(r.supplierName)+' · Destino #'+esc(r.destinationLocationId)+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div>'+esc(hnlMinor(r.grandTotalMinor,r.currency))+'</div></div></div><div class="toolbar">'+actions.map((a:any)=>'<form method="post" action="/purchases/'+Number(r.id)+'/'+esc(a[0])+'"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button class="'+(a[0]==="cancel"?"ghost":"")+'">'+esc(a[1])+'</button></form>').join("")+'</div>'+receipt+'</article>';
   }).join(""):'<div class="panel empty">Todavía no hay órdenes de compra.</div>';
-  return shell('<div class="eyebrow">Compras</div><h1>Órdenes a proveedores</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
+
+  return shell('<div class="eyebrow">Compras</div><h1>Órdenes y recepción de mercadería</h1>'+opsNotice(url)+createForm+'<section class="queue">'+cards+'</section>',session);
 }
 
 async function fulfillmentPage(url:URL,session:Session){
@@ -967,6 +1009,65 @@ Bun.serve({
         body:{decision:action,note:String(fd.get("note")||"").trim()||null}
       });
       return redirect("/vendor-review?n="+catalogResult(result,"action"));
+    }
+
+    if(url.pathname==="/purchases"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+
+      const toMinor=(v:FormDataEntryValue|null)=>Math.max(0,Math.round((Number(v)||0)*100));
+      const result=await api("/v1/internal/procurement/purchase-orders",{
+        method:"POST",
+        cookieHeader:session.cookieHeader,
+        csrf:session.csrf,
+        idempotencyKey:"cc-po-"+crypto.randomUUID(),
+        body:{
+          supplierId:Number(fd.get("supplierId")),
+          destinationLocationId:Number(fd.get("destinationLocationId")),
+          currency:"HNL",
+          supplierReference:String(fd.get("supplierReference")||"").trim()||null,
+          shippingEstimateMinor:toMinor(fd.get("shippingEstimate")),
+          taxEstimateMinor:toMinor(fd.get("taxEstimate")),
+          otherCostsMinor:toMinor(fd.get("otherCosts")),
+          items:[{
+            variantId:Number(fd.get("variantId")),
+            quantityOrdered:Number(fd.get("quantityOrdered")),
+            unitCostMinor:toMinor(fd.get("unitCost")),
+            supplierSku:String(fd.get("supplierSku")||"").trim()||null,
+            originCountryCode:String(fd.get("originCountryCode")||"").trim().toUpperCase()||null
+          }]
+        }
+      });
+      return redirect("/purchases?n="+catalogResult(result,"created"));
+    }
+
+    const receivePurchase=url.pathname.match(/^\/purchases\/(\d+)\/receive$/);
+    if(receivePurchase&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+
+      const items:any[]=[];
+      for(const [key,value] of fd.entries()){
+        const match=String(key).match(/^qty_(\d+)$/);
+        if(!match)continue;
+        const quantity=Number(value);
+        if(Number.isSafeInteger(quantity)&&quantity>0){
+          items.push({purchaseOrderItemId:Number(match[1]),quantityReceived:quantity});
+        }
+      }
+      if(!items.length)return redirect("/purchases?n=error");
+
+      const result=await api("/v1/internal/procurement/purchase-orders/"+Number(receivePurchase[1])+"/receipts",{
+        method:"POST",
+        cookieHeader:session.cookieHeader,
+        csrf:session.csrf,
+        idempotencyKey:"cc-gr-"+crypto.randomUUID(),
+        body:{
+          supplierDeliveryReference:String(fd.get("supplierDeliveryReference")||"").trim()||null,
+          items
+        }
+      });
+      return redirect("/purchases?n="+catalogResult(result,"action"));
     }
 
     const purchaseAction=url.pathname.match(/^\/purchases\/(\d+)\/(approve|order|cancel)$/);
