@@ -266,6 +266,8 @@ async function assignAttribution(req: Request, db: DB, orderId: number) {
     return { ok: true, replayed: false, attributionId };
   });
 
+  if (result.error) return json(result, result.status || 409);
+
   const rows = await db`
     SELECT a.*,u.display_name AS staff_display_name,u.email_normalized AS staff_email
     FROM order_staff_attributions a
