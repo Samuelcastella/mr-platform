@@ -43,6 +43,13 @@ const PERMISSIONS: Record<string, string> = {
   "customers.read": "Read customer data",
   "customers.write": "Update customer data",
   "customers.merge": "Merge duplicate customer records",
+  "suppliers.read": "Read supplier data",
+  "suppliers.write": "Create/update supplier data",
+  "procurement.read": "Read purchase orders and receipts",
+  "procurement.create": "Create purchase orders",
+  "procurement.approve": "Approve purchase orders",
+  "procurement.receive": "Receive purchased inventory",
+  "procurement.cancel": "Cancel purchase orders",
   "inquiries.read": "Read inquiries",
   "inquiries.write": "Update inquiries",
   "reports.read": "Read reports",
@@ -84,7 +91,10 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "inventory.read",
       "inventory.receive",
       "inventory.adjust",
-      "inventory.transfer"
+      "inventory.transfer",
+      "suppliers.read",
+      "procurement.read",
+      "procurement.receive"
     ]
   },
   FULFILLMENT_OPERATOR: {
