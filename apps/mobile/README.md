@@ -15,6 +15,7 @@ Esqueleto móvil de MR עדולם en Expo/React Native.
 - Continuación por WhatsApp configurable o storefront.
 - Selección nativa de recogida/entrega con tarifas y ETA servidas por Commerce Core.
 - Checkout nativo para efectivo en recogida, transferencia bancaria y pago contra entrega, manteniendo Payment en estado autoritativo del servidor.
+- Seguimiento móvil de Order/Fulfillment con refresh manual, polling moderado, timeline de eventos e intentos de entrega.
 
 ## Requisitos
 
