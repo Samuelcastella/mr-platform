@@ -1184,6 +1184,26 @@ async function postGoodsReceipt(req: Request, db: DB, purchaseOrderId: number) {
 }
 
 export async function handleProcurement(req: Request, url: URL, db: DB) {
+  if (url.pathname === "/v1/internal/locations" && req.method === "GET") {
+    const auth = await authorizeInternal(req, db, "procurement.read");
+    if (!auth.ok) return auth.response;
+
+    const rows = await db`
+      SELECT id,name,country_code,type,active
+      FROM locations
+      WHERE active AND type <> 'vendor'
+      ORDER BY name,id`;
+    return json({
+      data: rows.map((row:any)=>({
+        id:Number(row.id),
+        name:row.name,
+        countryCode:row.country_code,
+        type:row.type,
+        active:Boolean(row.active)
+      }))
+    });
+  }
+
   if (url.pathname === "/v1/internal/suppliers" && req.method === "GET") {
     return listSuppliers(req, url, db);
   }

@@ -31,6 +31,13 @@ CREATE TABLE IF NOT EXISTS locations (
 )`;
 
 await db`
+INSERT INTO locations(name,country_code,type,active)
+SELECT 'Puerto Cortés','HN','store',TRUE
+WHERE NOT EXISTS (
+  SELECT 1 FROM locations WHERE type='store' AND active
+)`;
+
+await db`
 CREATE TABLE IF NOT EXISTS suppliers (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL,
