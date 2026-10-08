@@ -4,6 +4,7 @@ import { ensureCheckoutSchema, handleCheckout } from "./checkout";
 import { ensureFulfillmentSchema, handleFulfillment } from "./fulfillment";
 import { ensureAuthSchema, handleAuth } from "./auth";
 import { ensureCustomersSchema, handleCustomers } from "./customers";
+import { ensureProcurementSchema, handleProcurement } from "./procurement";
 import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 
 const db = new SQL({
@@ -135,6 +136,7 @@ await ensureCheckoutSchema(db);
 await ensureFulfillmentSchema(db);
 await ensureAuthSchema(db);
 await ensureCustomersSchema(db);
+await ensureProcurementSchema(db);
 await ensureInternalOpsSchema(db);
 
 const json = (body: unknown, status = 200) =>
@@ -166,6 +168,9 @@ Bun.serve({
 
     const customersResponse = await handleCustomers(req, url, db);
     if (customersResponse) return customersResponse;
+
+    const procurementResponse = await handleProcurement(req, url, db);
+    if (procurementResponse) return procurementResponse;
 
     if (url.pathname === "/v1/products" && req.method === "GET") {
       const status = url.searchParams.get("status");
@@ -328,8 +333,8 @@ Bun.serve({
 
     return json({
       service: "MR עדולם Catalog API",
-      version: "0.8.0",
-      endpoints: ["/health", "/v1/auth/login", "/v1/auth/logout", "/v1/auth/me", "/v1/security/bootstrap", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/checkouts", "/v1/checkouts/:id", "/v1/fulfillment/options", "/v1/fulfillments", "/v1/fulfillments/:id", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
+      version: "0.9.0",
+      endpoints: ["/health", "/v1/auth/login", "/v1/auth/logout", "/v1/auth/me", "/v1/security/bootstrap", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/checkouts", "/v1/checkouts/:id", "/v1/fulfillment/options", "/v1/fulfillments", "/v1/fulfillments/:id", "/v1/internal/customers", "/v1/internal/suppliers", "/v1/internal/procurement/purchase-orders", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
     });
   }
 });
