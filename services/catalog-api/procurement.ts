@@ -691,7 +691,10 @@ async function createPurchaseOrder(req: Request, db: DB) {
     SELECT v.id, v.sku, v.active, p.name AS product_name
     FROM product_variants v
     JOIN products p ON p.id = v.product_id
-    WHERE v.id IN ${db(variantIds)}
+    WHERE v.id IN (
+      SELECT value::bigint
+      FROM jsonb_array_elements_text(${JSON.stringify(variantIds)}::jsonb)
+    )
     ORDER BY v.id`;
   if (variants.length !== variantIds.length || variants.some((v: any) => !v.active)) {
     return json({ error: "variant_unavailable" }, 409);
@@ -1046,7 +1049,10 @@ async function postGoodsReceipt(req: Request, db: DB, purchaseOrderId: number) {
         id, purchase_order_id, variant_id, quantity_ordered,
         quantity_received, unit_cost_minor, currency
       FROM purchase_order_items
-      WHERE id IN ${tx(itemIds)}
+      WHERE id IN (
+        SELECT value::bigint
+        FROM jsonb_array_elements_text(${JSON.stringify(itemIds)}::jsonb)
+      )
       ORDER BY id
       FOR UPDATE`;
 
