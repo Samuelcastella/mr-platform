@@ -15,29 +15,23 @@ import {
   View,
   useColorScheme,
 } from "react-native";
-
-type Variant = {
-  id: number;
-  sku: string;
-  size?: string | null;
-  color?: string | null;
-  price: string | number;
-  currency: string;
-  available: number;
-};
-
-type Product = {
-  id: number;
-  name: string;
-  slug: string;
-  category?: string | null;
-  brand?: string | null;
-  status: string;
-  price: string | number;
-  currency: string;
-  stock: number;
-  variants: Variant[];
-};
+import {
+  type CheckoutResult,
+  type DeliveryOption,
+  type FulfillmentResult,
+  type OrderResult,
+  type PaymentMethod,
+  type Product,
+  type Subdivision,
+  type Variant,
+  createAppOrder,
+  createOrderCheckout,
+  createOrderFulfillment,
+  fetchCatalog,
+  fetchDeliveryOptions,
+  fetchHondurasSubdivisions,
+  makeOperationKey,
+} from "./src/commerce";
 
 type CartLine = {
   productId: number;
@@ -52,21 +46,8 @@ type CartLine = {
   visibleAvailable: number;
 };
 
-type OrderResult = {
-  id: number;
-  orderNumber: string;
-  token: string;
-  status: string;
-  currency: string;
-  subtotalMinor: number;
-  grandTotalMinor: number;
-};
-
-type ViewName = "catalog" | "detail" | "cart" | "success";
-
-const API_BASE =
-  process.env.EXPO_PUBLIC_API_BASE_URL ??
-  "https://catalog-api-production-cc18.up.railway.app";
+type FulfillmentType = "STORE_PICKUP" | "LOCAL_DELIVERY" | "COURIER";
+type ViewName = "catalog" | "detail" | "cart" | "delivery" | "complete";
 
 const STOREFRONT_URL =
   process.env.EXPO_PUBLIC_STOREFRONT_URL ??
@@ -89,10 +70,6 @@ function moneyMinor(value: number, currency = "HNL") {
 
 function variantLabel(variant: Pick<Variant, "size" | "color" | "sku">) {
   return [variant.color, variant.size].filter(Boolean).join(" · ") || variant.sku;
-}
-
-function makeOrderKey() {
-  return `mobile-order-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function whatsappHandoffUrl(orderNumber: string) {
@@ -139,29 +116,95 @@ export default function App() {
   const [orderAttemptKey, setOrderAttemptKey] = useState<string | null>(null);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
 
+  const [subdivisions, setSubdivisions] = useState<Subdivision[]>([]);
+  const [geographyError, setGeographyError] = useState<string | null>(null);
+  const [fulfillmentType, setFulfillmentType] =
+    useState<FulfillmentType>("STORE_PICKUP");
+  const [department, setDepartment] = useState("");
+  const [municipality, setMunicipality] = useState("");
+  const [addressLine, setAddressLine] = useState("");
+  const [addressReference, setAddressReference] = useState("");
+  const [deliveryOptions, setDeliveryOptions] = useState<DeliveryOption[]>([]);
+  const [quoting, setQuoting] = useState(false);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  const [fulfillmentAttemptKey, setFulfillmentAttemptKey] =
+    useState<string | null>(null);
+  const [submittingFulfillment, setSubmittingFulfillment] = useState(false);
+  const [fulfillmentResult, setFulfillmentResult] =
+    useState<FulfillmentResult | null>(null);
+
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethod>("CASH");
+  const [checkoutAttemptKey, setCheckoutAttemptKey] =
+    useState<string | null>(null);
+  const [submittingCheckout, setSubmittingCheckout] = useState(false);
+  const [checkoutResult, setCheckoutResult] =
+    useState<CheckoutResult | null>(null);
+
   const load = useCallback(async (refresh = false) => {
     refresh ? setRefreshing(true) : setLoading(true);
     setCatalogError(null);
 
-    try {
-      const response = await fetch(
-        `${API_BASE.replace(/\/$/, "")}/v1/products?status=active`,
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const payload = (await response.json()) as { data?: Product[] };
-      setProducts(Array.isArray(payload.data) ? payload.data : []);
-    } catch {
+    const result = await fetchCatalog();
+    if (result.ok) {
+      setProducts(Array.isArray(result.body.data) ? result.body.data : []);
+    } else {
       setCatalogError("No se pudo cargar el catálogo. Intenta nuevamente.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
+
+    setLoading(false);
+    setRefreshing(false);
+  }, []);
+
+  const loadGeography = useCallback(async () => {
+    const result = await fetchHondurasSubdivisions();
+    if (
+      result.ok &&
+      result.body.countryCode === "HN" &&
+      Array.isArray(result.body.subdivisions)
+    ) {
+      setSubdivisions(result.body.subdivisions);
+      setGeographyError(null);
+      return;
+    }
+    setGeographyError(
+      "No pudimos cargar los departamentos. Puedes usar recogida en tienda o continuar por el canal asistido.",
+    );
   }, []);
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadGeography();
+  }, [load, loadGeography]);
+
+  const loadQuote = useCallback(async (nextDepartment: string) => {
+    if (!nextDepartment) {
+      setDeliveryOptions([]);
+      return;
+    }
+
+    setQuoting(true);
+    setDeliveryError(null);
+    const result = await fetchDeliveryOptions(nextDepartment);
+
+    if (result.ok) {
+      setDeliveryOptions(Array.isArray(result.body.options) ? result.body.options : []);
+    } else {
+      setDeliveryOptions([]);
+      setDeliveryError("No pudimos consultar la entrega para ese departamento.");
+    }
+    setQuoting(false);
+  }, []);
+
+  useEffect(() => {
+    if (
+      view === "delivery" &&
+      fulfillmentType !== "STORE_PICKUP" &&
+      department
+    ) {
+      void loadQuote(department);
+    }
+  }, [department, fulfillmentType, loadQuote, view]);
 
   const cartCount = useMemo(
     () => cart.reduce((sum, line) => sum + line.quantity, 0),
@@ -175,9 +218,44 @@ export default function App() {
 
   const cartCurrency = cart[0]?.currency || "HNL";
 
+  const selectedDeliveryOption = useMemo(
+    () =>
+      deliveryOptions.find(
+        (option) =>
+          option.type === fulfillmentType && !option.quoteRequired,
+      ) ?? null,
+    [deliveryOptions, fulfillmentType],
+  );
+
+  const manualQuoteRequired =
+    fulfillmentType !== "STORE_PICKUP" &&
+    department.length > 0 &&
+    !quoting &&
+    !selectedDeliveryOption;
+
   const invalidateOrderAttempt = useCallback(() => {
     setOrderAttemptKey(null);
     setOrderError(null);
+  }, []);
+
+  const invalidateFulfillmentAttempt = useCallback(() => {
+    setFulfillmentAttemptKey(null);
+    setDeliveryError(null);
+  }, []);
+
+  const resetPostOrderFlow = useCallback(() => {
+    setFulfillmentType("STORE_PICKUP");
+    setDepartment("");
+    setMunicipality("");
+    setAddressLine("");
+    setAddressReference("");
+    setDeliveryOptions([]);
+    setDeliveryError(null);
+    setFulfillmentAttemptKey(null);
+    setFulfillmentResult(null);
+    setPaymentMethod("CASH");
+    setCheckoutAttemptKey(null);
+    setCheckoutResult(null);
   }, []);
 
   const openProduct = useCallback((product: Product) => {
@@ -264,8 +342,10 @@ export default function App() {
     setSelectedProduct(null);
     setSelectedVariantId(null);
     setOrderError(null);
+    setCart([]);
+    resetPostOrderFlow();
     setView("catalog");
-  }, []);
+  }, [resetPostOrderFlow]);
 
   const submitOrder = useCallback(async () => {
     if (submittingOrder) return;
@@ -286,110 +366,260 @@ export default function App() {
       return;
     }
 
-    const key = orderAttemptKey || makeOrderKey();
+    const key = orderAttemptKey || makeOperationKey("mobile-order");
     if (!orderAttemptKey) setOrderAttemptKey(key);
 
     setSubmittingOrder(true);
     setOrderError(null);
 
-    try {
-      const response = await fetch(`${API_BASE.replace(/\/$/, "")}/v1/orders`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "idempotency-key": key,
-        },
-        body: JSON.stringify({
-          channel: "APP",
-          customer: {
-            name,
-            phone,
-          },
-          items: cart.map((line) => ({
-            variantId: line.variantId,
-            quantity: line.quantity,
-          })),
-        }),
-      });
+    const result = await createAppOrder(
+      {
+        customerName: name,
+        customerPhone: phone,
+        items: cart.map((line) => ({
+          variantId: line.variantId,
+          quantity: line.quantity,
+        })),
+      },
+      key,
+    );
 
-      const payload = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        order?: OrderResult;
-        replayed?: boolean;
-      };
-
-      if (response.status === 409 && payload.error === "insufficient_stock") {
+    if (!result.ok) {
+      if (
+        result.status === 409 &&
+        result.body.error === "insufficient_stock"
+      ) {
         setOrderAttemptKey(null);
         setOrderError(
           "El inventario cambió mientras comprabas. Actualizamos el catálogo para que elijas la disponibilidad vigente.",
         );
         await load(true);
-        return;
-      }
-
-      if (
-        response.status === 409 &&
-        payload.error === "idempotency_conflict"
+      } else if (
+        result.status === 409 &&
+        result.body.error === "idempotency_conflict"
       ) {
         setOrderAttemptKey(null);
         setOrderError(
           "El intento anterior ya tenía un contenido distinto. Revisa el carrito e intenta de nuevo.",
         );
-        return;
-      }
-
-      if (!response.ok || !payload.order) {
+      } else if (result.status === 0) {
+        setOrderError(
+          "No pudimos confirmar si la red recibió tu solicitud. Reintenta: el mismo intento se enviará sin duplicar la orden.",
+        );
+      } else {
         setOrderError(
           "No pudimos crear la orden. Puedes reintentar sin duplicarla.",
         );
-        return;
       }
-
-      setOrderResult(payload.order);
-      setOrderAttemptKey(null);
-      setCart([]);
-      setView("success");
-      await load(true);
-    } catch {
-      setOrderError(
-        "No pudimos confirmar si la red recibió tu solicitud. Reintenta: el mismo intento se enviará sin duplicar la orden.",
-      );
-    } finally {
       setSubmittingOrder(false);
+      return;
     }
+
+    setOrderResult(result.body.order);
+    setOrderAttemptKey(null);
+    setCart([]);
+    resetPostOrderFlow();
+    setView("delivery");
+    await load(true);
+    setSubmittingOrder(false);
   }, [
     cart,
     customerName,
     customerPhone,
     load,
     orderAttemptKey,
+    resetPostOrderFlow,
     submittingOrder,
+  ]);
+
+  const chooseFulfillmentType = useCallback(
+    (next: FulfillmentType) => {
+      if (fulfillmentResult) return;
+      setFulfillmentType(next);
+      setPaymentMethod(next === "STORE_PICKUP" ? "CASH" : "BANK_TRANSFER");
+      invalidateFulfillmentAttempt();
+    },
+    [fulfillmentResult, invalidateFulfillmentAttempt],
+  );
+
+  const submitFulfillment = useCallback(async () => {
+    if (!orderResult || submittingFulfillment || fulfillmentResult) return;
+
+    const delivery = fulfillmentType !== "STORE_PICKUP";
+    if (delivery) {
+      if (!department) {
+        setDeliveryError("Selecciona el departamento.");
+        return;
+      }
+      if (!selectedDeliveryOption) {
+        setDeliveryError(
+          "Esta zona requiere una cotización asistida antes de confirmar la entrega.",
+        );
+        return;
+      }
+      if (!municipality.trim() || !addressLine.trim()) {
+        setDeliveryError("Completa municipio y dirección de entrega.");
+        return;
+      }
+    }
+
+    const key =
+      fulfillmentAttemptKey || makeOperationKey("mobile-fulfillment");
+    if (!fulfillmentAttemptKey) setFulfillmentAttemptKey(key);
+
+    setSubmittingFulfillment(true);
+    setDeliveryError(null);
+
+    const result = await createOrderFulfillment(
+      orderResult,
+      {
+        type: fulfillmentType,
+        department: delivery ? department : null,
+        municipality: delivery ? municipality.trim() : null,
+        addressLine: delivery ? addressLine.trim() : null,
+        addressReference: delivery ? addressReference.trim() || null : null,
+        recipientName: customerName.trim() || null,
+        recipientPhone: customerPhone.trim() || null,
+      },
+      key,
+    );
+
+    if (!result.ok) {
+      if (
+        result.status === 409 &&
+        result.body.error === "delivery_quote_required"
+      ) {
+        setDeliveryError(
+          "La tarifa debe cotizarse manualmente. Continúa por WhatsApp o la tienda web.",
+        );
+      } else if (
+        result.status === 409 &&
+        result.body.error === "idempotency_conflict"
+      ) {
+        setFulfillmentAttemptKey(null);
+        setDeliveryError(
+          "La selección de entrega cambió. Revisa los datos e intenta otra vez.",
+        );
+      } else if (result.status === 0) {
+        setDeliveryError(
+          "La conexión se interrumpió. Reintenta con los mismos datos; no se duplicará la entrega.",
+        );
+      } else {
+        setDeliveryError(
+          "No pudimos registrar la entrega. Revisa los datos e intenta de nuevo.",
+        );
+      }
+      setSubmittingFulfillment(false);
+      return;
+    }
+
+    setFulfillmentResult(result.body.fulfillment);
+    setFulfillmentAttemptKey(null);
+    setCheckoutAttemptKey(null);
+    setPaymentMethod(
+      result.body.fulfillment.type === "STORE_PICKUP"
+        ? "CASH"
+        : "BANK_TRANSFER",
+    );
+    setSubmittingFulfillment(false);
+  }, [
+    addressLine,
+    addressReference,
+    customerName,
+    customerPhone,
+    department,
+    fulfillmentAttemptKey,
+    fulfillmentResult,
+    fulfillmentType,
+    municipality,
+    orderResult,
+    selectedDeliveryOption,
+    submittingFulfillment,
+  ]);
+
+  const submitCheckout = useCallback(async () => {
+    if (
+      !orderResult ||
+      !fulfillmentResult ||
+      checkoutResult ||
+      submittingCheckout
+    ) {
+      return;
+    }
+
+    const key =
+      checkoutAttemptKey || makeOperationKey("mobile-checkout");
+    if (!checkoutAttemptKey) setCheckoutAttemptKey(key);
+
+    setSubmittingCheckout(true);
+    setDeliveryError(null);
+
+    const result = await createOrderCheckout(
+      orderResult,
+      paymentMethod,
+      key,
+    );
+
+    if (!result.ok) {
+      if (
+        result.status === 409 &&
+        result.body.error === "idempotency_conflict"
+      ) {
+        setCheckoutAttemptKey(null);
+        setDeliveryError(
+          "La forma de pago cambió durante el intento. Selecciónala nuevamente.",
+        );
+      } else if (result.status === 0) {
+        setDeliveryError(
+          "La conexión se interrumpió. Reintenta: el mismo checkout no se duplicará.",
+        );
+      } else {
+        setDeliveryError(
+          "No pudimos crear el checkout. La orden y la entrega siguen registradas.",
+        );
+      }
+      setSubmittingCheckout(false);
+      return;
+    }
+
+    setCheckoutResult(result.body.checkout);
+    setCheckoutAttemptKey(null);
+    setSubmittingCheckout(false);
+    setView("complete");
+  }, [
+    checkoutAttemptKey,
+    checkoutResult,
+    fulfillmentResult,
+    orderResult,
+    paymentMethod,
+    submittingCheckout,
   ]);
 
   const openHandoff = useCallback(async () => {
     if (!orderResult) return;
-
     const whatsapp = whatsappHandoffUrl(orderResult.orderNumber);
     const target = whatsapp || STOREFRONT_URL;
 
     try {
       await Linking.openURL(target);
     } catch {
-      setOrderError(
+      setDeliveryError(
         "No se pudo abrir el canal externo. Conserva tu número de orden para continuar.",
       );
     }
   }, [orderResult]);
 
+  const canBack = view === "detail" || view === "cart";
+
   const header = (
     <View style={styles.header}>
-      {view !== "catalog" ? (
+      {canBack ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Volver"
+          accessibilityLabel="Volver al catálogo"
           onPress={() => {
             setOrderError(null);
-            setView(view === "success" ? "catalog" : "catalog");
+            setView("catalog");
           }}
           style={({ pressed }) => [
             styles.iconButton,
@@ -412,13 +642,15 @@ export default function App() {
             ? "Detalle de producto"
             : view === "cart"
               ? "Carrito móvil"
-              : view === "success"
-                ? "Orden reservada"
-                : "Catálogo móvil"}
+              : view === "delivery"
+                ? "Entrega y pago"
+                : view === "complete"
+                  ? "Orden confirmada"
+                  : "Catálogo móvil"}
         </Text>
       </View>
 
-      {view !== "success" ? (
+      {view === "catalog" || view === "detail" || view === "cart" ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Abrir carrito, ${cartCount} producto(s)`}
@@ -499,9 +731,8 @@ export default function App() {
             Elige la variante exacta
           </Text>
           <Text style={[styles.body, { color: theme.muted }]}>
-            Precios y disponibilidad provienen del Commerce Core. El carrito
-            móvil puede crear una reserva de orden real para continuar la
-            confirmación.
+            Precios, stock, entrega y pago se validan en Commerce Core. La app
+            no mantiene una copia autoritativa del negocio.
           </Text>
         </View>
       }
@@ -674,8 +905,7 @@ export default function App() {
           Inventario autoritativo
         </Text>
         <Text style={[styles.noticeText, { color: theme.muted }]}>
-          La disponibilidad se vuelve a validar al crear la orden. Si otra
-          persona toma la última unidad, el servidor pedirá actualizar.
+          La disponibilidad se vuelve a validar al crear la orden.
         </Text>
       </View>
 
@@ -693,27 +923,10 @@ export default function App() {
           },
         ]}
       >
-        <Text
-          style={[
-            styles.primaryButtonText,
-            { color: theme.background },
-          ]}
-        >
+        <Text style={[styles.primaryButtonText, { color: theme.background }]}>
           Añadir a la bolsa
         </Text>
       </Pressable>
-
-      {cartCount > 0 ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setView("cart")}
-          style={[styles.secondaryButtonWide, { borderColor: theme.border }]}
-        >
-          <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
-            Ver bolsa ({cartCount})
-          </Text>
-        </Pressable>
-      ) : null}
     </ScrollView>
   ) : (
     <View style={styles.center}>
@@ -731,7 +944,7 @@ export default function App() {
       <Text style={[styles.title, { color: theme.text }]}>Tu bolsa</Text>
       <Text style={[styles.body, { color: theme.muted }]}>
         El total mostrado es informativo. Commerce Core vuelve a calcular
-        precios e inventario al crear la orden.
+        precio e inventario al crear la orden.
       </Text>
 
       {!cart.length ? (
@@ -743,12 +956,7 @@ export default function App() {
             onPress={() => setView("catalog")}
             style={[styles.primaryButton, { backgroundColor: theme.text }]}
           >
-            <Text
-              style={[
-                styles.primaryButtonText,
-                { color: theme.background },
-              ]}
-            >
+            <Text style={[styles.primaryButtonText, { color: theme.background }]}>
               Ver productos
             </Text>
           </Pressable>
@@ -777,17 +985,13 @@ export default function App() {
                     </Text>
                   </View>
                   <Text style={[styles.price, { color: theme.text }]}>
-                    {money(
-                      line.unitPrice * line.quantity,
-                      line.currency,
-                    )}
+                    {money(line.unitPrice * line.quantity, line.currency)}
                   </Text>
                 </View>
 
                 <View style={styles.quantityRow}>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Reducir ${line.productName}`}
                     onPress={() =>
                       setLineQuantity(line.variantId, line.quantity - 1)
                     }
@@ -807,7 +1011,6 @@ export default function App() {
 
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Aumentar ${line.productName}`}
                     disabled={line.quantity >= line.visibleAvailable}
                     onPress={() =>
                       setLineQuantity(line.variantId, line.quantity + 1)
@@ -857,7 +1060,6 @@ export default function App() {
             </Text>
 
             <TextInput
-              accessibilityLabel="Nombre"
               value={customerName}
               onChangeText={(value) => {
                 setCustomerName(value);
@@ -877,7 +1079,6 @@ export default function App() {
             />
 
             <TextInput
-              accessibilityLabel="Teléfono"
               value={customerPhone}
               onChangeText={(value) => {
                 setCustomerPhone(value);
@@ -914,7 +1115,6 @@ export default function App() {
           ) : null}
 
           <Pressable
-            accessibilityRole="button"
             disabled={submittingOrder}
             onPress={() => void submitOrder()}
             style={[
@@ -929,113 +1129,584 @@ export default function App() {
             {submittingOrder ? (
               <ActivityIndicator color={theme.background} />
             ) : (
-              <Text
-                style={[
-                  styles.primaryButtonText,
-                  { color: theme.background },
-                ]}
-              >
-                Crear reserva de orden
+              <Text style={[styles.primaryButtonText, { color: theme.background }]}>
+                Continuar con entrega
               </Text>
             )}
           </Pressable>
-
-          <Text style={[styles.legalNote, { color: theme.muted }]}>
-            Crear la reserva no significa que el pago esté realizado. El equipo
-            debe continuar la confirmación, entrega y pago por los canales
-            habilitados.
-          </Text>
         </>
       )}
     </ScrollView>
   );
 
-  const successView = orderResult ? (
-    <ScrollView contentContainerStyle={styles.successScreen}>
-      <View
-        style={[
-          styles.successCard,
-          {
-            backgroundColor: theme.surface,
-            borderColor: theme.border,
-          },
-        ]}
-      >
-        <Text style={[styles.kicker, { color: theme.success }]}>
-          Reserva creada
-        </Text>
-        <Text style={[styles.successTitle, { color: theme.text }]}>
-          {orderResult.orderNumber}
-        </Text>
-        <Text style={[styles.body, { color: theme.muted }]}>
-          La orden quedó registrada en Commerce Core como{" "}
-          {orderResult.status}. Aún no representa un pago confirmado.
-        </Text>
+  const deliveryView = orderResult ? (
+    <ScrollView
+      contentContainerStyle={styles.screen}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text style={[styles.kicker, { color: theme.success }]}>
+        Orden {orderResult.orderNumber}
+      </Text>
+      <Text style={[styles.title, { color: theme.text }]}>
+        Entrega y pago
+      </Text>
+      <Text style={[styles.body, { color: theme.muted }]}>
+        La orden ya reservó inventario. Falta registrar cómo se entrega y
+        crear el checkout.
+      </Text>
 
-        <View
-          style={[
-            styles.summary,
-            {
-              backgroundColor: theme.surfaceAlt,
-              borderColor: theme.border,
-            },
-          ]}
-        >
-          <Text style={[styles.summaryLabel, { color: theme.muted }]}>
-            Productos reservados
+      {!fulfillmentResult ? (
+        <>
+          <Text style={[styles.sectionTitleSpaced, { color: theme.text }]}>
+            Cómo recibirás tu compra
           </Text>
-          <Text style={[styles.summaryValue, { color: theme.text }]}>
-            {moneyMinor(
-              orderResult.subtotalMinor,
-              orderResult.currency || "HNL",
+
+          <View style={styles.optionRow}>
+            {(["STORE_PICKUP", "LOCAL_DELIVERY", "COURIER"] as FulfillmentType[]).map(
+              (type) => (
+                <Pressable
+                  key={type}
+                  onPress={() => chooseFulfillmentType(type)}
+                  style={[
+                    styles.optionChip,
+                    {
+                      borderColor:
+                        fulfillmentType === type ? theme.accent : theme.border,
+                      backgroundColor:
+                        fulfillmentType === type ? theme.surfaceAlt : theme.surface,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.optionChipText, { color: theme.text }]}>
+                    {type === "STORE_PICKUP"
+                      ? "Recoger"
+                      : type === "LOCAL_DELIVERY"
+                        ? "Entrega local"
+                        : "Courier"}
+                  </Text>
+                </Pressable>
+              ),
             )}
-          </Text>
-          <Text style={[styles.summaryFoot, { color: theme.muted }]}>
-            Entrega y forma de pago se cierran en el siguiente paso.
-          </Text>
-        </View>
+          </View>
 
-        {orderError ? (
-          <Text style={[styles.errorText, { color: theme.danger }]}>
-            {orderError}
-          </Text>
-        ) : null}
+          {fulfillmentType !== "STORE_PICKUP" ? (
+            <>
+              <Text style={[styles.fieldLabel, { color: theme.text }]}>
+                Departamento
+              </Text>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => void openHandoff()}
-          style={[styles.primaryButtonWide, { backgroundColor: theme.text }]}
-        >
-          <Text
+              {geographyError ? (
+                <Text style={[styles.errorText, { color: theme.danger }]}>
+                  {geographyError}
+                </Text>
+              ) : null}
+
+              <View style={styles.departmentGrid}>
+                {subdivisions.map((item) => (
+                  <Pressable
+                    key={item.code}
+                    onPress={() => {
+                      setDepartment(item.name);
+                      invalidateFulfillmentAttempt();
+                    }}
+                    style={[
+                      styles.departmentChip,
+                      {
+                        borderColor:
+                          department === item.name ? theme.accent : theme.border,
+                        backgroundColor:
+                          department === item.name
+                            ? theme.surfaceAlt
+                            : theme.surface,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.departmentChipText, { color: theme.text }]}
+                    >
+                      {item.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {quoting ? (
+                <View style={styles.inlineLoading}>
+                  <ActivityIndicator color={theme.accent} />
+                  <Text style={[styles.stateTextSmall, { color: theme.muted }]}>
+                    Consultando tarifa…
+                  </Text>
+                </View>
+              ) : selectedDeliveryOption ? (
+                <View
+                  style={[
+                    styles.quoteCard,
+                    {
+                      backgroundColor: theme.surfaceAlt,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.noticeTitle, { color: theme.text }]}>
+                    Tarifa del servidor
+                  </Text>
+                  <Text style={[styles.quoteValue, { color: theme.text }]}>
+                    {moneyMinor(
+                      selectedDeliveryOption.shippingMinor || 0,
+                      selectedDeliveryOption.currency,
+                    )}
+                  </Text>
+                  <Text style={[styles.noticeText, { color: theme.muted }]}>
+                    ETA: {selectedDeliveryOption.etaMinDays}–
+                    {selectedDeliveryOption.etaMaxDays} día(s)
+                    {selectedDeliveryOption.provider
+                      ? ` · ${selectedDeliveryOption.provider}`
+                      : ""}
+                  </Text>
+                </View>
+              ) : manualQuoteRequired ? (
+                <View
+                  style={[
+                    styles.notice,
+                    {
+                      backgroundColor: theme.surfaceAlt,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.noticeTitle, { color: theme.text }]}>
+                    Cotización asistida
+                  </Text>
+                  <Text style={[styles.noticeText, { color: theme.muted }]}>
+                    Commerce Core no tiene una tarifa automática vigente para
+                    esta combinación. No inventaremos costo ni ETA.
+                  </Text>
+                  <Pressable
+                    onPress={() => void openHandoff()}
+                    style={[
+                      styles.secondaryButtonWide,
+                      { borderColor: theme.border },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.secondaryButtonText, { color: theme.text }]}
+                    >
+                      Continuar por canal asistido
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              <View style={styles.formSection}>
+                <TextInput
+                  value={municipality}
+                  onChangeText={(value) => {
+                    setMunicipality(value);
+                    invalidateFulfillmentAttempt();
+                  }}
+                  placeholder="Municipio / ciudad"
+                  placeholderTextColor={theme.muted}
+                  style={[
+                    styles.input,
+                    {
+                      color: theme.text,
+                      borderColor: theme.border,
+                      backgroundColor: theme.surface,
+                    },
+                  ]}
+                />
+                <TextInput
+                  value={addressLine}
+                  onChangeText={(value) => {
+                    setAddressLine(value);
+                    invalidateFulfillmentAttempt();
+                  }}
+                  placeholder="Dirección exacta"
+                  placeholderTextColor={theme.muted}
+                  multiline
+                  style={[
+                    styles.inputMultiline,
+                    {
+                      color: theme.text,
+                      borderColor: theme.border,
+                      backgroundColor: theme.surface,
+                    },
+                  ]}
+                />
+                <TextInput
+                  value={addressReference}
+                  onChangeText={(value) => {
+                    setAddressReference(value);
+                    invalidateFulfillmentAttempt();
+                  }}
+                  placeholder="Referencia adicional (opcional)"
+                  placeholderTextColor={theme.muted}
+                  multiline
+                  style={[
+                    styles.inputMultiline,
+                    {
+                      color: theme.text,
+                      borderColor: theme.border,
+                      backgroundColor: theme.surface,
+                    },
+                  ]}
+                />
+              </View>
+            </>
+          ) : (
+            <View
+              style={[
+                styles.notice,
+                {
+                  backgroundColor: theme.surfaceAlt,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Text style={[styles.noticeTitle, { color: theme.text }]}>
+                Recogida en tienda
+              </Text>
+              <Text style={[styles.noticeText, { color: theme.muted }]}>
+                Commerce Core registrará envío L 0.00 y el equipo preparará la
+                orden para recogida.
+              </Text>
+            </View>
+          )}
+
+          {deliveryError ? (
+            <View
+              style={[
+                styles.errorBox,
+                {
+                  borderColor: theme.danger,
+                  backgroundColor: theme.surface,
+                },
+              ]}
+            >
+              <Text style={[styles.errorText, { color: theme.danger }]}>
+                {deliveryError}
+              </Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            disabled={submittingFulfillment || manualQuoteRequired}
+            onPress={() => void submitFulfillment()}
             style={[
-              styles.primaryButtonText,
-              { color: theme.background },
+              styles.primaryButtonWide,
+              {
+                backgroundColor:
+                  submittingFulfillment || manualQuoteRequired
+                    ? theme.border
+                    : theme.text,
+              },
             ]}
           >
-            {WHATSAPP_URL
-              ? "Continuar por WhatsApp"
-              : "Continuar en la tienda web"}
-          </Text>
-        </Pressable>
+            {submittingFulfillment ? (
+              <ActivityIndicator color={theme.background} />
+            ) : (
+              <Text style={[styles.primaryButtonText, { color: theme.background }]}>
+                Registrar entrega
+              </Text>
+            )}
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <View
+            style={[
+              styles.statusCard,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text style={[styles.kicker, { color: theme.success }]}>
+              Entrega registrada
+            </Text>
+            <Text style={[styles.statusTitle, { color: theme.text }]}>
+              {fulfillmentResult.type === "STORE_PICKUP"
+                ? "Recogida en tienda"
+                : fulfillmentResult.type === "LOCAL_DELIVERY"
+                  ? "Entrega local"
+                  : "Courier"}
+            </Text>
+            <Text style={[styles.noticeText, { color: theme.muted }]}>
+              Estado: {fulfillmentResult.status}
+              {fulfillmentResult.quote.shippingMinor != null
+                ? ` · ${moneyMinor(
+                    fulfillmentResult.quote.shippingMinor,
+                    fulfillmentResult.quote.currency,
+                  )}`
+                : ""}
+            </Text>
+          </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={beginNewShopping}
-          style={[styles.secondaryButtonWide, { borderColor: theme.border }]}
-        >
-          <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
-            Seguir comprando
+          <Text style={[styles.sectionTitleSpaced, { color: theme.text }]}>
+            Forma de pago
           </Text>
-        </Pressable>
-      </View>
+
+          <View style={styles.optionRow}>
+            {(fulfillmentResult.type === "STORE_PICKUP"
+              ? (["CASH", "BANK_TRANSFER"] as PaymentMethod[])
+              : (["BANK_TRANSFER", "CASH_ON_DELIVERY"] as PaymentMethod[])
+            ).map((method) => (
+              <Pressable
+                key={method}
+                onPress={() => {
+                  setPaymentMethod(method);
+                  setCheckoutAttemptKey(null);
+                  setDeliveryError(null);
+                }}
+                style={[
+                  styles.optionChip,
+                  {
+                    borderColor:
+                      paymentMethod === method ? theme.accent : theme.border,
+                    backgroundColor:
+                      paymentMethod === method
+                        ? theme.surfaceAlt
+                        : theme.surface,
+                  },
+                ]}
+              >
+                <Text style={[styles.optionChipText, { color: theme.text }]}>
+                  {method === "CASH"
+                    ? "Efectivo"
+                    : method === "BANK_TRANSFER"
+                      ? "Transferencia"
+                      : "Contra entrega"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View
+            style={[
+              styles.summary,
+              {
+                backgroundColor: theme.surfaceAlt,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text style={[styles.summaryLabel, { color: theme.muted }]}>
+              Total autoritativo
+            </Text>
+            <Text style={[styles.summaryValue, { color: theme.text }]}>
+              {moneyMinor(
+                orderResult.subtotalMinor +
+                  (fulfillmentResult.quote.shippingMinor || 0),
+                orderResult.currency,
+              )}
+            </Text>
+            <Text style={[styles.summaryFoot, { color: theme.muted }]}>
+              Checkout volverá a leer el total desde el servidor; la app no lo
+              envía como autoridad.
+            </Text>
+          </View>
+
+          {deliveryError ? (
+            <View
+              style={[
+                styles.errorBox,
+                {
+                  borderColor: theme.danger,
+                  backgroundColor: theme.surface,
+                },
+              ]}
+            >
+              <Text style={[styles.errorText, { color: theme.danger }]}>
+                {deliveryError}
+              </Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            disabled={submittingCheckout}
+            onPress={() => void submitCheckout()}
+            style={[
+              styles.primaryButtonWide,
+              {
+                backgroundColor: submittingCheckout
+                  ? theme.border
+                  : theme.text,
+              },
+            ]}
+          >
+            {submittingCheckout ? (
+              <ActivityIndicator color={theme.background} />
+            ) : (
+              <Text style={[styles.primaryButtonText, { color: theme.background }]}>
+                Crear checkout
+              </Text>
+            )}
+          </Pressable>
+        </>
+      )}
     </ScrollView>
   ) : (
     <View style={styles.center}>
       <Text style={[styles.stateText, { color: theme.muted }]}>
-        No hay una orden reciente.
+        No hay una orden reservada.
       </Text>
     </View>
   );
+
+  const completeView =
+    orderResult && fulfillmentResult && checkoutResult ? (
+      <ScrollView contentContainerStyle={styles.successScreen}>
+        <View
+          style={[
+            styles.successCard,
+            {
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Text style={[styles.kicker, { color: theme.success }]}>
+            Checkout creado
+          </Text>
+          <Text style={[styles.successTitle, { color: theme.text }]}>
+            {checkoutResult.orderNumber}
+          </Text>
+          <Text style={[styles.body, { color: theme.muted }]}>
+            Los estados se muestran por separado. Pago pendiente no significa
+            pago realizado.
+          </Text>
+
+          <View style={styles.stateGrid}>
+            <View
+              style={[
+                styles.stateBox,
+                {
+                  backgroundColor: theme.surfaceAlt,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Text style={[styles.summaryLabel, { color: theme.muted }]}>
+                Orden
+              </Text>
+              <Text style={[styles.stateBoxValue, { color: theme.text }]}>
+                {checkoutResult.orderStatus}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.stateBox,
+                {
+                  backgroundColor: theme.surfaceAlt,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Text style={[styles.summaryLabel, { color: theme.muted }]}>
+                Entrega
+              </Text>
+              <Text style={[styles.stateBoxValue, { color: theme.text }]}>
+                {fulfillmentResult.status}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.stateBox,
+                {
+                  backgroundColor: theme.surfaceAlt,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Text style={[styles.summaryLabel, { color: theme.muted }]}>
+                Pago
+              </Text>
+              <Text style={[styles.stateBoxValue, { color: theme.text }]}>
+                {checkoutResult.payment.status}
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.summary,
+              {
+                backgroundColor: theme.surfaceAlt,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text style={[styles.summaryLabel, { color: theme.muted }]}>
+              Total de checkout
+            </Text>
+            <Text style={[styles.summaryValue, { color: theme.text }]}>
+              {moneyMinor(
+                checkoutResult.amountMinor,
+                checkoutResult.currency,
+              )}
+            </Text>
+            <Text style={[styles.summaryFoot, { color: theme.muted }]}>
+              Método:{" "}
+              {checkoutResult.paymentMethod === "CASH"
+                ? "Efectivo"
+                : checkoutResult.paymentMethod === "BANK_TRANSFER"
+                  ? "Transferencia bancaria"
+                  : "Pago contra entrega"}
+            </Text>
+          </View>
+
+          {checkoutResult.payment.status === "PENDING" ? (
+            <View
+              style={[
+                styles.notice,
+                {
+                  backgroundColor: theme.surfaceAlt,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Text style={[styles.noticeTitle, { color: theme.text }]}>
+                Pago pendiente
+              </Text>
+              <Text style={[styles.noticeText, { color: theme.muted }]}>
+                La orden está confirmada, pero el pago todavía debe ser
+                verificado o cobrado según el método seleccionado.
+              </Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={() => void openHandoff()}
+            style={[styles.primaryButtonWide, { backgroundColor: theme.text }]}
+          >
+            <Text style={[styles.primaryButtonText, { color: theme.background }]}>
+              {WHATSAPP_URL
+                ? "Contactar por WhatsApp"
+                : "Abrir tienda web"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={beginNewShopping}
+            style={[
+              styles.secondaryButtonWide,
+              { borderColor: theme.border },
+            ]}
+          >
+            <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
+              Seguir comprando
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    ) : (
+      <View style={styles.center}>
+        <Text style={[styles.stateText, { color: theme.muted }]}>
+          No hay un checkout reciente.
+        </Text>
+      </View>
+    );
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
@@ -1050,7 +1721,9 @@ export default function App() {
           ? detailView
           : view === "cart"
             ? cartView
-            : successView}
+            : view === "delivery"
+              ? deliveryView
+              : completeView}
     </SafeAreaView>
   );
 }
@@ -1150,6 +1823,7 @@ const styles = StyleSheet.create({
   },
   stateTitle: { fontSize: 22, fontWeight: "800", textAlign: "center" },
   stateText: { fontSize: 15, lineHeight: 22, textAlign: "center" },
+  stateTextSmall: { fontSize: 13, lineHeight: 18 },
   primaryButton: {
     minHeight: 46,
     paddingHorizontal: 20,
@@ -1191,6 +1865,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     lineHeight: 26,
     fontWeight: "800",
+    marginBottom: 12,
+  },
+  sectionTitleSpaced: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "800",
+    marginTop: 28,
     marginBottom: 12,
   },
   variantStack: { gap: 10 },
@@ -1260,12 +1941,22 @@ const styles = StyleSheet.create({
   summaryValue: { fontSize: 26, fontWeight: "800", marginTop: 5 },
   summaryFoot: { fontSize: 12, lineHeight: 18, marginTop: 7 },
   formSection: { marginTop: 26, gap: 12 },
+  fieldLabel: { fontSize: 14, fontWeight: "800", marginTop: 18, marginBottom: 8 },
   input: {
     minHeight: 50,
     borderWidth: 1,
     borderRadius: 14,
     paddingHorizontal: 14,
     fontSize: 16,
+  },
+  inputMultiline: {
+    minHeight: 84,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    fontSize: 16,
+    textAlignVertical: "top",
   },
   errorBox: {
     borderWidth: 1,
@@ -1274,13 +1965,54 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   errorText: { fontSize: 13, lineHeight: 19, fontWeight: "700" },
-  legalNote: {
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: "center",
-    marginTop: 13,
-    paddingHorizontal: 8,
+  optionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
   },
+  optionChip: {
+    minHeight: 46,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionChipText: { fontSize: 13, fontWeight: "800" },
+  departmentGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  departmentChip: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  departmentChipText: { fontSize: 12, fontWeight: "700" },
+  inlineLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    paddingVertical: 16,
+  },
+  quoteCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+  },
+  quoteValue: { fontSize: 22, fontWeight: "900", marginTop: 6 },
+  statusCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 18,
+    marginTop: 20,
+  },
+  statusTitle: { fontSize: 20, fontWeight: "900", marginTop: 5 },
   successCard: {
     borderWidth: 1,
     borderRadius: 24,
@@ -1292,4 +2024,18 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 7,
   },
+  stateGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+    marginTop: 20,
+  },
+  stateBox: {
+    flexGrow: 1,
+    minWidth: 96,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13,
+  },
+  stateBoxValue: { fontSize: 14, fontWeight: "900", marginTop: 4 },
 });
