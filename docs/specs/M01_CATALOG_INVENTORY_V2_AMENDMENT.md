@@ -13,7 +13,26 @@ Amend M01 so the authoritative catalog/inventory domain supports the confirmed h
 
 This amendment preserves M01 v1 except where explicitly changed below.
 
-## 2. Key correction: product model vs economic ownership
+## 2. Verified implementation baseline — 2026-10-08
+
+The current catalog-api schema is simpler than the full M01 v1 design and must be treated as the migration starting point.
+
+Verified current tables include:
+
+- products with name, slug, description, category text, brand text and status;
+- product_variants with SKU, size, color, cost, price, currency, supplier_id and origin_country_code;
+- inventory keyed by variant_id + location_id with quantity and reserved;
+- inventory_movements with movement_type, quantity, reference and notes.
+
+Important implementation fact:
+
+- Product.commercial_model is not currently present in the verified catalog-api schema.
+- InventorySource does not currently exist.
+- Supplier sourcing is currently represented directly on product_variants in the baseline schema.
+
+Therefore this amendment is an additive migration direction. It must not assume every M01 v1 design field already exists in production.
+
+## 3. Key correction: product model vs economic ownership
 
 M01 v1 defines Product.commercial_model as:
 
@@ -34,7 +53,7 @@ It SHALL NOT determine:
 
 Economic ownership is a separate concern governed by this amendment + M11.
 
-## 3. InventorySource
+## 4. InventorySource
 
 Introduce an explicit inventory-source / ownership record.
 
@@ -81,7 +100,7 @@ Rules:
 4. Public catalog APIs must not expose private seller agreement, cost or settlement data.
 5. SellerAgreement remains governed by M11.
 
-## 4. InventoryLevel compatibility
+## 5. InventoryLevel compatibility
 
 M01 v1 models one InventoryLevel per variant + location.
 
@@ -97,7 +116,7 @@ Constraint:
 
 Public availability may aggregate compatible stock, but order allocation must resolve the actual inventory source before commercial settlement is finalized.
 
-## 5. Inventory movement vocabulary
+## 6. Inventory movement vocabulary
 
 Approved documentation and implementation currently differ.
 
@@ -131,7 +150,7 @@ Before adding a new value:
 3. add compatible migration if required;
 4. update this contract.
 
-## 6. InventoryMovement amendment
+## 7. InventoryMovement amendment
 
 InventoryMovement must preserve enough context to support M11/M12.
 
@@ -154,7 +173,7 @@ Rules:
 - exceptional adjustments must flow through M12 once M12 is activated;
 - movement rows do not calculate seller settlement; M11 consumes authoritative events.
 
-## 7. Adjustment boundary
+## 8. Adjustment boundary
 
 M01 remains the stock ledger authority.
 
@@ -175,7 +194,7 @@ Normal system flows remain governed by their source modules:
 - transfer: M01
 - exceptional loss/damage/count correction: M12
 
-## 8. Cost basis
+## 9. Cost basis
 
 Historical procurement costs remain immutable.
 
@@ -192,7 +211,7 @@ M11 determines seller settlement economics.
 
 M13 may consume cost basis for margin-based commission only when the cost attribution is deterministic.
 
-## 9. Public catalog contract
+## 10. Public catalog contract
 
 Public APIs may expose:
 
@@ -212,7 +231,7 @@ Public APIs must not expose:
 - supplier private terms;
 - seller agreement IDs unless explicitly intended for public marketplace contracts later.
 
-## 10. Functional requirements added
+## 11. Functional requirements added
 
 - FR-INV-005 Separate economic inventory ownership from Product.commercial_model.
 - FR-INV-006 Preserve inventory source/owner context through stock lifecycle.
@@ -222,7 +241,7 @@ Public APIs must not expose:
 - FR-INV-010 Provide authoritative inventory-source context to M02/M11.
 - FR-AUDIT-002 Preserve actor/reason/source references for governed inventory mutations.
 
-## 11. Acceptance criteria added
+## 12. Acceptance criteria added
 
 1. A curated or third-party Product can be MR-owned without semantic conflict.
 2. A curated or third-party Product can be third-party-owned.
@@ -234,7 +253,7 @@ Public APIs must not expose:
 8. M11 can consume commercial ownership context without altering inventory history.
 9. No production movement value is renamed without migration review.
 
-## 12. Migration gate
+## 13. Migration gate
 
 Before implementation:
 
