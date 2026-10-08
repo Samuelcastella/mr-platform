@@ -602,16 +602,21 @@ La consolidación amplía especialmente requisitos futuros de modelo híbrido, s
 | Intentos y colas operativas | CONTROL_CENTER_INTENT_QUEUE_V1 |
 | CTAs y handoff comercial | INTENT_CTA_SYSTEM_V1 |
 
-### Future specs suggested by conversation evidence
+### Nuevas SPECs creadas a partir de gaps confirmados
 
-No crear todavía sin SDD approval, pero la evidencia sugiere eventualmente:
+La revisión contra M01–M10 confirmó dominios suficientemente independientes para documentarlos como propuestas separadas:
 
-- Marketplace / Seller Ownership & Settlement;
-- Commissions & Staff Incentives;
-- Inventory Adjustments / Shrinkage Approval;
-- Operational Health Desk;
-- Credit Provider Adapter;
-- Pricing & Promotion Rules.
+- M11_HYBRID_SELLER_SETTLEMENT_V1.md — propiedad económica, acuerdos de terceros y liquidaciones;
+- M12_INVENTORY_ADJUSTMENTS_SHRINKAGE_V1.md — ajustes excepcionales, merma, evidencia y aprobación;
+- M13_STAFF_COMMISSIONS_INCENTIVES_V1.md — comisiones de personal separadas de nómina;
+- M14_OPERATIONAL_HEALTH_DESK_V1.md — señales, incidentes, webhooks, colas y excepciones operativas;
+- M15_CREDIT_PROVIDER_ADAPTER_V1.md — frontera neutral para crédito externo, sin convertir MR en prestamista.
+
+Todas quedan **PROPOSED FOR APPROVAL**. No modifican automáticamente las SPECs M01–M10 ni autorizan implementación.
+
+### Gap mantenido como pendiente de definición
+
+Pricing & Promotions no recibe SPEC propia todavía porque faltan reglas comerciales aprobadas sobre promociones, funding de descuentos, stacking, vigencias y autorización. M01 continúa gobernando precio base por canal/moneda hasta que exista suficiente decisión de negocio.
 
 ## 38. Información que requiere revalidación externa
 
