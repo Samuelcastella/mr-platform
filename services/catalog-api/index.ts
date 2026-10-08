@@ -1,4 +1,5 @@
 import { SQL } from "bun";
+import { ensureRestockSchema, handleRestock } from "./restock";
 import { ensureOrdersSchema, handleOrders } from "./orders";
 import { ensureCheckoutSchema, handleCheckout } from "./checkout";
 import { ensureFulfillmentSchema, handleFulfillment } from "./fulfillment";
@@ -141,6 +142,7 @@ await db`
 CREATE INDEX IF NOT EXISTS idx_public_events_name_created
 ON public_events(event_name, created_at DESC)`;
 
+await ensureRestockSchema(db);
 await ensureOrdersSchema(db);
 await ensureCheckoutSchema(db);
 await ensureFulfillmentSchema(db);
@@ -177,6 +179,9 @@ Bun.serve({
 
     const authResponse = await handleAuth(req, url, db);
     if (authResponse) return authResponse;
+
+    const restockResponse = await handleRestock(req, url, db);
+    if (restockResponse) return restockResponse;
 
     const customersResponse = await handleCustomers(req, url, db);
     if (customersResponse) return customersResponse;

@@ -67,12 +67,13 @@ http.createServer(async (req, res) => {
     const upstreamPath = p.slice(4);
     if (upstreamPath.startsWith('/v1/internal/')) { res.writeHead(404, h); res.end('{"error":"not_found"}'); return; }
     const canRead = req.method === 'GET';
+    const canSubmitRestock = req.method === 'POST' && upstreamPath === '/v1/restock/subscribe';
     const canSubmitInquiry = req.method === 'POST' && upstreamPath === '/v1/inquiries';
     const canSubmitEvent = req.method === 'POST' && upstreamPath === '/v1/events';
     const canSubmitOrder = req.method === 'POST' && (upstreamPath === '/v1/orders' || /^\/v1\/orders\/\d+\/(confirm|cancel)$/.test(upstreamPath));
     const canSubmitCheckout = req.method === 'POST' && upstreamPath === '/v1/checkouts';
     const canSubmitFulfillment = req.method === 'POST' && upstreamPath === '/v1/fulfillments';
-    if (!canRead && !canSubmitInquiry && !canSubmitEvent && !canSubmitOrder && !canSubmitCheckout && !canSubmitFulfillment) { res.writeHead(405, { ...h, allow: 'GET, POST' }); res.end('{"error":"method_not_allowed"}'); return; }
+    if (!canRead && !canSubmitRestock && !canSubmitInquiry && !canSubmitEvent && !canSubmitOrder && !canSubmitCheckout && !canSubmitFulfillment) { res.writeHead(405, { ...h, allow: 'GET, POST' }); res.end('{"error":"method_not_allowed"}'); return; }
     try {
       const headers = {};
       let body;
