@@ -140,6 +140,17 @@ const manager = await createStaff(
 ok(operator.session.response.status === 200, "Inventory Operator inicia sesión");
 ok(manager.session.response.status === 200, "Manager inicia sesión");
 
+const directStock = await api("/v1/internal/catalog/variants/" + variantId + "/stock", {
+  method: "POST",
+  headers: headers(manager.session),
+  body: JSON.stringify({ quantity: 99 })
+});
+ok(
+  directStock.response.status === 409 &&
+  directStock.body.error === "governed_adjustment_required",
+  "flag M12 bloquea ajuste directo de stock"
+);
+
 const created = await api("/v1/internal/inventory-adjustments", {
   method: "POST",
   headers: headers(operator.session),
