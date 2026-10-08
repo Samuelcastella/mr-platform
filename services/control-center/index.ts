@@ -161,7 +161,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -294,6 +294,137 @@ async function dashboard(url:URL,session:Session){
     </form>
     <section class="queue">${items}</section>
   `,session);
+}
+
+
+function opsNotice(url:URL){
+  const n=url.searchParams.get("n")||"";
+  const messages:Record<string,string>={
+    created:"Creado correctamente.",
+    updated:"Actualizado correctamente.",
+    action:"Acción completada.",
+    error:"No se pudo completar la acción."
+  };
+  return messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+}
+
+function hnlMinor(value:unknown,currency="HNL"){
+  const amount=(Number(value)||0)/100;
+  return (currency==="HNL"?"L ":currency+" ")+amount.toLocaleString("es-HN",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+async function ordersPage(url:URL,session:Session){
+  const result=await api("/v1/internal/orders",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso orders.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Pedidos no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const next:Record<string,string[]>={
+    PENDING_CONFIRMATION:["CONFIRMED","CANCELLED"],
+    CONFIRMED:["PROCESSING","CANCELLED"],
+    PROCESSING:["READY","CANCELLED"],
+    READY:["SHIPPED","COMPLETED","CANCELLED"],
+    SHIPPED:["DELIVERED"],
+    DELIVERED:["COMPLETED"],
+    COMPLETED:[],
+    CANCELLED:[]
+  };
+  const cards=rows.length?rows.map((r:any)=>{
+    const targets=next[String(r.status)]||[];
+    const form=targets.length
+      ?'<form method="post" action="/orders/'+Number(r.id)+'/status" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nuevo estado<select name="status">'+targets.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join("")+'</select></label><label>Motivo<input name="reason" maxlength="240" placeholder="Opcional"></label><button>Actualizar</button></form>'
+      :"";
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(r.channel||"WEB")+'</div><h3>'+esc(r.order_number||("#"+r.id))+'</h3><div class="meta">'+esc(r.customer_name||"Cliente sin nombre")+' · '+esc(r.customer_phone||"Sin teléfono")+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div style="margin-top:8px">'+esc(hnlMinor(r.grand_total_minor,r.currency||"HNL"))+'</div></div></div>'+form+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay pedidos.</div>';
+  return shell('<div class="eyebrow">Pedidos</div><h1>Ventas y estados de pedido</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
+}
+
+async function customersPage(url:URL,session:Session){
+  const result=await api("/v1/internal/customers",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso customers.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Clientes no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const cards=rows.length?rows.map((r:any)=>{
+    const contacts=Array.isArray(r.contacts)?r.contacts:[];
+    return '<article class="item"><h3>'+esc(r.displayName)+'</h3><div class="meta">Cliente #'+esc(r.id)+' · '+esc(r.customerType||"PERSON")+' · '+esc(r.status)+'</div><div class="meta">'+(contacts.length?contacts.map((x:any)=>esc(x.type)+": "+esc(x.value)).join(" · "):"Sin contactos registrados")+'</div></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay clientes.</div>';
+  return shell('<div class="eyebrow">Clientes</div><h1>Directorio de clientes</h1>'+opsNotice(url)+'<section class="panel" style="margin-bottom:14px"><h3>Nuevo cliente</h3><form method="post" action="/customers" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="displayName" required maxlength="160"></label><label>Tipo<select name="customerType"><option value="PERSON">Persona</option><option value="BUSINESS">Empresa</option></select></label><button>Crear cliente</button></form></section><section class="queue">'+cards+'</section>',session);
+}
+
+async function suppliersPage(url:URL,session:Session){
+  const result=await api("/v1/internal/suppliers",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso suppliers.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Proveedores no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const invite=url.searchParams.get("invite")||"";
+  const cards=rows.length?rows.map((r:any)=>{
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.name)+'</h3><div class="meta">'+esc(r.contactName||"Sin contacto")+' · '+esc(r.phone||"Sin teléfono")+' · '+esc(r.email||"Sin correo")+'</div></div><span class="pill">'+(r.active?"Activo":"Inactivo")+'</span></div><form method="post" action="/suppliers/'+Number(r.id)+'/invite" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Correo de invitación<input name="email" type="email" maxlength="254" placeholder="Opcional"></label><button>Crear enlace de catálogo</button></form></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay proveedores.</div>';
+  return shell('<div class="eyebrow">Proveedores</div><h1>Abastecimiento y catálogos externos</h1>'+opsNotice(url)+(invite?'<div class="notice"><b>Enlace de proveedor:</b><br><span style="word-break:break-all">'+esc(invite)+'</span></div>':"")+'<section class="panel" style="margin-bottom:14px"><h3>Nuevo proveedor</h3><form method="post" action="/suppliers" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="name" required maxlength="180"></label><label>Contacto<input name="contactName" maxlength="160"></label><label>Teléfono<input name="phone" maxlength="80"></label><label>Correo<input name="email" type="email" maxlength="254"></label><label>País<input name="countryCode" value="HN" maxlength="2"></label><label>Moneda<input name="defaultCurrency" value="HNL" maxlength="3"></label><button>Crear proveedor</button></form></section><section class="queue">'+cards+'</section>',session);
+}
+
+async function vendorReviewPage(url:URL,session:Session){
+  const result=await api("/v1/internal/vendor-products",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso catalog.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Revisión de proveedores no disponible</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const cards=rows.length?rows.map((r:any)=>{
+    const actions=r.reviewStatus==="SUBMITTED"
+      ?'<div class="toolbar"><form method="post" action="/vendor-review/'+Number(r.id)+'/approve"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button> Aprobar y publicar </button></form><form method="post" action="/vendor-review/'+Number(r.id)+'/reject" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input name="note" maxlength="2000" placeholder="Motivo de rechazo" required><button class="ghost">Rechazar</button></form></div>'
+      :"";
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(r.supplierName)+'</div><h3>'+esc(r.name)+'</h3><div class="meta">'+esc(r.category||"Sin categoría")+' · '+esc(r.brand||"Sin marca")+' · '+esc(r.variantCount)+' variantes · '+esc(r.imageCount)+' imágenes</div></div><span class="pill">'+esc(r.reviewStatus)+'</span></div>'+actions+'</article>';
+  }).join(""):'<div class="panel empty">No hay productos de proveedores para revisar.</div>';
+  return shell('<div class="eyebrow">Revisión</div><h1>Catálogos de terceros</h1>'+opsNotice(url)+'<p class="meta">Los productos externos permanecen en borrador hasta que el equipo los apruebe.</p><section class="queue">'+cards+'</section>',session);
+}
+
+async function purchasesPage(url:URL,session:Session){
+  const result=await api("/v1/internal/procurement/purchase-orders",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso procurement.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Compras no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const cards=rows.length?rows.map((r:any)=>{
+    const actions:any[]=[];
+    if(r.status==="DRAFT")actions.push(["approve","Aprobar"],["cancel","Cancelar"]);
+    if(r.status==="APPROVED")actions.push(["order","Marcar ordenada"],["cancel","Cancelar"]);
+    if(r.status==="ORDERED")actions.push(["cancel","Cancelar"]);
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.poNumber)+'</h3><div class="meta">'+esc(r.supplierName)+' · Destino #'+esc(r.destinationLocationId)+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div>'+esc(hnlMinor(r.grandTotalMinor,r.currency))+'</div></div></div><div class="toolbar">'+actions.map((a:any)=>'<form method="post" action="/purchases/'+Number(r.id)+'/'+esc(a[0])+'"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button class="'+(a[0]==="cancel"?"ghost":"")+'">'+esc(a[1])+'</button></form>').join("")+'</div></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay órdenes de compra.</div>';
+  return shell('<div class="eyebrow">Compras</div><h1>Órdenes a proveedores</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
+}
+
+async function fulfillmentPage(url:URL,session:Session){
+  const result=await api("/v1/internal/fulfillments",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso fulfillment.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Entregas no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const next:Record<string,string[]>={
+    PENDING:["PREPARING","CANCELLED"],
+    PREPARING:["READY","CANCELLED"],
+    READY:["DISPATCHED","DELIVERED","CANCELLED"],
+    DISPATCHED:["OUT_FOR_DELIVERY","FAILED"],
+    OUT_FOR_DELIVERY:["DELIVERED","FAILED"],
+    FAILED:["OUT_FOR_DELIVERY","RETURNING"],
+    RETURNING:["RETURNED"]
+  };
+  const cards=rows.length?rows.map((r:any)=>{
+    const targets=next[String(r.status)]||[];
+    const form=targets.length?'<form method="post" action="/fulfillment/'+Number(r.id)+'/status" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nuevo estado<select name="status">'+targets.map(x=>'<option>'+esc(x)+'</option>').join("")+'</select></label><label>Motivo<input name="reason" maxlength="300"></label><button>Actualizar</button></form>':"";
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.order_number)+'</h3><div class="meta">'+esc(r.type)+' · '+esc(r.department||"")+' · '+esc(r.municipality||"")+' · '+esc(r.provider||"Sin proveedor")+'</div></div><span class="pill">'+esc(r.status)+'</span></div>'+form+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay entregas.</div>';
+  return shell('<div class="eyebrow">Entregas</div><h1>Preparación y despacho</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
+}
+
+async function returnsPage(url:URL,session:Session){
+  const result=await api("/v1/internal/returns",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso returns.read.</p></div>',session);
+  if(!result.response?.ok)return shell('<div class="panel empty"><h2>Devoluciones no disponibles</h2></div>',session);
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const cards=rows.length?rows.map((r:any)=>{
+    let actions="";
+    if(r.status==="REQUESTED")actions='<div class="toolbar"><form method="post" action="/returns/'+Number(r.id)+'/approve"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Aprobar</button></form><form method="post" action="/returns/'+Number(r.id)+'/reject" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input name="reason" maxlength="500" placeholder="Motivo" required><button class="ghost">Rechazar</button></form></div>';
+    if(r.status==="INSPECTED")actions='<form method="post" action="/returns/'+Number(r.id)+'/complete"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Completar</button></form>';
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.returnNumber)+'</h3><div class="meta">Pedido '+esc(r.orderNumber)+' · '+esc(r.requestedResolution)+' · '+esc(r.reasonCode)+'</div></div><span class="pill">'+esc(r.status)+'</span></div>'+actions+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay devoluciones.</div>';
+  return shell('<div class="eyebrow">Devoluciones</div><h1>Cambios y devoluciones</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
 }
 
 async function catalogPage(url:URL,session:Session){
@@ -506,6 +637,14 @@ Bun.serve({
     }
 
 
+    if(url.pathname==="/orders"&&req.method==="GET")return html(await ordersPage(url,session));
+    if(url.pathname==="/customers"&&req.method==="GET")return html(await customersPage(url,session));
+    if(url.pathname==="/suppliers"&&req.method==="GET")return html(await suppliersPage(url,session));
+    if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
+    if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
+    if(url.pathname==="/fulfillment"&&req.method==="GET")return html(await fulfillmentPage(url,session));
+    if(url.pathname==="/returns"&&req.method==="GET")return html(await returnsPage(url,session));
+
     if(url.pathname==="/catalog"&&req.method==="GET"){
       return html(await catalogPage(url,session));
     }
@@ -575,6 +714,102 @@ Bun.serve({
         body:{quantity:Number(fd.get("quantity")||0)}
       });
       return redirect("/catalog?n="+catalogResult(result,"stock"));
+    }
+
+    const orderStatus=url.pathname.match(/^\/orders\/(\d+)\/status$/);
+    if(orderStatus&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/orders/"+Number(orderStatus[1])+"/status",{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{status:String(fd.get("status")||""),reason:String(fd.get("reason")||"").trim()||null}
+      });
+      return redirect("/orders?n="+catalogResult(result,"action"));
+    }
+
+    if(url.pathname==="/customers"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/customers",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{displayName:String(fd.get("displayName")||"").trim(),customerType:String(fd.get("customerType")||"PERSON")}
+      });
+      return redirect("/customers?n="+catalogResult(result,"created"));
+    }
+
+    if(url.pathname==="/suppliers"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/suppliers",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          name:String(fd.get("name")||"").trim(),
+          contactName:String(fd.get("contactName")||"").trim()||null,
+          phone:String(fd.get("phone")||"").trim()||null,
+          email:String(fd.get("email")||"").trim()||null,
+          countryCode:String(fd.get("countryCode")||"HN").trim().toUpperCase(),
+          defaultCurrency:String(fd.get("defaultCurrency")||"HNL").trim().toUpperCase()
+        }
+      });
+      return redirect("/suppliers?n="+catalogResult(result,"created"));
+    }
+
+    const inviteSupplier=url.pathname.match(/^\/suppliers\/(\d+)\/invite$/);
+    if(inviteSupplier&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/vendor-invitations",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{supplierId:Number(inviteSupplier[1]),email:String(fd.get("email")||"").trim()||null}
+      });
+      if(!result.response?.ok)return redirect("/suppliers?n=error");
+      const token=String(result.body?.invitation?.token||"");
+      const link=url.origin+"/vendor/accept?token="+encodeURIComponent(token);
+      return redirect("/suppliers?invite="+encodeURIComponent(link));
+    }
+
+    const vendorReview=url.pathname.match(/^\/vendor-review\/(\d+)\/(approve|reject)$/);
+    if(vendorReview&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const action=vendorReview[2]==="approve"?"APPROVE":"REJECT";
+      const result=await api("/v1/internal/vendor-products/"+Number(vendorReview[1])+"/review",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{decision:action,note:String(fd.get("note")||"").trim()||null}
+      });
+      return redirect("/vendor-review?n="+catalogResult(result,"action"));
+    }
+
+    const purchaseAction=url.pathname.match(/^\/purchases\/(\d+)\/(approve|order|cancel)$/);
+    if(purchaseAction&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/procurement/purchase-orders/"+Number(purchaseAction[1])+"/"+purchaseAction[2],{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,body:{}
+      });
+      return redirect("/purchases?n="+catalogResult(result,"action"));
+    }
+
+    const fulfillmentStatus=url.pathname.match(/^\/fulfillment\/(\d+)\/status$/);
+    if(fulfillmentStatus&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/fulfillments/"+Number(fulfillmentStatus[1])+"/status",{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{status:String(fd.get("status")||""),reason:String(fd.get("reason")||"").trim()||null}
+      });
+      return redirect("/fulfillment?n="+catalogResult(result,"action"));
+    }
+
+    const returnAction=url.pathname.match(/^\/returns\/(\d+)\/(approve|reject|complete)$/);
+    if(returnAction&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/returns/"+Number(returnAction[1])+"/"+returnAction[2],{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{reason:String(fd.get("reason")||"").trim()||null}
+      });
+      return redirect("/returns?n="+catalogResult(result,"action"));
     }
 
     if(url.pathname==="/export/inquiries.csv"&&req.method==="GET"){
