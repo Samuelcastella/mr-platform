@@ -65,6 +65,8 @@ jobs:
         run: bun build services/catalog-api/auth.ts --target=bun --outfile=/tmp/auth.js
       - name: Validar módulo de Customer CRM
         run: bun build services/catalog-api/customers.ts --target=bun --outfile=/tmp/customers.js
+      - name: Validar Control Center antes de integración
+        run: bun build services/control-center/index.ts --target=bun --outfile=/tmp/control-center-pre.js
       - name: Prueba de integración órdenes + reservas
         shell: bash
         run: |
