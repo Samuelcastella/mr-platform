@@ -9,7 +9,10 @@ Esqueleto móvil de MR עדולם en Expo/React Native.
 - Icono iOS/Android y adaptive icon conectados desde el pack de marca existente.
 - Splash configurado con `expo-splash-screen`.
 - Catálogo conectado a `catalog-api /v1/products?status=active`.
-- Compra todavía se completa en el storefront web; checkout nativo queda para una fase posterior.
+- Detalle de producto y selección exacta de variante.
+- Carrito móvil en memoria con límite por disponibilidad visible.
+- Creación nativa de reservas de Order con `channel=APP` e idempotencia.
+- Continuación por WhatsApp configurable o storefront; checkout/pago nativo queda para una fase posterior.
 
 ## Requisitos
 
@@ -41,6 +44,7 @@ Copia `.env.example` a `.env.local` si necesitas apuntar a otro entorno.
 ```env
 EXPO_PUBLIC_API_BASE_URL=https://...
 EXPO_PUBLIC_STOREFRONT_URL=https://...
+EXPO_PUBLIC_WHATSAPP_URL=https://wa.me/...
 ```
 
 Las variables `EXPO_PUBLIC_*` se empaquetan en la app. Nunca deben contener secretos.
