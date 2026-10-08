@@ -2,11 +2,12 @@
 
 **Status:** ACTIVE PROJECT CONTEXT  
 **Purpose:** Durable project memory for decisions, constraints, operating context and direction that should remain available beyond individual chat sessions.  
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-08
 
 ## 1. Core identity
 
 - Brand: **MR עדולם**
+- “Boutique” is the conversational/project workspace name, not the commercial brand name.
 - Permanent naming rule: **עדולם must only appear in Hebrew** throughout the project.
 - MR עדולם is a scalable commercial brand and platform, not only a boutique.
 - Initial physical operation: Honduras.
@@ -105,7 +106,13 @@ The Honduras research reinforces these priorities:
 - local brand differentiation;
 - future digital credit only as a separate financial capability.
 
-## 7. Technical architecture
+## 7. Confirmed commercial model
+
+MR עדולם is explicitly a **hybrid commerce model** supporting MR-owned inventory and third-party products. The architecture must progressively distinguish inventory owner, supplier/seller, commercial modality, cost basis, price, margin or commission, settlement rule, returns liability and shrinkage liability.
+
+Supporting the hybrid model in data does not mean activating an open self-service marketplace before the Commerce Core is stable.
+
+## 8. Technical architecture
 
 Primary repository:
 
@@ -129,7 +136,7 @@ Architecture rule:
 - Browser-local state may be used for temporary UX state only.
 - Catalog, inventory, orders, payments and fulfillment must progressively become authoritative server-side domains.
 
-## 8. LIRA boundary
+## 9. LIRA boundary
 
 LIRA is an **independent financial platform**.
 
@@ -140,7 +147,7 @@ MR עדולם may integrate with LIRA through a versioned payment adapter, but:
 - no duplication of LIRA financial accounting;
 - MR must continue functioning with cash, transfer, COD and future providers without requiring LIRA.
 
-## 9. Current execution order
+## 10. Current execution order
 
 1. Finish authoritative catalog integration.
 2. Make variants and stock authoritative.
@@ -153,7 +160,7 @@ MR עדולם may integrate with LIRA through a versioned payment adapter, but:
 9. Validate Honduras fiscal requirements before production coding.
 10. Activate marketplace and LIRA integrations only after the commerce core is stable.
 
-## 10. Current project artifacts
+## 11. Current project artifacts
 
 Strategic documentation:
 
@@ -162,6 +169,7 @@ Strategic documentation:
 - `docs/research/Resumen_Ejecutivo.md`
 - `docs/architecture/MR_עדולם_Blueprint_v2.0.md`
 - `docs/specs/M01_CATALOG_INVENTORY_V1.md`
+- `docs/CONVERSATION_KNOWLEDGE_CONSOLIDATION_2026-10-08.md`
 
 Strategic PR:
 
@@ -176,7 +184,28 @@ Execution backlog:
 - #17 fulfillment / local delivery / logistical COD;
 - #18 Honduras fiscal validation.
 
-## 11. Memory rule for future work
+## 12. Conversation-derived knowledge
+
+The 2026-10-08 consolidation preserves new conversation research on Honduran competitors, customer segments, categories, credit, logistics, digital catalogs, local software, Kardex, shrinkage, staff commissions, Health Desk and the hybrid seller model.
+
+Confirmed additions include:
+
+- brand naming discipline: **MR עדולם**;
+- “Boutique” is not the commercial name;
+- hybrid owned + third-party commercial model;
+- omnichannel authority across store, web, phone, WhatsApp and future app;
+- future need for seller ownership and settlement rules;
+- inventory adjustment / shrinkage approval requirements;
+- staff commission requirements;
+- Health Desk / operational exception visibility;
+- credit as a separate future capability or adapter;
+- multicategory research as expansion evidence, not immediate launch scope.
+
+The review on 2026-10-08 created M11–M15 as **PROPOSED FOR APPROVAL** specifications. Approved M01–M10 remain authoritative until those proposals are explicitly accepted and implementation work is separately approved.
+
+Dynamic external market facts from conversations must be revalidated before becoming public claims, contracts or production rules.
+
+## 13. Memory rule for future work
 
 When new research, decisions or operating facts materially affect MR עדולם:
 
@@ -185,6 +214,8 @@ When new research, decisions or operating facts materially affect MR עדולם:
 3. Add it to the appropriate project artifact.
 4. Link it to the relevant SPEC or issue when applicable.
 5. Never silently overwrite historical decisions; version or supersede them explicitly.
+6. Prefer inspecting repository, Railway and existing artifacts before asking the user for facts already available there.
+7. Do not create a parallel roadmap when an authoritative roadmap already exists.
 
 This file is a durable project-context index. Detailed research and implementation specifications remain in their dedicated documents.
 
