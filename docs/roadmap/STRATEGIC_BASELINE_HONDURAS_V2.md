@@ -873,3 +873,26 @@ On approval, this v2 roadmap becomes the strategic bridge for subsequent SPEC am
 ---
 
 **Core rule:** new knowledge must change the roadmap when it materially changes the target operating model, but it must not destabilize the proven execution sequence without evidence.
+
+
+## 25. Execution status checkpoint — 2026-10-08
+
+This checkpoint records implementation facts without changing the overall roadmap approval status.
+
+Completed in repository/main:
+
+- M12 governed inventory adjustments and shrinkage controls — merged through PR #56;
+- M14 Operational Health Desk Phase v1 — merged through PR #59;
+- Honduras fiscal research revalidation — merged through PR #60; production fiscal issuance remains blocked by the M05 evidence gate;
+- M11 Phase A seller ownership foundation — merged through PR #62, including SellerAccount, SellerAgreement, InventorySource and immutable OrderItem commercial snapshots;
+- M13 Phase A staff sales attribution foundation — merged through PR #64, including primary/assist attribution and auditable post-commit corrections.
+
+Still gated:
+
+- M11 seller settlement calculation/approval/payout confirmation requires approved settlement policy and applicable fiscal/legal validation;
+- M13 commission accruals/statements require approved earning trigger, rates, allocation policies, payout frequency and negative carry-forward treatment;
+- M05 live fiscal issuance still requires authoritative taxpayer, authorization/range and product-tax evidence;
+- marketplace self-service remains inactive;
+- external credit-provider integration remains behind provider/legal/commercial validation.
+
+No Railway or production deployment is implied by this documentation checkpoint. Repository implementation facts and production deployment facts remain separate under the traceability rules in Section 17.

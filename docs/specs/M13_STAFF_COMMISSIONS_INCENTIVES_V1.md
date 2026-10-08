@@ -263,3 +263,33 @@ Before implementation, approve:
 - treatment of seller-owned inventory;
 - payout frequency;
 - handling of negative carry-forward.
+
+
+## 16. Approved Phase A decision — 2026-10-08
+
+Implementation is approved to proceed with staff sales attribution before commission calculation.
+
+Approved Phase A semantics:
+
+- attribution roles are PRIMARY_SALESPERSON and ASSIST;
+- MANUAL_OVERRIDE is an attribution/correction source, not a staff role;
+- attribution is internal and server-side;
+- one active primary salesperson is allowed per Order, while multiple assists may coexist;
+- after an Order leaves PENDING_CONFIRMATION, a staff-driven attribution change requires an explicit correction reason and must preserve the superseded assignment;
+- attribution must not modify Order totals, Payment state or Order lifecycle;
+- attribution must remain private from public storefront/order APIs.
+
+Phase A is being implemented through PR #64.
+
+The following remain intentionally unapproved and must not be hardcoded yet:
+
+- default earning trigger;
+- commission rates;
+- rule basis by role/category;
+- discount and shipping treatment;
+- seller-owned inventory treatment for staff commissions;
+- payout frequency;
+- negative carry-forward policy;
+- CommissionAccrual, CommissionStatement and payout activation.
+
+This keeps the attribution foundation usable while preserving the pending business decisions in Section 15.

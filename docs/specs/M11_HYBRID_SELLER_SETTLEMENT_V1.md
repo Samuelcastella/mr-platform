@@ -326,3 +326,19 @@ Audit must include actor, timestamp, reason and linked entity.
 Do not activate marketplace self-service from this SPEC alone.
 
 Implementation may begin with operator-managed third-party inventory and settlement only after M01-M04 are stable enough to provide authoritative source events.
+
+
+## 21. Approved implementation decision — 2026-10-08
+
+The following commercial ownership rule is approved for implementation:
+
+- when MR purchases a product from a third party and incorporates it into MR inventory for resale, the subsequent customer sale is treated as MR-owned commerce;
+- when a third party retains the economic ownership of the product and offers it through MR, the inventory must retain explicit Seller / SellerAgreement attribution and THIRD_PARTY economic ownership;
+- Supplier and Seller remain separate roles even when the same organization performs both;
+- operator-managed third-party inventory may proceed before open marketplace self-service;
+- MARKETPLACE_FUTURE remains inactive;
+- the fiscal issuer for third-party-owned sales is not inferred by M11 and remains gated by M05 legal/tax validation.
+
+Phase A implementation landed through PR #62 and established SellerAccount, versioned SellerAgreement, InventorySource and immutable commercial snapshots on OrderItem.
+
+Settlement calculation, eligibility defaults, payout timing and return/fee allocation remain subject to the agreement configuration and the unresolved business decisions in this SPEC. This approval does not authorize a hardcoded settlement trigger or marketplace activation.
