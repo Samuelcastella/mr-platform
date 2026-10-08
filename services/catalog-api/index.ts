@@ -192,6 +192,22 @@ Bun.serve({
           COALESCE(MIN(v.currency), 'HNL') AS currency,
           COALESCE(SUM(v.available), 0)::int AS stock,
           COALESCE(
+            (
+              SELECT json_agg(
+                json_build_object(
+                  'id', pi.id,
+                  'url', pi.url,
+                  'altText', pi.alt_text,
+                  'sortOrder', pi.sort_order
+                )
+                ORDER BY pi.sort_order, pi.id
+              )
+              FROM product_images pi
+              WHERE pi.product_id=p.id AND pi.active
+            ),
+            '[]'::json
+          ) AS images,
+          COALESCE(
             json_agg(
               json_build_object(
                 'id', v.id,
