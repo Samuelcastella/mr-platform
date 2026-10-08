@@ -86,6 +86,7 @@ jobs:
           bun run services/catalog-api/test/rbac-internal.integration.ts
           bun run services/catalog-api/test/catalog.integration.ts
           bun run services/catalog-api/test/vendor-portal.integration.ts
+          bun run services/catalog-api/test/procurement.integration.ts
           bun run services/control-center/test/integration.ts
           bun run services/catalog-api/test/customers.integration.ts
       - name: Validar Control Center
