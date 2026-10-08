@@ -29,7 +29,7 @@ This matrix determines which approved modules would require a versioned amendmen
 
 ## 3. Cross-cutting issue A — commercial model vs economic ownership
 
-### Current state
+### Current documentation state
 
 M01 defines Product.commercial_model as:
 
@@ -51,6 +51,12 @@ The confirmed hybrid model requires a separate economic ownership dimension:
 - future marketplace inventory
 
 These are not equivalent to M01 Product.commercial_model.
+
+### Verified implementation note — 2026-10-08
+
+Repository code search did not find commercial_model in services/catalog-api. Treat the M01 field as approved design intent until schema/code verification proves it is deployed.
+
+This strengthens the rule: the hybrid ownership amendment must be designed against the implemented schema rather than assuming every M01 field already exists.
 
 Example:
 
@@ -76,9 +82,9 @@ Do not overload Product.commercial_model.
 
 ## 4. Cross-cutting issue B — inventory movement vocabulary
 
-### Current state
+### Current documentation state
 
-M01 movement types include lowercase conceptual values:
+M01 documents conceptual movement types in lowercase:
 
 - purchase_receipt
 - sale
@@ -90,20 +96,33 @@ M01 movement types include lowercase conceptual values:
 - loss
 - donation
 
-M08 refers to PURCHASE_RECEIPT.
-M09 refers to CUSTOMER_RETURN.
-M04 also uses CUSTOMER_RETURN for RTO inspection restock.
+M08 specifies PURCHASE_RECEIPT.
+M09 specifies CUSTOMER_RETURN.
+M04 also uses CUSTOMER_RETURN for a restock after RTO inspection.
+
+### Verified implementation state — 2026-10-08
+
+Repository inspection confirms the deployed code writes string values including:
+
+- PURCHASE_RECEIPT in procurement;
+- CUSTOMER_RETURN in customer returns;
+- SALE in order inventory consumption;
+- INITIAL_STOCK in catalog/internal stock creation;
+- ADJUSTMENT in internal stock changes.
+
+Therefore the mismatch is primarily a documentation/contract normalization issue, not proof that production data must be renamed.
 
 ### Gap
 
-The movement taxonomy is not fully normalized across approved SPECs.
+The movement taxonomy is not fully normalized across approved SPECs, and the actual implementation already contains values not enumerated by M01.
 
 ### Required amendment
 
-Before implementing M12 or adding more inventory event types, create one authoritative movement vocabulary in M01 vNext.
+Before M12 adds additional movement semantics, M01 vNext should publish one authoritative vocabulary that reflects implemented values and defines future additions.
 
-Proposed normalized enum:
+Candidate vocabulary:
 
+- INITIAL_STOCK
 - PURCHASE_RECEIPT
 - SALE
 - CUSTOMER_RETURN
@@ -117,13 +136,12 @@ Proposed normalized enum:
 - SUPPLIER_RETURN
 - RTO_RESTOCK
 
-Exact final names require migration review against implemented database values.
+Exact future additions require implementation review.
 
 ### Migration caution
 
-Do not rename deployed enum/string values blindly.
-First inspect the production schema and existing data.
-If values already exist, use a compatibility migration or mapping layer.
+Do not rename existing production string values merely for stylistic consistency.
+Prefer documenting existing values and adding compatible new values unless a verified data migration is justified.
 
 ## 5. M11 impact — Hybrid Seller Ownership & Settlement
 
