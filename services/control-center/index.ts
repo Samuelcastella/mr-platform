@@ -1,10 +1,8 @@
-import { SQL } from "bun";
-
-let db: SQL | null = null;
-let schemaReady = false;
-const attempts = new Map<string,{count:number,reset:number}>();
-const enc = new TextEncoder();
+const API_BASE = (Bun.env.CATALOG_API_URL || "").replace(/\/+$/, "");
+const SESSION_COOKIE = "mrstaff";
+const CSRF_COOKIE = "mrcc_csrf";
 const statuses = new Set(["new","reviewing","contacted","qualified","converted","closed","rejected"]);
+
 const labels: Record<string,string> = {
   new:"Nueva", reviewing:"En revisión", contacted:"Contactada", qualified:"Calificada",
   converted:"Convertida", closed:"Cerrada", rejected:"No procede",
@@ -12,58 +10,10 @@ const labels: Record<string,string> = {
   partnership:"Alianza", notify:"Disponibilidad"
 };
 
-function getDb() {
-  if (db) return db;
-  db = new SQL({
-    hostname: Bun.env.PGHOST!,
-    port: Number(Bun.env.PGPORT || 5432),
-    username: Bun.env.PGUSER!,
-    password: Bun.env.PGPASSWORD!,
-    database: Bun.env.PGDATABASE!,
-    tls: false,
-    max: 4
-  });
-  return db;
-}
-
-async function ensureSchema() {
-  if (schemaReady) return;
-  const sql = getDb();
-  await sql`ALTER TABLE public_inquiries ADD COLUMN IF NOT EXISTS priority SMALLINT NOT NULL DEFAULT 0`;
-  await sql`ALTER TABLE public_inquiries ADD COLUMN IF NOT EXISTS assigned_to TEXT`;
-  await sql`ALTER TABLE public_inquiries ADD COLUMN IF NOT EXISTS internal_notes TEXT`;
-  await sql`ALTER TABLE public_inquiries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`;
-  await sql`
-    CREATE TABLE IF NOT EXISTS inquiry_history (
-      id BIGSERIAL PRIMARY KEY,
-      inquiry_id BIGINT NOT NULL REFERENCES public_inquiries(id) ON DELETE CASCADE,
-      actor TEXT NOT NULL,
-      action TEXT NOT NULL,
-      from_status TEXT,
-      to_status TEXT,
-      note TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_inquiry_history_inquiry_created ON inquiry_history(inquiry_id, created_at DESC)`;
-  await sql`
-    CREATE TABLE IF NOT EXISTS sourcing_opportunities (
-      id BIGSERIAL PRIMARY KEY,
-      inquiry_id BIGINT UNIQUE REFERENCES public_inquiries(id) ON DELETE SET NULL,
-      opportunity_type TEXT NOT NULL,
-      title TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'open',
-      priority SMALLINT NOT NULL DEFAULT 1,
-      owner TEXT,
-      notes TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_sourcing_opportunities_status_created ON sourcing_opportunities(status, created_at DESC)`;
-  schemaReady = true;
-}
-
 function esc(v: unknown) {
-  return String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"} as any)[c]);
+  return String(v ?? "").replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"} as any)[c]
+  );
 }
 
 function securityHeaders(extra: Record<string,string> = {}) {
@@ -72,66 +22,127 @@ function securityHeaders(extra: Record<string,string> = {}) {
     "x-frame-options":"DENY",
     "referrer-policy":"no-referrer",
     "permissions-policy":"camera=(), microphone=(), geolocation=()",
-    "content-security-policy":"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "content-security-policy":"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     ...extra
   };
 }
 
 function html(body:string, status=200, headers:Record<string,string>={}) {
-  return new Response(body,{status,headers:securityHeaders({"content-type":"text/html; charset=utf-8","cache-control":"no-store",...headers})});
+  return new Response(body,{
+    status,
+    headers:securityHeaders({
+      "content-type":"text/html; charset=utf-8",
+      "cache-control":"no-store",
+      ...headers
+    })
+  });
 }
-function json(body:unknown,status=200){return Response.json(body,{status,headers:securityHeaders({"cache-control":"no-store"})});}
-function redirect(path:string, cookie?:string){const h:Record<string,string>={location:path}; if(cookie)h["set-cookie"]=cookie; return new Response(null,{status:303,headers:securityHeaders(h)});}
 
-function b64url(data: Uint8Array|string) {
-  return Buffer.from(typeof data === "string" ? enc.encode(data) : data).toString("base64url");
+function json(body:unknown,status=200){
+  return Response.json(body,{
+    status,
+    headers:securityHeaders({"cache-control":"no-store"})
+  });
 }
-async function hmacKey() {
-  const secret = Bun.env.CONTROL_CENTER_SESSION_SECRET || "";
-  return crypto.subtle.importKey("raw",enc.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign","verify"]);
+
+function redirect(path:string,cookies:string[]=[]){
+  const headers=new Headers(securityHeaders({location:path}));
+  for(const cookie of cookies) headers.append("set-cookie",cookie);
+  return new Response(null,{status:303,headers});
 }
-async function signPayload(payload:string) {
-  const sig = await crypto.subtle.sign("HMAC",await hmacKey(),enc.encode(payload));
-  return Buffer.from(sig).toString("base64url");
+
+function cookie(req:Request,name:string){
+  const header=req.headers.get("cookie")||"";
+  for(const item of header.split(";")){
+    const [key,...rest]=item.trim().split("=");
+    if(key===name)return rest.join("=");
+  }
+  return "";
 }
-async function makeSession() {
-  const payload = b64url(JSON.stringify({
-    exp:Date.now()+8*60*60*1000,
-    csrf:crypto.randomUUID(),
-    actor:Bun.env.CONTROL_CENTER_OPERATOR || "operator"
-  }));
-  return payload+"."+await signPayload(payload);
+
+function sessionCookieHeader(req:Request){
+  const token=cookie(req,SESSION_COOKIE);
+  return token ? `${SESSION_COOKIE}=${token}` : "";
 }
-async function readSession(req:Request) {
-  const raw=(req.headers.get("cookie")||"").split(";").map(x=>x.trim()).find(x=>x.startsWith("mrcc="))?.slice(5);
-  if(!raw)return null;
-  const [payload,sig]=raw.split(".");
-  if(!payload||!sig)return null;
+
+function csrfCookie(value:string,maxAge=28800){
+  return `${CSRF_COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+function clearCookie(name:string){
+  return `${name}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+}
+
+function safeEqual(a:string,b:string){
+  if(a.length!==b.length)return false;
+  let diff=0;
+  for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);
+  return diff===0;
+}
+
+async function api(
+  path:string,
+  options:{
+    method?:string;
+    cookieHeader?:string;
+    csrf?:string;
+    body?:unknown;
+  }={}
+){
+  if(!API_BASE) return {response:null,body:{error:"api_not_configured"} as any};
+  const headers:Record<string,string>={"accept":"application/json"};
+  if(options.cookieHeader)headers.cookie=options.cookieHeader;
+  if(options.csrf)headers["x-csrf-token"]=options.csrf;
+  if(options.body!==undefined)headers["content-type"]="application/json";
+
   try{
-    const ok=await crypto.subtle.verify("HMAC",await hmacKey(),Buffer.from(sig,"base64url"),enc.encode(payload));
-    if(!ok)return null;
-    const data=JSON.parse(Buffer.from(payload,"base64url").toString("utf8"));
-    if(!data.exp||Date.now()>data.exp)return null;
-    return data;
-  }catch{return null}
+    const response=await fetch(API_BASE+path,{
+      method:options.method||"GET",
+      headers,
+      body:options.body===undefined?undefined:JSON.stringify(options.body),
+      redirect:"manual"
+    });
+    const body=await response.json().catch(()=>({}));
+    return {response,body};
+  }catch{
+    return {response:null,body:{error:"api_unavailable"} as any};
+  }
 }
-function sessionCookie(token:string){return `mrcc=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`;}
-function clearCookie(){return "mrcc=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0";}
 
-async function safePasswordEqual(a:string,b:string){
-  const [x,y]=await Promise.all([crypto.subtle.digest("SHA-256",enc.encode(a)),crypto.subtle.digest("SHA-256",enc.encode(b))]);
-  const xa=new Uint8Array(x),ya=new Uint8Array(y); let d=0; for(let i=0;i<xa.length;i++)d|=xa[i]^ya[i]; return d===0;
+type Session = {
+  csrf:string;
+  actor:string;
+  user:any;
+  cookieHeader:string;
+};
+
+async function readSession(req:Request):Promise<Session|null>{
+  const cookieHeader=sessionCookieHeader(req);
+  const csrf=cookie(req,CSRF_COOKIE);
+  if(!cookieHeader||!csrf)return null;
+
+  const result=await api("/v1/auth/me",{cookieHeader});
+  if(!result.response?.ok||!result.body?.user)return null;
+
+  return {
+    csrf,
+    actor:String(result.body.user.displayName||result.body.user.email||"staff"),
+    user:result.body.user,
+    cookieHeader
+  };
 }
-function clientKey(req:Request){return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()||"unknown";}
-function loginAllowed(req:Request){const k=clientKey(req),now=Date.now(),v=attempts.get(k);if(!v||v.reset<now){attempts.set(k,{count:0,reset:now+15*60*1000});return true}return v.count<5;}
-function recordFailure(req:Request){const k=clientKey(req),now=Date.now(),v=attempts.get(k)||{count:0,reset:now+15*60*1000};v.count++;attempts.set(k,v);}
-function resetFailures(req:Request){attempts.delete(clientKey(req));}
+
+function requireFormCsrf(fd:FormData,session:Session){
+  const supplied=String(fd.get("csrf")||"");
+  return Boolean(supplied)&&safeEqual(supplied,session.csrf);
+}
 
 const css=`
 :root{--ink:#171513;--cream:#f4efe7;--gold:#b7923b;--line:#ded5c8;--muted:#6c645a}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,system-ui,sans-serif}
-header{background:#111;color:white;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:3}
-header b{font:400 22px Georgia,serif;color:#e7cf89}.wrap{max-width:1280px;margin:auto;padding:30px 20px 60px}
+header{background:#111;color:white;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;gap:16px;position:sticky;top:0;z-index:3}
+header b{font:400 22px Georgia,serif;color:#e7cf89}.user{font-size:12px;color:#cfc5b8;margin-left:auto}
+.wrap{max-width:1280px;margin:auto;padding:30px 20px 60px}
 h1,h2,h3{font-family:Georgia,serif;font-weight:400}.eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:900;color:#947127}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric,.panel{background:white;border:1px solid var(--line);border-radius:18px;padding:18px}
 .metric span{display:block;color:var(--muted);font-size:12px}.metric b{display:block;font:400 28px Georgia,serif;margin-top:8px}
@@ -144,119 +155,303 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 .login{max-width:430px;margin:10vh auto;background:white;border:1px solid var(--line);border-radius:24px;padding:28px}.login input{width:100%;margin:10px 0 16px}.login button{width:100%}
 .notice{padding:12px 14px;border-radius:12px;background:#fff6dc;margin:12px 0;color:#725817}.empty{text-align:center;padding:45px;color:var(--muted)}
 .intel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}.intel-card{background:#171513;color:white;border-radius:18px;padding:18px}.intel-card h3{margin:7px 0 12px;color:#efd98b}.intel-card ol{margin:0;padding-left:20px}.intel-card li{padding:6px 0;color:#ddd3c4}.score{display:inline-flex;padding:4px 8px;border-radius:999px;background:#d4af3722;color:#efd98b;font-size:11px;font-weight:900;margin-left:6px}.suggest{font-size:12px;color:#705b27;background:#fbf3dd;border-radius:10px;padding:8px 10px;margin-top:10px}
-@media(max-width:900px){.intel-grid{grid-template-columns:1fr}}
-@media(max-width:900px){.grid{grid-template-columns:1fr 1fr}.actions{grid-template-columns:1fr 1fr}.actions label:nth-child(4){grid-column:1/-1}.item-head{flex-direction:column}}
-@media(max-width:600px){.grid{grid-template-columns:1fr}.toolbar{display:grid}.toolbar input{min-width:0;width:100%}}
+@media(max-width:900px){.intel-grid{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.actions{grid-template-columns:1fr 1fr}.actions label:nth-child(4){grid-column:1/-1}.item-head{flex-direction:column}}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.toolbar{display:grid}.toolbar input{min-width:0;width:100%}.user{display:none}}
 `;
 
-function shell(content:string, session:any){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+function shell(content:string,session:Session){
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
-function loginPage(message=""){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Acceso · MR עדולם</title><style>${css}</style></head><body><main class="login"><div class="eyebrow">Acceso privado</div><h1>MR עדולם Control Center</h1><p class="meta">Operación interna. El acceso requiere credenciales del equipo.</p>${message?`<div class="notice">${esc(message)}</div>`:""}<form method="post" action="/login"><label>Contraseña<input type="password" name="password" autocomplete="current-password" required></label><button>Entrar</button></form></main></body></html>`;
-}
-function setupPage(){return loginPage("El acceso aún no ha sido habilitado. Configure CONTROL_CENTER_PASSWORD en Railway antes de abrir este panel al equipo.");}
-function suggestedAction(kind:string){return ({product_request:"Buscar disponibilidad, comparar proveedores y evaluar incorporación al catálogo.",notify:"Revisar reposición y contactar cuando exista stock.",supplier:"Evaluar catálogo, precios, MOQ, tiempos y confiabilidad.",partnership:"Clasificar propuesta y asignar responsable comercial.",support:"Responder, resolver y cerrar con trazabilidad."} as Record<string,string>)[kind]||"Revisar y clasificar.";}
-function csvCell(v:unknown){const x=String(v??"");return /[",\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x;}
 
-async function dashboard(url:URL, session:any){
-  await ensureSchema(); const sql=getDb();
-  const status=(url.searchParams.get("status")||"").slice(0,32),kind=(url.searchParams.get("kind")||"").slice(0,32),q=(url.searchParams.get("q")||"").slice(0,120);
-  const summary=await sql`SELECT COUNT(*)::int total, COUNT(*) FILTER(WHERE status='new')::int new_count, COUNT(*) FILTER(WHERE kind='product_request')::int product_requests, COUNT(*) FILTER(WHERE kind='supplier')::int suppliers, COUNT(*) FILTER(WHERE created_at>=NOW()-INTERVAL '24 hours')::int last_24h, COUNT(*) FILTER(WHERE assigned_to IS NULL AND status NOT IN ('closed','rejected','converted'))::int unassigned, COUNT(*) FILTER(WHERE status='new' AND created_at<NOW()-INTERVAL '24 hours')::int overdue_new FROM public_inquiries`;
-  const events=await sql`SELECT event_name,COUNT(*)::int count FROM public_events WHERE created_at>=NOW()-INTERVAL '7 days' GROUP BY event_name`;
-  const demand=await sql`SELECT COALESCE(NULLIF(i.metadata->>'requestedProduct',''),p.name,'Sin especificar') item,COUNT(*)::int count FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id WHERE i.kind='product_request' GROUP BY 1 ORDER BY count DESC LIMIT 5`;
-  const restock=await sql`SELECT COALESCE(p.name,'Producto sin relación') item,COUNT(*)::int count FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id WHERE i.kind='notify' GROUP BY 1 ORDER BY count DESC LIMIT 5`;
-  const supplierCats=await sql`SELECT COALESCE(NULLIF(metadata->>'categories',''),'Sin categoría') item,COUNT(*)::int count FROM public_inquiries WHERE kind='supplier' GROUP BY 1 ORDER BY count DESC LIMIT 5`;
-  const historyRows=await sql`SELECT inquiry_id,actor,action,from_status,to_status,note,created_at FROM inquiry_history ORDER BY created_at DESC LIMIT 500`;
-  const opportunitySummary=await sql`SELECT COUNT(*)::int total, COUNT(*) FILTER(WHERE status='open')::int open_count FROM sourcing_opportunities`;
-  const opportunities=await sql`SELECT id,inquiry_id,opportunity_type,title,status,priority,owner,notes,created_at FROM sourcing_opportunities WHERE status='open' ORDER BY priority DESC,created_at DESC LIMIT 12`;
-  const rows=await sql`
-    SELECT i.id,i.kind,i.name,i.contact,i.country_code,i.product_id,i.message,i.metadata,i.status,i.priority,i.assigned_to,i.internal_notes,i.created_at,i.updated_at,p.name product_name
-    FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id
-    WHERE (${status||null}::text IS NULL OR i.status=${status||null}::text)
-      AND (${kind||null}::text IS NULL OR i.kind=${kind||null}::text)
-      AND (${q||null}::text IS NULL OR i.name ILIKE '%'||${q||null}::text||'%' OR i.contact ILIKE '%'||${q||null}::text||'%' OR COALESCE(i.message,'') ILIKE '%'||${q||null}::text||'%')
-    ORDER BY i.priority DESC,i.created_at DESC LIMIT 100`;
-  const ev=Object.fromEntries(events.map((x:any)=>[x.event_name,x.count])); const s=summary[0]; const opp=opportunitySummary[0];
-  const historyBy=new Map<number,any[]>(); for(const h of historyRows as any[]){const id=Number(h.inquiry_id);const arr=historyBy.get(id)||[];if(arr.length<8){arr.push(h);historyBy.set(id,arr)}}
-  const list=(rows:any[])=>rows.length?`<ol>${rows.map(x=>`<li><b>${esc(x.item)}</b><span class="score">${x.count}</span></li>`).join("")}</ol>`:`<p class="meta">Aún sin señales suficientes.</p>`;
+function loginPage(message=""){
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Acceso · MR עדולם</title><style>${css}</style></head><body><main class="login"><div class="eyebrow">Acceso privado</div><h1>MR עדולם Control Center</h1><p class="meta">Usa tu identidad individual de StaffUser. Las acciones quedan vinculadas a tu usuario y permisos.</p>${message?`<div class="notice">${esc(message)}</div>`:""}<form method="post" action="/login"><label>Correo<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Contraseña<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><button>Entrar</button></form></main></body></html>`;
+}
+
+function setupPage(){
+  return loginPage("El Control Center requiere CATALOG_API_URL para usar la identidad de StaffUser del Commerce Core.");
+}
+
+function suggestedAction(kind:string){
+  return ({
+    product_request:"Buscar disponibilidad, comparar proveedores y evaluar incorporación al catálogo.",
+    notify:"Revisar reposición y contactar cuando exista stock.",
+    supplier:"Evaluar catálogo, precios, MOQ, tiempos y confiabilidad.",
+    partnership:"Clasificar propuesta y asignar responsable comercial.",
+    support:"Responder, resolver y cerrar con trazabilidad."
+  } as Record<string,string>)[kind]||"Revisar y clasificar.";
+}
+
+function csvCell(v:unknown){
+  const x=String(v??"");
+  return /[",\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x;
+}
+
+async function dashboard(url:URL,session:Session){
+  const query=new URLSearchParams();
+  for(const key of ["status","kind","q"]){
+    const value=(url.searchParams.get(key)||"").slice(0,key==="q"?120:32);
+    if(value)query.set(key,value);
+  }
+
+  const result=await api(
+    "/v1/internal/control-center/dashboard"+(query.size?"?"+query.toString():""),
+    {cookieHeader:session.cookieHeader}
+  );
+
+  if(result.response?.status===403){
+    return shell(`<div class="panel empty"><h2>Acceso insuficiente</h2><p>Tu usuario no tiene el permiso <b>inquiries.read</b>.</p></div>`,session);
+  }
+  if(!result.response?.ok){
+    return shell(`<div class="panel empty"><h2>Servicio no disponible</h2><p>No se pudo consultar el Commerce Core.</p></div>`,session);
+  }
+
+  const data=result.body||{};
+  const rows:any[]=Array.isArray(data.inquiries)?data.inquiries:[];
+  const events:any[]=Array.isArray(data.events)?data.events:[];
+  const demand:any[]=Array.isArray(data.demand)?data.demand:[];
+  const restock:any[]=Array.isArray(data.restock)?data.restock:[];
+  const supplierCats:any[]=Array.isArray(data.supplierCategories)?data.supplierCategories:[];
+  const historyRows:any[]=Array.isArray(data.history)?data.history:[];
+  const opportunities:any[]=Array.isArray(data.opportunities)?data.opportunities:[];
+  const s:any=data.summary||{};
+  const opp:any=data.opportunitySummary||{};
+
+  const ev=Object.fromEntries(events.map((x:any)=>[x.event_name,Number(x.count)||0]));
+  const historyBy=new Map<number,any[]>();
+  for(const h of historyRows){
+    const id=Number(h.inquiry_id);
+    const arr=historyBy.get(id)||[];
+    if(arr.length<8){arr.push(h);historyBy.set(id,arr)}
+  }
+
+  const list=(items:any[])=>items.length
+    ?`<ol>${items.map(x=>`<li><b>${esc(x.item)}</b><span class="score">${esc(x.count)}</span></li>`).join("")}</ol>`
+    :`<p class="meta">Aún sin señales suficientes.</p>`;
+
   const ctaRate=(ev.cta_click||0)?Math.round((ev.intent_submit||0)/(ev.cta_click||1)*100):0;
   const checkoutRate=(ev.add_to_cart||0)?Math.round((ev.checkout_start||0)/(ev.add_to_cart||1)*100):0;
-  const intelligence=`<div class="intel-grid"><section class="intel-card"><div class="eyebrow" style="color:#d8b96d">Demanda no cubierta</div><h3>Productos solicitados</h3>${list(demand)}</section><section class="intel-card"><div class="eyebrow" style="color:#d8b96d">Reposición</div><h3>Interés por disponibilidad</h3>${list(restock)}</section><section class="intel-card"><div class="eyebrow" style="color:#d8b96d">Sourcing</div><h3>Oferta de proveedores</h3>${list(supplierCats)}</section></div><div class="panel" style="margin-top:12px"><div class="eyebrow">Conversión de intención</div><p class="meta">CTA → solicitud: <b>${ctaRate}%</b> · Carrito → checkout: <b>${checkoutRate}%</b>. Estas tasas ganarán valor conforme aumente el tráfico real.</p></div>`;
+
+  const intelligence=`<div class="intel-grid"><section class="intel-card"><div class="eyebrow" style="color:#d8b96d">Demanda no cubierta</div><h3>Productos solicitados</h3>${list(demand)}</section><section class="intel-card"><div class="eyebrow" style="color:#d8b96d">Reposición</div><h3>Interés por disponibilidad</h3>${list(restock)}</section><section class="intel-card"><div class="eyebrow" style="color:#d8b96d">Sourcing</div><h3>Oferta de proveedores</h3>${list(supplierCats)}</section></div><div class="panel" style="margin-top:12px"><div class="eyebrow">Conversión de intención</div><p class="meta">CTA → solicitud: <b>${ctaRate}%</b> · Carrito → checkout: <b>${checkoutRate}%</b>.</p></div>`;
+
   const metrics=`
     <div class="grid">
-      <div class="metric"><span>Nuevas</span><b>${s.new_count}</b></div>
-      <div class="metric"><span>Solicitudes producto</span><b>${s.product_requests}</b></div>
-      <div class="metric"><span>Proveedores</span><b>${s.suppliers}</b></div>
-      <div class="metric"><span>Últimas 24 h</span><b>${s.last_24h}</b></div><div class="metric"><span>Sin asignar</span><b>${s.unassigned}</b></div><div class="metric"><span>Nuevas &gt;24h</span><b>${s.overdue_new}</b></div><div class="metric"><span>Oportunidades abiertas</span><b>${opp.open_count}</b></div>
+      <div class="metric"><span>Nuevas</span><b>${Number(s.new_count)||0}</b></div>
+      <div class="metric"><span>Solicitudes producto</span><b>${Number(s.product_requests)||0}</b></div>
+      <div class="metric"><span>Proveedores</span><b>${Number(s.suppliers)||0}</b></div>
+      <div class="metric"><span>Últimas 24 h</span><b>${Number(s.last_24h)||0}</b></div>
+      <div class="metric"><span>Sin asignar</span><b>${Number(s.unassigned)||0}</b></div>
+      <div class="metric"><span>Nuevas &gt;24h</span><b>${Number(s.overdue_new)||0}</b></div>
+      <div class="metric"><span>Oportunidades abiertas</span><b>${Number(opp.open_count)||0}</b></div>
     </div>
     <div class="panel" style="margin-top:12px"><div class="eyebrow">Embudo · 7 días</div><p class="meta">Vistas ${ev.page_view||0} · CTA ${ev.cta_click||0} · Intenciones ${ev.intent_submit||0} · Carrito ${ev.add_to_cart||0} · Checkout ${ev.checkout_start||0}</p></div>`;
-  const opts=(set:string[],value:string)=>set.map(x=>`<option value="${x}" ${x===value?"selected":""}>${esc(labels[x]||x)}</option>`).join("");
+
+  const opts=(set:string[],value:string)=>set
+    .map(x=>`<option value="${x}" ${x===value?"selected":""}>${esc(labels[x]||x)}</option>`)
+    .join("");
+
   const items=rows.length?rows.map((r:any)=>`
     <article class="item">
-      <div class="item-head"><div><span class="pill ${r.priority>=2?"high":""}">${esc(labels[r.kind]||r.kind)}</span><h3>#${r.id} · ${esc(r.name)}</h3><div class="meta">${esc(r.contact)} · ${esc(r.country_code||"Sin país")} · ${new Date(r.created_at).toLocaleString("es-HN")}${r.product_name?" · "+esc(r.product_name):""}</div></div><span class="pill">${esc(labels[r.status]||r.status)}</span></div>
+      <div class="item-head"><div><span class="pill ${Number(r.priority)>=2?"high":""}">${esc(labels[r.kind]||r.kind)}</span><h3>#${r.id} · ${esc(r.name)}</h3><div class="meta">${esc(r.contact)} · ${esc(r.country_code||"Sin país")} · ${new Date(r.created_at).toLocaleString("es-HN")}${r.product_name?" · "+esc(r.product_name):""}</div></div><span class="pill">${esc(labels[r.status]||r.status)}</span></div>
       <div class="message">${esc(r.message||"Sin mensaje")}</div>
       <div class="suggest"><b>Acción sugerida:</b> ${esc(suggestedAction(r.kind))}</div>
-      <details><summary class="meta">Datos estructurados</summary><pre class="meta">${esc(JSON.stringify(r.metadata||{},null,2))}</pre></details>${(historyBy.get(Number(r.id))||[]).length?`<details><summary class="meta">Historial interno</summary>${(historyBy.get(Number(r.id))||[]).map((h:any)=>`<div class="meta" style="padding:6px 0;border-bottom:1px solid #eee5d9"><b>${esc(h.actor)}</b> · ${esc(labels[h.from_status]||h.from_status||"—")} → ${esc(labels[h.to_status]||h.to_status||"—")} · ${new Date(h.created_at).toLocaleString("es-HN")}${h.note?`<br>${esc(h.note)}`:""}</div>`).join("")}</details>`:""}
+      <details><summary class="meta">Datos estructurados</summary><pre class="meta">${esc(JSON.stringify(r.metadata||{},null,2))}</pre></details>
+      ${(historyBy.get(Number(r.id))||[]).length?`<details><summary class="meta">Historial interno</summary>${(historyBy.get(Number(r.id))||[]).map((h:any)=>`<div class="meta" style="padding:6px 0;border-bottom:1px solid #eee5d9"><b>${esc(h.actor)}</b> · ${esc(labels[h.from_status]||h.from_status||"—")} → ${esc(labels[h.to_status]||h.to_status||"—")} · ${new Date(h.created_at).toLocaleString("es-HN")}${h.note?`<br>${esc(h.note)}`:""}</div>`).join("")}</details>`:""}
       <form class="actions" method="post" action="/inquiries/${r.id}/update">
         <input type="hidden" name="csrf" value="${esc(session.csrf)}">
         <label>Estado<select name="status">${opts([...statuses],r.status)}</select></label>
-        <label>Prioridad<select name="priority">${[0,1,2,3].map(x=>`<option value="${x}" ${x===r.priority?"selected":""}>${x}</option>`).join("")}</select></label>
+        <label>Prioridad<select name="priority">${[0,1,2,3].map(x=>`<option value="${x}" ${x===Number(r.priority)?"selected":""}>${x}</option>`).join("")}</select></label>
         <label>Asignado a<input name="assigned_to" maxlength="120" value="${esc(r.assigned_to||"")}"></label>
         <label>Notas internas<textarea name="internal_notes" maxlength="4000">${esc(r.internal_notes||"")}</textarea></label>
         <button>Guardar</button>
-      </form>${["product_request","notify","supplier","partnership"].includes(r.kind)?`<form method="post" action="/inquiries/${r.id}/opportunity" style="margin-top:10px"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Crear oportunidad</button></form>`:""}
+      </form>
+      ${["product_request","notify","supplier","partnership"].includes(r.kind)?`<form method="post" action="/inquiries/${r.id}/opportunity" style="margin-top:10px"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Crear oportunidad</button></form>`:""}
     </article>`).join(""):`<div class="panel empty">No hay intenciones con estos filtros.</div>`;
+
+  const q=(url.searchParams.get("q")||"").slice(0,120);
+  const kind=(url.searchParams.get("kind")||"").slice(0,32);
+  const status=(url.searchParams.get("status")||"").slice(0,32);
+
+  const opportunityPanel=opportunities.length
+    ?`<div class="panel" style="margin-top:12px"><div class="eyebrow">Oportunidades abiertas</div>${opportunities.map((o:any)=>`<p class="meta"><b>${esc(o.title)}</b> · ${esc(o.opportunity_type)} · ${esc(o.owner||"sin asignar")}</p>`).join("")}</div>`
+    :"";
+
   return shell(`
-    <div class="eyebrow">Bandeja de Intenciones</div><h1>Señales del mercado convertidas en trabajo.</h1><p class="meta">Clientes, proveedores, reposición, soporte y alianzas en una cola operativa.</p>
-    ${metrics}
-    <form class="toolbar" method="get"><a href="/export/inquiries.csv" style="align-self:center;text-decoration:none;font-weight:900;color:#705b27">Exportar CSV ↓</a><input type="search" name="q" value="${esc(q)}" placeholder="Buscar nombre, contacto o mensaje"><select name="kind"><option value="">Todos los tipos</option>${["product_request","notify","supplier","partnership","support"].map(x=>`<option value="${x}" ${x===kind?"selected":""}>${esc(labels[x])}</option>`).join("")}</select><select name="status"><option value="">Todos los estados</option>${opts([...statuses],status)}</select><button>Filtrar</button></form>
-    <section class="queue">${items}</section>`,session);
+    <div class="eyebrow">Bandeja de Intenciones</div>
+    <h1>Señales del mercado convertidas en trabajo.</h1>
+    <p class="meta">Sesión individual StaffUser · permisos efectivos del Commerce Core.</p>
+    ${metrics}${intelligence}${opportunityPanel}
+    <form class="toolbar" method="get">
+      <a href="/export/inquiries.csv" style="align-self:center;text-decoration:none;font-weight:900;color:#705b27">Exportar CSV ↓</a>
+      <input type="search" name="q" value="${esc(q)}" placeholder="Buscar nombre, contacto o mensaje">
+      <select name="kind"><option value="">Todos los tipos</option>${["product_request","notify","supplier","partnership","support"].map(x=>`<option value="${x}" ${x===kind?"selected":""}>${esc(labels[x])}</option>`).join("")}</select>
+      <select name="status"><option value="">Todos los estados</option>${opts([...statuses],status)}</select>
+      <button>Filtrar</button>
+    </form>
+    <section class="queue">${items}</section>
+  `,session);
 }
 
 Bun.serve({
   port:Number(Bun.env.PORT||3000),
   async fetch(req){
-    const url=new URL(req.url), configured=Boolean(Bun.env.CONTROL_CENTER_PASSWORD&&Bun.env.CONTROL_CENTER_SESSION_SECRET&&Bun.env.PGHOST);
-    if(url.pathname==="/health")return json({ok:true,service:"MR עדולם Control Center",configured});
+    const url=new URL(req.url);
+    const configured=Boolean(API_BASE);
+
+    if(url.pathname==="/health"){
+      return json({ok:true,service:"MR עדולם Control Center",configured,identity:"StaffUser"});
+    }
+
     if(url.pathname==="/ready"){
       if(!configured)return json({ok:false,reason:"setup_required"},503);
-      try{await ensureSchema();await getDb()`SELECT 1`;return json({ok:true,database:"connected"});}catch{return json({ok:false,database:"unavailable"},503)}
+      const result=await api("/health");
+      return result.response?.ok
+        ?json({ok:true,commerceCore:"connected"})
+        :json({ok:false,commerceCore:"unavailable"},503);
     }
+
     if(!configured)return html(setupPage(),503);
-    if(url.pathname==="/login"&&req.method==="GET")return html(loginPage());
-    if(url.pathname==="/login"&&req.method==="POST"){
-      if(!loginAllowed(req))return html(loginPage("Demasiados intentos. Intenta más tarde."),429);
-      const fd=await req.formData(),pass=String(fd.get("password")||"");
-      if(!await safePasswordEqual(pass,Bun.env.CONTROL_CENTER_PASSWORD||"")){recordFailure(req);return html(loginPage("Credenciales incorrectas."),401)}
-      resetFailures(req);return redirect("/",sessionCookie(await makeSession()));
+
+    if(url.pathname==="/login"&&req.method==="GET"){
+      const existing=await readSession(req);
+      return existing?redirect("/"):html(loginPage());
     }
+
+    if(url.pathname==="/login"&&req.method==="POST"){
+      const fd=await req.formData();
+      const email=String(fd.get("email")||"").trim().slice(0,254);
+      const password=String(fd.get("password")||"").slice(0,256);
+
+      const result=await api("/v1/auth/login",{
+        method:"POST",
+        body:{email,password}
+      });
+
+      if(!result.response?.ok){
+        const message=result.response?.status===429
+          ?"Demasiados intentos. Intenta más tarde."
+          :"Credenciales incorrectas o acceso no disponible.";
+        return html(loginPage(message),result.response?.status===429?429:401);
+      }
+
+      const upstreamCookie=result.response.headers.get("set-cookie")||"";
+      const csrf=String(result.body?.csrfToken||"");
+      if(!upstreamCookie.startsWith(`${SESSION_COOKIE}=`)||!csrf){
+        return html(loginPage("No se pudo establecer la sesión."),502);
+      }
+
+      return redirect("/",[
+        upstreamCookie,
+        csrfCookie(csrf)
+      ]);
+    }
+
     const session=await readSession(req);
-    if(!session)return html(loginPage("Inicia sesión para continuar."),401);
-    if(url.pathname==="/logout"&&req.method==="POST"){const fd=await req.formData();if(String(fd.get("csrf")||"")!==session.csrf)return html("Solicitud inválida",403);return redirect("/login",clearCookie())}
-    if(url.pathname==="/"&&req.method==="GET")return html(await dashboard(url,session));
-    if(url.pathname==="/export/inquiries.csv"&&req.method==="GET"){await ensureSchema();const rows=await getDb()`SELECT i.id,i.kind,i.status,i.priority,i.name,i.contact,i.country_code,p.name product_name,i.created_at FROM public_inquiries i LEFT JOIN products p ON p.id=i.product_id ORDER BY i.created_at DESC LIMIT 5000`;const head=["id","kind","status","priority","name","contact","country","product","created_at"];const csv=[head.join(","),...rows.map((r:any)=>[r.id,r.kind,r.status,r.priority,r.name,r.contact,r.country_code,r.product_name,r.created_at].map(csvCell).join(","))].join("\n");return new Response(csv,{headers:securityHeaders({"content-type":"text/csv; charset=utf-8","content-disposition":"attachment; filename=mr-intenciones.csv","cache-control":"no-store"})});}
+    if(!session){
+      return html(loginPage("Inicia sesión con tu usuario del equipo para continuar."),401,{
+        "set-cookie":clearCookie(SESSION_COOKIE)
+      });
+    }
+
+    if(url.pathname==="/logout"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+
+      await api("/v1/auth/logout",{
+        method:"POST",
+        cookieHeader:session.cookieHeader,
+        csrf:session.csrf
+      });
+
+      return redirect("/login",[
+        clearCookie(SESSION_COOKIE),
+        clearCookie(CSRF_COOKIE)
+      ]);
+    }
+
+    if(url.pathname==="/"&&req.method==="GET"){
+      return html(await dashboard(url,session));
+    }
+
+    if(url.pathname==="/export/inquiries.csv"&&req.method==="GET"){
+      const result=await api("/v1/internal/inquiries/export",{
+        cookieHeader:session.cookieHeader
+      });
+      if(result.response?.status===403)return html("Permiso insuficiente",403);
+      if(!result.response?.ok)return html("No se pudo exportar",502);
+
+      const rows=Array.isArray(result.body?.data)?result.body.data:[];
+      const head=["id","kind","status","priority","name","contact","country","product","created_at"];
+      const csv=[
+        head.join(","),
+        ...rows.map((r:any)=>[
+          r.id,r.kind,r.status,r.priority,r.name,r.contact,
+          r.country_code,r.product_name,r.created_at
+        ].map(csvCell).join(","))
+      ].join("\n");
+
+      return new Response(csv,{
+        headers:securityHeaders({
+          "content-type":"text/csv; charset=utf-8",
+          "content-disposition":"attachment; filename=mr-intenciones.csv",
+          "cache-control":"no-store"
+        })
+      });
+    }
+
     const opportunityMatch=url.pathname.match(/^\/inquiries\/(\d+)\/opportunity$/);
     if(opportunityMatch&&req.method==="POST"){
-      const fd=await req.formData();if(String(fd.get("csrf")||"")!==session.csrf)return html("Solicitud inválida",403);
-      await ensureSchema();const sql=getDb();const inquiry=await sql`SELECT id,kind,name,message,metadata FROM public_inquiries WHERE id=${Number(opportunityMatch[1])} LIMIT 1`;if(!inquiry.length)return html("Solicitud no encontrada",404);
-      const row:any=inquiry[0],meta=row.metadata||{};
-      const title=String(meta.requestedProduct||meta.categories||row.message||row.name||("Solicitud #"+row.id)).slice(0,180);
-      const type=row.kind==="supplier"?"supplier_lead":row.kind==="partnership"?"partnership":row.kind==="notify"?"restock":"product_demand";
-      await sql`INSERT INTO sourcing_opportunities(inquiry_id,opportunity_type,title,priority,owner,notes) VALUES(${row.id},${type},${title},1,${session.actor},${row.message||null}) ON CONFLICT(inquiry_id) DO UPDATE SET updated_at=NOW()`;
-      await sql`INSERT INTO inquiry_history(inquiry_id,actor,action,from_status,to_status,note) VALUES(${row.id},${session.actor},"create_opportunity",NULL,NULL,${"Converted to sourcing opportunity"})`;
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+
+      const result=await api(
+        `/v1/internal/inquiries/${Number(opportunityMatch[1])}/opportunity`,
+        {
+          method:"POST",
+          cookieHeader:session.cookieHeader,
+          csrf:session.csrf,
+          body:{}
+        }
+      );
+
+      if(result.response?.status===403)return html("Permiso insuficiente",403);
+      if(result.response?.status===404)return html("Solicitud no encontrada",404);
+      if(!result.response?.ok)return html("No se pudo crear la oportunidad",502);
       return redirect("/");
     }
-    const m=url.pathname.match(/^\/inquiries\/(\d+)\/update$/);
-    if(m&&req.method==="POST"){
-      const fd=await req.formData();if(String(fd.get("csrf")||"")!==session.csrf)return html("Solicitud inválida",403);
-      const status=String(fd.get("status")||"").slice(0,32);if(!statuses.has(status))return html("Estado inválido",400);
-      const priority=Math.min(3,Math.max(0,Number(fd.get("priority")||0)||0)),assigned=String(fd.get("assigned_to")||"").trim().slice(0,120),notes=String(fd.get("internal_notes")||"").trim().slice(0,4000);
-      await ensureSchema();const sql=getDb();const before=await sql`SELECT status FROM public_inquiries WHERE id=${Number(m[1])} LIMIT 1`;if(!before.length)return html("Solicitud no encontrada",404);
-      await sql`UPDATE public_inquiries SET status=${status},priority=${priority},assigned_to=${assigned||null},internal_notes=${notes||null},updated_at=NOW() WHERE id=${Number(m[1])}`;
-      await sql`INSERT INTO inquiry_history(inquiry_id,actor,action,from_status,to_status,note) VALUES(${Number(m[1])},${session.actor},"update",${before[0].status},${status},${notes||null})`;
+
+    const updateMatch=url.pathname.match(/^\/inquiries\/(\d+)\/update$/);
+    if(updateMatch&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+
+      const status=String(fd.get("status")||"").slice(0,32);
+      if(!statuses.has(status))return html("Estado inválido",400);
+
+      const priority=Math.min(
+        3,
+        Math.max(0,Number(fd.get("priority")||0)||0)
+      );
+      const assignedTo=String(fd.get("assigned_to")||"").trim().slice(0,120);
+      const internalNotes=String(fd.get("internal_notes")||"").trim().slice(0,4000);
+
+      const result=await api(`/v1/internal/inquiries/${Number(updateMatch[1])}`,{
+        method:"PATCH",
+        cookieHeader:session.cookieHeader,
+        csrf:session.csrf,
+        body:{
+          status,
+          priority,
+          assignedTo:assignedTo||null,
+          internalNotes:internalNotes||null
+        }
+      });
+
+      if(result.response?.status===403)return html("Permiso insuficiente",403);
+      if(result.response?.status===404)return html("Solicitud no encontrada",404);
+      if(!result.response?.ok)return html("No se pudo guardar",502);
       return redirect("/");
     }
+
     return html("No encontrado",404);
   }
 });
