@@ -16,8 +16,12 @@ export async function ensureRestockSchema(db:DB){
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(subscription_id))`;
  // Inventory transitions from zero to positive are handled by an outbox trigger.
  await db`CREATE OR REPLACE FUNCTION enqueue_restock_on_inventory() RETURNS trigger LANGUAGE plpgsql AS $$
+ DECLARE total_available BIGINT; previous_available BIGINT;
  BEGIN
- IF NEW.quantity - NEW.reserved > 0 AND (TG_OP='INSERT' OR OLD.quantity - OLD.reserved <= 0) THEN
+ SELECT COALESCE(SUM(quantity-reserved),0) INTO total_available FROM inventory WHERE variant_id=NEW.variant_id;
+ previous_available := total_available - (NEW.quantity-NEW.reserved);
+ IF TG_OP='UPDATE' THEN previous_available := previous_available + (OLD.quantity-OLD.reserved); END IF;
+ IF total_available > 0 AND previous_available <= 0 THEN
  INSERT INTO restock_outbox(subscription_id,variant_id)
  SELECT id,variant_id FROM restock_subscriptions WHERE variant_id=NEW.variant_id AND status='PENDING'
  ON CONFLICT DO NOTHING;
