@@ -102,7 +102,7 @@ async function listAttributions(req: Request, url: URL, db: DB, orderId: number)
   if (!order) return json({ error: "not_found" }, 404);
 
   const auth = await authorizeInternal(req, db, "commissions.attribution.read", {
-    locationId: lockedOrder.locationId
+    locationId: order.locationId
   });
   if (!auth.ok) return auth.response;
 
@@ -122,9 +122,9 @@ async function listAttributions(req: Request, url: URL, db: DB, orderId: number)
     order: {
       id: order.id,
       orderNumber: order.orderNumber,
-      status: lockedOrder.status,
-      channel: lockedOrder.channel,
-      locationId: lockedOrder.locationId
+      status: order.status,
+      channel: order.channel,
+      locationId: order.locationId
     },
     data: rows.map(mapAttribution)
   });
@@ -135,7 +135,7 @@ async function assignAttribution(req: Request, db: DB, orderId: number) {
   if (!order) return json({ error: "not_found" }, 404);
 
   const auth = await authorizeInternal(req, db, "commissions.attribution.manage", {
-    locationId: lockedOrder.locationId,
+    locationId: order.locationId,
     mutation: true
   });
   if (!auth.ok) return auth.response;
