@@ -160,6 +160,12 @@ const agreementCreate = await api("/v1/internal/sellers/" + sellerId + "/agreeme
     currency: "HNL",
     commissionBasis: "NET_SALES",
     commissionRateBps: 1500,
+    discountAllocationRule: "MR",
+    returnAllocationRule: "SELLER",
+    shippingAllocationRule: "PROPORTIONAL",
+    paymentFeeAllocationRule: "SELLER",
+    shrinkageLiabilityRule: "SELLER_AFTER_APPROVAL",
+    settlementFrequency: "WEEKLY",
     settlementDelayDays: 7
   })
 });
@@ -262,7 +268,10 @@ ok(Number(ownedSnapshot[0]?.unit_cost_basis_minor) === 10000, "orden propia cong
 const thirdSnapshot = await db`
   SELECT seller_id,seller_agreement_id,seller_agreement_version,commercial_mode,
          economic_owner_type,inventory_source_id,unit_cost_basis_minor,
-         commission_basis,commission_rate_bps,fixed_fee_minor,commercial_snapshot_at
+         commission_basis,commission_rate_bps,fixed_fee_minor,
+         discount_allocation_rule,return_allocation_rule,shipping_allocation_rule,
+         payment_fee_allocation_rule,shrinkage_liability_rule,
+         settlement_frequency,settlement_delay_days,commercial_snapshot_at
   FROM order_items WHERE order_id=${thirdOrderId} LIMIT 1`;
 ok(Number(thirdSnapshot[0]?.seller_id) === sellerId, "orden tercero conserva seller");
 ok(Number(thirdSnapshot[0]?.seller_agreement_id) === agreementId, "orden tercero conserva agreement");
@@ -271,6 +280,13 @@ ok(thirdSnapshot[0]?.commercial_mode === "COMMISSION", "orden tercero conserva m
 ok(thirdSnapshot[0]?.economic_owner_type === "THIRD_PARTY", "orden tercero conserva owner THIRD_PARTY");
 ok(Number(thirdSnapshot[0]?.commission_rate_bps) === 1500, "orden tercero congela comisión");
 ok(Number(thirdSnapshot[0]?.unit_cost_basis_minor) === 9000, "orden tercero congela cost basis");
+ok(thirdSnapshot[0]?.discount_allocation_rule === "MR", "snapshot congela asignación de descuento");
+ok(thirdSnapshot[0]?.return_allocation_rule === "SELLER", "snapshot congela asignación de devolución");
+ok(thirdSnapshot[0]?.shipping_allocation_rule === "PROPORTIONAL", "snapshot congela asignación de envío");
+ok(thirdSnapshot[0]?.payment_fee_allocation_rule === "SELLER", "snapshot congela fee de pago");
+ok(thirdSnapshot[0]?.shrinkage_liability_rule === "SELLER_AFTER_APPROVAL", "snapshot congela responsabilidad por merma");
+ok(thirdSnapshot[0]?.settlement_frequency === "WEEKLY", "snapshot congela frecuencia de liquidación");
+ok(Number(thirdSnapshot[0]?.settlement_delay_days) === 7, "snapshot congela delay de liquidación");
 
 const legacySnapshot = await db`
   SELECT seller_id,seller_agreement_id,commercial_mode,economic_owner_type,inventory_source_id
@@ -288,21 +304,39 @@ const agreementV2 = await api("/v1/internal/sellers/" + sellerId + "/agreements"
     currency: "HNL",
     commissionBasis: "NET_SALES",
     commissionRateBps: 2200,
-    settlementDelayDays: 7
+    discountAllocationRule: "SELLER",
+    returnAllocationRule: "MR",
+    shippingAllocationRule: "MR",
+    paymentFeeAllocationRule: "MR",
+    shrinkageLiabilityRule: "MR_AFTER_APPROVAL",
+    settlementFrequency: "MONTHLY",
+    settlementDelayDays: 14
   })
 });
 ok(agreementV2.response.status === 201, "nueva versión de acuerdo puede coexistir");
 
 const thirdHistorical = await db`
-  SELECT seller_agreement_version,commission_rate_bps
+  SELECT seller_agreement_version,commission_rate_bps,
+         discount_allocation_rule,return_allocation_rule,shipping_allocation_rule,
+         payment_fee_allocation_rule,shrinkage_liability_rule,
+         settlement_frequency,settlement_delay_days
   FROM order_items WHERE order_id=${thirdOrderId} LIMIT 1`;
 ok(Number(thirdHistorical[0]?.seller_agreement_version) === 1, "snapshot histórico no cambia de versión");
 ok(Number(thirdHistorical[0]?.commission_rate_bps) === 1500, "snapshot histórico no recalcula comisión");
+ok(thirdHistorical[0]?.discount_allocation_rule === "MR", "snapshot histórico conserva descuento v1");
+ok(thirdHistorical[0]?.return_allocation_rule === "SELLER", "snapshot histórico conserva devolución v1");
+ok(thirdHistorical[0]?.shipping_allocation_rule === "PROPORTIONAL", "snapshot histórico conserva envío v1");
+ok(thirdHistorical[0]?.payment_fee_allocation_rule === "SELLER", "snapshot histórico conserva fee v1");
+ok(thirdHistorical[0]?.shrinkage_liability_rule === "SELLER_AFTER_APPROVAL", "snapshot histórico conserva merma v1");
+ok(thirdHistorical[0]?.settlement_frequency === "WEEKLY", "snapshot histórico conserva frecuencia v1");
+ok(Number(thirdHistorical[0]?.settlement_delay_days) === 7, "snapshot histórico conserva delay v1");
 
 const publicThird = JSON.stringify(thirdOrder.body.order || {});
 ok(!publicThird.includes("commissionRate"), "respuesta pública no expone comisión");
 ok(!publicThird.includes("sellerAgreement"), "respuesta pública no expone agreement");
 ok(!publicThird.includes("unitCostBasis"), "respuesta pública no expone cost basis");
+ok(!publicThird.includes("discountAllocation"), "respuesta pública no expone allocation rules");
+ok(!publicThird.includes("settlementFrequency"), "respuesta pública no expone settlement policy");
 
 if (failures) {
   console.error(failures + " fallo(s)");
