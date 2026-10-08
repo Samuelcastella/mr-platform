@@ -3,7 +3,7 @@ import { ensureOrdersSchema, handleOrders } from "./orders";
 import { ensureCheckoutSchema, handleCheckout } from "./checkout";
 import { ensureFulfillmentSchema, handleFulfillment } from "./fulfillment";
 import { ensureAuthSchema, handleAuth } from "./auth";
-import { handleInternal } from "./internal-routes";
+import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 
 const db = new SQL({
   hostname: Bun.env.PGHOST!,
@@ -133,6 +133,7 @@ await ensureOrdersSchema(db);
 await ensureCheckoutSchema(db);
 await ensureFulfillmentSchema(db);
 await ensureAuthSchema(db);
+await ensureInternalOpsSchema(db);
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, {
