@@ -8,6 +8,7 @@ import { ensureCustomersSchema, handleCustomers } from "./customers";
 import { ensureProcurementSchema, handleProcurement } from "./procurement";
 import { ensureReturnsSchema, handleReturns } from "./returns";
 import { ensureInventoryAdjustmentsSchema, handleInventoryAdjustments } from "./inventory-adjustments";
+import { ensureHealthDeskSchema, handleHealthDesk } from "./health-desk";
 import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 import { handleInternalCatalog } from "./catalog-internal";
 import { ensureVendorPortalSchema, handleVendorPortal } from "./vendor-portal";
@@ -152,6 +153,7 @@ await ensureCustomersSchema(db);
 await ensureProcurementSchema(db);
 await ensureReturnsSchema(db);
 await ensureInventoryAdjustmentsSchema(db);
+await ensureHealthDeskSchema(db);
 await ensureInternalOpsSchema(db);
 await ensureVendorPortalSchema(db);
 
@@ -196,6 +198,9 @@ Bun.serve({
 
     const adjustmentResponse = await handleInventoryAdjustments(req, url, db);
     if (adjustmentResponse) return adjustmentResponse;
+
+    const healthDeskResponse = await handleHealthDesk(req, url, db);
+    if (healthDeskResponse) return healthDeskResponse;
 
     const vendorResponse = await handleVendorPortal(req, url, db);
     if (vendorResponse) return vendorResponse;
