@@ -1011,6 +1011,65 @@ Bun.serve({
       return redirect("/vendor-review?n="+catalogResult(result,"action"));
     }
 
+    if(url.pathname==="/purchases"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+
+      const toMinor=(v:FormDataEntryValue|null)=>Math.max(0,Math.round((Number(v)||0)*100));
+      const result=await api("/v1/internal/procurement/purchase-orders",{
+        method:"POST",
+        cookieHeader:session.cookieHeader,
+        csrf:session.csrf,
+        idempotencyKey:"cc-po-"+crypto.randomUUID(),
+        body:{
+          supplierId:Number(fd.get("supplierId")),
+          destinationLocationId:Number(fd.get("destinationLocationId")),
+          currency:"HNL",
+          supplierReference:String(fd.get("supplierReference")||"").trim()||null,
+          shippingEstimateMinor:toMinor(fd.get("shippingEstimate")),
+          taxEstimateMinor:toMinor(fd.get("taxEstimate")),
+          otherCostsMinor:toMinor(fd.get("otherCosts")),
+          items:[{
+            variantId:Number(fd.get("variantId")),
+            quantityOrdered:Number(fd.get("quantityOrdered")),
+            unitCostMinor:toMinor(fd.get("unitCost")),
+            supplierSku:String(fd.get("supplierSku")||"").trim()||null,
+            originCountryCode:String(fd.get("originCountryCode")||"").trim().toUpperCase()||null
+          }]
+        }
+      });
+      return redirect("/purchases?n="+catalogResult(result,"created"));
+    }
+
+    const receivePurchase=url.pathname.match(/^\/purchases\/(\d+)\/receive$/);
+    if(receivePurchase&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+
+      const items:any[]=[];
+      for(const [key,value] of fd.entries()){
+        const match=String(key).match(/^qty_(\d+)$/);
+        if(!match)continue;
+        const quantity=Number(value);
+        if(Number.isSafeInteger(quantity)&&quantity>0){
+          items.push({purchaseOrderItemId:Number(match[1]),quantityReceived:quantity});
+        }
+      }
+      if(!items.length)return redirect("/purchases?n=error");
+
+      const result=await api("/v1/internal/procurement/purchase-orders/"+Number(receivePurchase[1])+"/receipts",{
+        method:"POST",
+        cookieHeader:session.cookieHeader,
+        csrf:session.csrf,
+        idempotencyKey:"cc-gr-"+crypto.randomUUID(),
+        body:{
+          supplierDeliveryReference:String(fd.get("supplierDeliveryReference")||"").trim()||null,
+          items
+        }
+      });
+      return redirect("/purchases?n="+catalogResult(result,"action"));
+    }
+
     const purchaseAction=url.pathname.match(/^\/purchases\/(\d+)\/(approve|order|cancel)$/);
     if(purchaseAction&&req.method==="POST"){
       const fd=await req.formData();
