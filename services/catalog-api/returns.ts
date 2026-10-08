@@ -830,6 +830,7 @@ function normalizeInspection(body: any) {
     }
 
     const dispositions: any[] = [];
+    const seenDispositions = new Set<string>();
     for (const d of raw.dispositions) {
       const disposition = clean(d?.disposition, 40).toUpperCase();
       const quantity = Number(d?.quantity);
@@ -838,6 +839,10 @@ function normalizeInspection(body: any) {
       if (!DISPOSITIONS.has(disposition)) {
         return { error: "invalid_disposition" as const };
       }
+      if (seenDispositions.has(disposition)) {
+        return { error: "duplicate_disposition" as const };
+      }
+      seenDispositions.add(disposition);
       if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000) {
         return { error: "invalid_disposition_quantity" as const };
       }
