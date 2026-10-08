@@ -28,6 +28,7 @@ import {
   createOrderCheckout,
   createOrderFulfillment,
   fetchCatalog,
+  fetchCheckout,
   fetchDeliveryOptions,
   fetchFulfillment,
   fetchHondurasSubdivisions,
@@ -647,14 +648,32 @@ export default function App() {
   }, [orderResult]);
 
   const refreshTracking = useCallback(async () => {
-    if (!orderResult || !fulfillmentResult || trackingBusyRef.current) return;
+    const orderId = orderResult?.id;
+    const orderToken = orderResult?.token;
+    const fulfillmentId = fulfillmentResult?.id;
+    const fulfillmentToken = fulfillmentResult?.token;
+    const checkoutId = checkoutResult?.id;
+    const checkoutToken = checkoutResult?.token;
+
+    if (
+      !orderId ||
+      !orderToken ||
+      !fulfillmentId ||
+      !fulfillmentToken ||
+      !checkoutId ||
+      !checkoutToken ||
+      trackingBusyRef.current
+    ) {
+      return;
+    }
 
     trackingBusyRef.current = true;
     setTrackingRefreshing(true);
 
-    const [orderRead, fulfillmentRead] = await Promise.all([
-      fetchOrder(orderResult),
-      fetchFulfillment(fulfillmentResult),
+    const [orderRead, fulfillmentRead, checkoutRead] = await Promise.all([
+      fetchOrder({ id: orderId, token: orderToken }),
+      fetchFulfillment({ id: fulfillmentId, token: fulfillmentToken }),
+      fetchCheckout({ id: checkoutId, token: checkoutToken }),
     ]);
 
     let failed = false;
@@ -671,6 +690,12 @@ export default function App() {
       failed = true;
     }
 
+    if (checkoutRead.ok) {
+      setCheckoutResult(checkoutRead.body.checkout);
+    } else {
+      failed = true;
+    }
+
     setTrackingError(
       failed
         ? "No pudimos actualizar todo el seguimiento. Conservamos la última información recibida."
@@ -678,10 +703,27 @@ export default function App() {
     );
     setTrackingRefreshing(false);
     trackingBusyRef.current = false;
-  }, [fulfillmentResult, orderResult]);
+  }, [
+    checkoutResult?.id,
+    checkoutResult?.token,
+    fulfillmentResult?.id,
+    fulfillmentResult?.token,
+    orderResult?.id,
+    orderResult?.token,
+  ]);
 
   useEffect(() => {
-    if (view !== "tracking" || !orderResult || !fulfillmentResult) return;
+    if (
+      view !== "tracking" ||
+      !orderResult?.id ||
+      !orderResult?.token ||
+      !fulfillmentResult?.id ||
+      !fulfillmentResult?.token ||
+      !checkoutResult?.id ||
+      !checkoutResult?.token
+    ) {
+      return;
+    }
 
     void refreshTracking();
     const timer = setInterval(() => {
@@ -689,7 +731,16 @@ export default function App() {
     }, 30_000);
 
     return () => clearInterval(timer);
-  }, [fulfillmentResult?.id, orderResult?.id, refreshTracking, view]);
+  }, [
+    checkoutResult?.id,
+    checkoutResult?.token,
+    fulfillmentResult?.id,
+    fulfillmentResult?.token,
+    orderResult?.id,
+    orderResult?.token,
+    refreshTracking,
+    view,
+  ]);
 
   const canBack = view === "detail" || view === "cart";
 
