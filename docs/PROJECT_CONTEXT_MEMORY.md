@@ -201,6 +201,8 @@ Confirmed additions include:
 - credit as a separate future capability or adapter;
 - multicategory research as expansion evidence, not immediate launch scope.
 
+The review on 2026-10-08 created M11–M15 as **PROPOSED FOR APPROVAL** specifications. Approved M01–M10 remain authoritative until those proposals are explicitly accepted and implementation work is separately approved.
+
 Dynamic external market facts from conversations must be revalidated before becoming public claims, contracts or production rules.
 
 ## 13. Memory rule for future work
