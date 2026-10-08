@@ -90,6 +90,7 @@ export async function ensureSellerFoundationSchema(db: DB) {
       variant_id BIGINT NOT NULL REFERENCES product_variants(id) ON DELETE RESTRICT,
       location_id BIGINT NOT NULL REFERENCES locations(id) ON DELETE RESTRICT,
       source_type TEXT NOT NULL,
+      commercial_mode TEXT NOT NULL,
       economic_owner_type TEXT NOT NULL,
       seller_id BIGINT REFERENCES seller_accounts(id) ON DELETE RESTRICT,
       seller_agreement_id BIGINT REFERENCES seller_agreements(id) ON DELETE RESTRICT,
@@ -104,6 +105,7 @@ export async function ensureSellerFoundationSchema(db: DB) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CHECK (source_type IN ('PROCUREMENT','CONSIGNMENT','THIRD_PARTY','OWNED_OPENING_STOCK','RETURNED_STOCK','OTHER')),
+      CHECK (commercial_mode IN ('OWNED','CONSIGNMENT','COMMISSION','WHOLESALE_MARGIN')),
       CHECK (economic_owner_type IN ('MR','THIRD_PARTY')),
       CHECK (status IN ('ACTIVE','INACTIVE')),
       CHECK (cost_basis_minor IS NULL OR cost_basis_minor >= 0),
@@ -269,15 +271,22 @@ async function createInventorySource(req:Request,db:DB){
 
   const sourceType=clean(body?.sourceType,40).toUpperCase();
   const owner=clean(body?.economicOwnerType,24).toUpperCase();
+  const commercialMode=clean(body?.commercialMode,40).toUpperCase();
   if(!new Set(["PROCUREMENT","CONSIGNMENT","THIRD_PARTY","OWNED_OPENING_STOCK","RETURNED_STOCK","OTHER"]).has(sourceType))
     return json({error:"invalid_source_type"},400);
   if(!OWNER_TYPES.has(owner))return json({error:"invalid_economic_owner_type"},400);
+  if(!new Set(["OWNED","CONSIGNMENT","COMMISSION","WHOLESALE_MARGIN"]).has(commercialMode))
+    return json({error:"invalid_commercial_mode"},400);
+  if(owner==="MR"&&!["OWNED","WHOLESALE_MARGIN"].includes(commercialMode))
+    return json({error:"invalid_mode_for_mr_owned"},409);
+  if(owner==="THIRD_PARTY"&&!["CONSIGNMENT","COMMISSION"].includes(commercialMode))
+    return json({error:"invalid_mode_for_third_party"},409);
 
   const sellerId=optionalPositiveInt(body?.sellerId);
   const agreementId=optionalPositiveInt(body?.sellerAgreementId);
   const supplierId=optionalPositiveInt(body?.supplierId);
-  if(owner==="MR"&&sellerId)return json({error:"mr_owned_cannot_have_seller"},409);
-  if(owner==="THIRD_PARTY"&&!sellerId)return json({error:"third_party_requires_seller"},409);
+  if(owner==="MR"&&(sellerId||agreementId))return json({error:"mr_owned_cannot_have_seller_agreement"},409);
+  if(owner==="THIRD_PARTY"&&(!sellerId||!agreementId))return json({error:"third_party_requires_seller_agreement"},409);
 
   const [variant,location]=await Promise.all([
     db`SELECT id,cost,currency FROM product_variants WHERE id=${variantId} LIMIT 1`,
@@ -300,6 +309,8 @@ async function createInventorySource(req:Request,db:DB){
     if(sellerId!==Number(agreement[0].seller_id))return json({error:"agreement_seller_mismatch"},409);
     if(!["APPROVED","ACTIVE"].includes(agreement[0].status))
       return json({error:"agreement_not_active"},409);
+    if(commercialMode!==String(agreement[0].commercial_mode))
+      return json({error:"agreement_mode_mismatch"},409);
   }
 
   const rawCost=body?.costBasisMinor;
@@ -311,17 +322,17 @@ async function createInventorySource(req:Request,db:DB){
   try{
     const rows=await db`
       INSERT INTO inventory_sources(
-        variant_id,location_id,source_type,economic_owner_type,seller_id,
+        variant_id,location_id,source_type,commercial_mode,economic_owner_type,seller_id,
         seller_agreement_id,supplier_id,currency,cost_basis_minor,created_by_user_id
       )
       VALUES(
-        ${variantId},${locationId},${sourceType},${owner},${sellerId},
+        ${variantId},${locationId},${sourceType},${commercialMode},${owner},${sellerId},
         ${agreementId},${supplierId},
         ${clean(body?.currency,3).toUpperCase()||String(variant[0].currency||"HNL")},
         ${costBasisMinor},
         ${auth.actor.type==="USER"?auth.actor.userId:null}
       )
-      RETURNING id,variant_id,location_id,source_type,economic_owner_type,
+      RETURNING id,variant_id,location_id,source_type,commercial_mode,economic_owner_type,
                 seller_id,seller_agreement_id,supplier_id,currency,cost_basis_minor,status`;
     await writeAuditEvent(db,{
       ...auditActor(auth.actor),
@@ -330,11 +341,11 @@ async function createInventorySource(req:Request,db:DB){
       resourceId:Number(rows[0].id),
       locationId,
       outcome:"SUCCESS",
-      metadata:{variantId,owner,sourceType,sellerId,agreementId}
+      metadata:{variantId,owner,sourceType,commercialMode,sellerId,agreementId}
     });
     return json({inventorySource:{
       id:Number(rows[0].id),variantId:Number(rows[0].variant_id),locationId:Number(rows[0].location_id),
-      sourceType:rows[0].source_type,economicOwnerType:rows[0].economic_owner_type,
+      sourceType:rows[0].source_type,commercialMode:rows[0].commercial_mode,economicOwnerType:rows[0].economic_owner_type,
       sellerId:rows[0].seller_id==null?null:Number(rows[0].seller_id),
       sellerAgreementId:rows[0].seller_agreement_id==null?null:Number(rows[0].seller_agreement_id),
       supplierId:rows[0].supplier_id==null?null:Number(rows[0].supplier_id),
