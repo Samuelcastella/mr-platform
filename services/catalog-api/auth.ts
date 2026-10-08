@@ -42,6 +42,7 @@ const PERMISSIONS: Record<string, string> = {
   "fulfillment.deliver": "Confirm delivery",
   "customers.read": "Read customer data",
   "customers.write": "Update customer data",
+  "customers.merge": "Merge duplicate customer records",
   "inquiries.read": "Read inquiries",
   "inquiries.write": "Update inquiries",
   "reports.read": "Read reports",
