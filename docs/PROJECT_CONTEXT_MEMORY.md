@@ -149,22 +149,32 @@ MR עדולם may integrate with LIRA through a versioned payment adapter, but:
 
 ## 10. Current execution order
 
+The authoritative execution spine remains the Commerce Core sequence, now being aligned through Strategic Baseline Honduras v2:
+
 1. Finish authoritative catalog integration.
 2. Make variants and stock authoritative.
-3. Implement server-side orders.
-4. Implement inventory reservations and idempotency.
-5. Implement server-side checkout.
-6. Add cash / bank transfer / COD orchestration.
-7. Implement fulfillment and local delivery.
-8. Harden identity, roles and audit.
-9. Validate Honduras fiscal requirements before production coding.
-10. Activate marketplace and LIRA integrations only after the commerce core is stable.
+3. Normalize/document inventory movement contracts against actual implementation.
+4. Implement/finish server-side orders.
+5. Implement inventory reservations and idempotency.
+6. Implement/finish server-side checkout.
+7. Add cash / bank transfer / COD orchestration.
+8. Complete fulfillment, local delivery and returns.
+9. Harden identity, roles and audit.
+10. Activate governed inventory-adjustment/shrinkage workflow.
+11. Establish Health Desk visibility over stabilized domains.
+12. Validate and implement Honduras fiscal requirements.
+13. Activate controlled hybrid seller ownership and agreements.
+14. Activate seller settlement.
+15. Activate staff commissions after policy approval.
+16. Add external credit-provider adapters after validation.
+17. Move toward marketplace self-service only after controlled hybrid operations are stable.
 
 ## 11. Current project artifacts
 
 Strategic documentation:
 
 - `docs/roadmap/STRATEGIC_BASELINE_HONDURAS_V1.md`
+- `docs/roadmap/STRATEGIC_BASELINE_HONDURAS_V2.md` — proposed alignment with consolidated conversation knowledge
 - `docs/research/HONDURAS_RETAIL_OPERATING_PATTERNS_2026.md`
 - `docs/research/Resumen_Ejecutivo.md`
 - `docs/architecture/MR_עדולם_Blueprint_v2.0.md`
@@ -201,7 +211,7 @@ Confirmed additions include:
 - credit as a separate future capability or adapter;
 - multicategory research as expansion evidence, not immediate launch scope.
 
-The review on 2026-10-08 created M11–M15 as **PROPOSED FOR APPROVAL** specifications. Approved M01–M10 remain authoritative until those proposals are explicitly accepted and implementation work is separately approved.
+The review on 2026-10-08 created M11–M15, and PR #50 was merged into `main` on 2026-10-08. They are now part of the versioned design baseline. Implementation remains separately gated by roadmap placement, dependency satisfaction and explicit implementation work.
 
 Dynamic external market facts from conversations must be revalidated before becoming public claims, contracts or production rules.
 
