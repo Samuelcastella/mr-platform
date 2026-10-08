@@ -693,7 +693,7 @@ async function createPurchaseOrder(req: Request, db: DB) {
     JOIN products p ON p.id = v.product_id
     WHERE v.id IN (
       SELECT value::bigint
-      FROM jsonb_array_elements_text(${JSON.stringify(variantIds)}::jsonb)
+      FROM jsonb_array_elements_text(${JSON.stringify(variantIds)}::text::jsonb)
     )
     ORDER BY v.id`;
   if (variants.length !== variantIds.length || variants.some((v: any) => !v.active)) {
@@ -1051,7 +1051,7 @@ async function postGoodsReceipt(req: Request, db: DB, purchaseOrderId: number) {
       FROM purchase_order_items
       WHERE id IN (
         SELECT value::bigint
-        FROM jsonb_array_elements_text(${JSON.stringify(itemIds)}::jsonb)
+        FROM jsonb_array_elements_text(${JSON.stringify(itemIds)}::text::jsonb)
       )
       ORDER BY id
       FOR UPDATE`;
