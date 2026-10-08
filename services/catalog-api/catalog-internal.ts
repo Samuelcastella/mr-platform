@@ -20,6 +20,16 @@ const slugify = (value: string) =>
   value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 160);
 
+function validImageUrl(value: string) {
+  if (!value) return true;
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 async function readBody(req: Request) {
   try { return await req.json(); } catch { return null; }
 }
@@ -59,6 +69,20 @@ export async function handleInternalCatalog(
         p.id, p.name, p.slug, p.description, p.category, p.brand,
         p.status, p.created_at, p.updated_at,
         COALESCE(
+          (
+            SELECT json_agg(
+              json_build_object(
+                'id', pi.id, 'url', pi.url, 'altText', pi.alt_text,
+                'sortOrder', pi.sort_order
+              )
+              ORDER BY pi.sort_order, pi.id
+            )
+            FROM product_images pi
+            WHERE pi.product_id=p.id AND pi.active
+          ),
+          '[]'::json
+        ) AS images,
+        COALESCE(
           json_agg(
             json_build_object(
               'id', v.id, 'sku', v.sku, 'barcode', v.barcode,
@@ -96,12 +120,14 @@ export async function handleInternalCatalog(
     const description = clean(body.description, 4000) || null;
     const category = clean(body.category, 120) || null;
     const brand = clean(body.brand, 120) || null;
+    const imageUrl = clean(body.imageUrl, 1000) || null;
     const status = clean(body.status, 24) || "draft";
     const rawVariants = Array.isArray(body.variants) ? body.variants.slice(0, 20) : [];
 
     if (name.length < 2) return json({ error: "name_required" }, 400);
     if (!slug) return json({ error: "slug_required" }, 400);
     if (!["draft","active"].includes(status)) return json({ error: "invalid_status" }, 400);
+    if (!validImageUrl(imageUrl || "")) return json({ error: "invalid_image_url" }, 400);
     if (!rawVariants.length) return json({ error: "variant_required" }, 400);
 
     if (status === "active") {
@@ -184,6 +210,12 @@ export async function handleInternalCatalog(
         created.push({ ...variant, stock: v.stock });
       }
 
+      if (imageUrl) {
+        await tx`
+          INSERT INTO product_images(product_id,url,alt_text,sort_order,active)
+          VALUES(${product.id},${imageUrl},${name},0,TRUE)`;
+      }
+
       await writeAuditEvent(tx, {
         ...auditActor(auth.actor),
         action: "catalog.product_created",
@@ -246,6 +278,49 @@ export async function handleInternalCatalog(
     });
 
     return json({ product: rows[0] });
+  }
+
+  const imageMatch = url.pathname.match(
+    /^\/v1\/internal\/catalog\/products\/(\d+)\/images$/
+  );
+  if (imageMatch && req.method === "POST") {
+    const auth = await authorizeInternal(req, db, "catalog.write", { mutation: true });
+    if (!auth.ok) return auth.response;
+
+    const body: any = await readBody(req);
+    if (!body) return json({ error: "invalid_json" }, 400);
+
+    const productId = Number(imageMatch[1]);
+    const urlValue = clean(body.url, 1000);
+    const altText = clean(body.altText, 240) || null;
+    if (!urlValue || !validImageUrl(urlValue)) {
+      return json({ error: "invalid_image_url" }, 400);
+    }
+    const product = await db`SELECT id,name FROM products WHERE id=${productId} LIMIT 1`;
+    if (!product.length) return json({ error: "product_not_found" }, 404);
+
+    const sortRows = await db`
+      SELECT COALESCE(MAX(sort_order),-1)::int + 1 AS next
+      FROM product_images
+      WHERE product_id=${productId}`;
+    const rows = await db`
+      INSERT INTO product_images(product_id,url,alt_text,sort_order,active)
+      VALUES(
+        ${productId},${urlValue},${altText || product[0].name},
+        ${Number(sortRows[0]?.next || 0)},TRUE
+      )
+      RETURNING id,product_id,url,alt_text,sort_order,active,created_at`;
+
+    await writeAuditEvent(db, {
+      ...auditActor(auth.actor),
+      action: "catalog.product_image_added",
+      resourceType: "Product",
+      resourceId: productId,
+      outcome: "SUCCESS",
+      metadata: { imageId: Number(rows[0].id) }
+    });
+
+    return json({ image: rows[0] }, 201);
   }
 
   const variantMatch = url.pathname.match(

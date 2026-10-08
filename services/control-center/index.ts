@@ -25,7 +25,7 @@ function securityHeaders(extra: Record<string,string> = {}) {
     "x-frame-options":"DENY",
     "referrer-policy":"no-referrer",
     "permissions-policy":"camera=(), microphone=(), geolocation=()",
-    "content-security-policy":"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "content-security-policy":"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: https:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     ...extra
   };
 }
@@ -497,11 +497,13 @@ async function catalogPage(url:URL,session:Session){
 
   const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
   const n=url.searchParams.get("n")||"";
-  const messages:any={created:"Producto creado.",updated:"Estado actualizado.",variant:"Variante agregada.",stock:"Stock actualizado.",error:"No se pudo completar la acción."};
+  const messages:any={created:"Producto creado.",updated:"Estado actualizado.",variant:"Variante agregada.",stock:"Stock actualizado.",image:"Imagen agregada.",error:"No se pudo completar la acción."};
   const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
 
   const cards=rows.length?rows.map((p:any)=>{
     const variants=Array.isArray(p.variants)?p.variants:[];
+    const images=Array.isArray(p.images)?p.images:[];
+    const primaryImage=images[0]?.url||"";
     const vars=variants.length?variants.map((v:any)=>`
       <div class="item" style="margin-top:10px">
         <div class="item-head"><div><b>${esc(v.sku)}</b><div class="meta">${esc(v.size||"Sin talla")} · ${esc(v.color||"Sin color")} · L ${Number(v.price||0).toFixed(2)} · Stock ${Number(v.available||0)}</div></div>
@@ -514,7 +516,10 @@ async function catalogPage(url:URL,session:Session){
 
     return `<section class="panel" style="margin-bottom:14px">
       <div class="item-head">
-        <div><div class="eyebrow">${esc(p.category||"Sin categoría")}</div><h3>${esc(p.name)}</h3><p class="meta">${esc(p.brand||"Sin marca")} · ${p.status==="active"?"Publicado":"Borrador"}</p></div>
+        <div style="display:flex;gap:12px;align-items:center">
+          ${primaryImage?'<img src="'+esc(primaryImage)+'" alt="'+esc(p.name)+'" style="width:88px;height:88px;object-fit:cover;border-radius:14px;border:1px solid #ded5c8">':""}
+          <div><div class="eyebrow">${esc(p.category||"Sin categoría")}</div><h3>${esc(p.name)}</h3><p class="meta">${esc(p.brand||"Sin marca")} · ${p.status==="active"?"Publicado":"Borrador"} · ${images.length} imagen(es)</p></div>
+        </div>
         <form method="post" action="/catalog/products/${Number(p.id)}/status">
           <input type="hidden" name="csrf" value="${esc(session.csrf)}">
           <input type="hidden" name="status" value="${p.status==="active"?"draft":"active"}">
@@ -522,6 +527,14 @@ async function catalogPage(url:URL,session:Session){
         </form>
       </div>
       ${vars}
+      <details style="margin-top:12px"><summary>Agregar imagen</summary>
+        <form method="post" action="/catalog/products/${Number(p.id)}/images" class="toolbar" style="margin-top:10px">
+          <input type="hidden" name="csrf" value="${esc(session.csrf)}">
+          <label>URL HTTPS de imagen<input name="url" type="url" required maxlength="1000" placeholder="https://..."></label>
+          <label>Texto alternativo<input name="altText" maxlength="240" value="${esc(p.name)}"></label>
+          <button>Agregar imagen</button>
+        </form>
+      </details>
       <details style="margin-top:12px"><summary>Agregar variante</summary>
         <form method="post" action="/catalog/products/${Number(p.id)}/variants" class="actions" style="margin-top:10px">
           <input type="hidden" name="csrf" value="${esc(session.csrf)}">
@@ -554,6 +567,7 @@ async function catalogPage(url:URL,session:Session){
         <label>Color<input name="color"></label>
         <label>Costo HNL<input name="cost" type="number" min="0" step="0.01"></label>
         <label>Stock inicial<input name="stock" type="number" min="0" step="1" value="0" required></label>
+        <label>Imagen principal (URL HTTPS)<input name="imageUrl" type="url" maxlength="1000" placeholder="https://..."></label>
         <button>Crear producto</button>
       </form>
     </section>
@@ -819,6 +833,7 @@ Bun.serve({
           name:String(fd.get("name")||"").trim(),
           category:String(fd.get("category")||"").trim(),
           brand:String(fd.get("brand")||"").trim(),
+          imageUrl:String(fd.get("imageUrl")||"").trim()||null,
           status:String(fd.get("status")||"draft"),
           variants:[{
             sku:String(fd.get("sku")||"").trim(),
@@ -843,6 +858,20 @@ Bun.serve({
         body:{status:String(fd.get("status")||"draft")}
       });
       return redirect("/catalog?n="+catalogResult(result,"updated"));
+    }
+
+    const cpi=url.pathname.match(/^\/catalog\/products\/(\d+)\/images$/);
+    if(cpi&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/catalog/products/"+Number(cpi[1])+"/images",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          url:String(fd.get("url")||"").trim(),
+          altText:String(fd.get("altText")||"").trim()||null
+        }
+      });
+      return redirect("/catalog?n="+catalogResult(result,"image"));
     }
 
     const cpv=url.pathname.match(/^\/catalog\/products\/(\d+)\/variants$/);

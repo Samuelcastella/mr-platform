@@ -50,6 +50,7 @@ const created = await api("/v1/internal/catalog/products", {
     category: "Ropa",
     brand: "MR",
     status: "draft",
+    imageUrl: "https://example.com/vestido-prueba-ci.jpg",
     variants: [{
       sku: "MR-CI-VEST-001",
       size: "M",
@@ -91,6 +92,10 @@ const publicProduct = Array.isArray(visible.body?.data)
 ok(Boolean(publicProduct), "producto publicado aparece en storefront API");
 ok(Number(publicProduct?.stock) === 5, "storefront API expone stock autoritativo");
 ok(publicProduct?.variants?.[0]?.sku === "MR-CI-VEST-001", "storefront API expone SKU");
+ok(
+  publicProduct?.images?.[0]?.url === "https://example.com/vestido-prueba-ci.jpg",
+  "storefront API expone imagen principal"
+);
 
 const adjusted = await api("/v1/internal/catalog/variants/" + variantId + "/stock", {
   method: "POST",

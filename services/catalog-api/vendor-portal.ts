@@ -73,6 +73,16 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 160);
 }
 
+function validImageUrl(value: string) {
+  if (!value) return true;
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 type VendorSession = {
   sessionId: number;
   vendorUserId: number;
@@ -493,6 +503,7 @@ async function createProduct(req: Request, db: DB) {
   if (!Number.isFinite(price) || price < 0) return json({ error: "invalid_price" }, 400);
   if (cost != null && (!Number.isFinite(cost) || cost < 0)) return json({ error: "invalid_cost" }, 400);
   if (!Number.isSafeInteger(stock) || stock < 0 || stock > 1000000) return json({ error: "invalid_stock" }, 400);
+  if (!validImageUrl(imageUrl || "")) return json({ error: "invalid_image_url" }, 400);
   if ((await db`SELECT id FROM product_variants WHERE sku=${sku} LIMIT 1`).length) {
     return json({ error: "sku_exists" }, 409);
   }
