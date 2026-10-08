@@ -224,8 +224,6 @@ async function vendorCatalogPage(url:URL,session:VendorSession){
   const cards=rows.length?rows.map((p:any)=>{
     const variants=Array.isArray(p.variants)?p.variants:[];
     const images=Array.isArray(p.images)?p.images:[];
-    const primaryImage=images[0]?.url||"";
-    const images=Array.isArray(p.images)?p.images:[];
     const first=variants[0]||{};
     const submit=(p.review_status==="DRAFT"||p.review_status==="REJECTED")
       ?'<form method="post" action="/vendor/products/'+Number(p.id)+'/submit"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Enviar a revisión</button></form>'
@@ -504,6 +502,8 @@ async function catalogPage(url:URL,session:Session){
 
   const cards=rows.length?rows.map((p:any)=>{
     const variants=Array.isArray(p.variants)?p.variants:[];
+    const images=Array.isArray(p.images)?p.images:[];
+    const primaryImage=images[0]?.url||"";
     const vars=variants.length?variants.map((v:any)=>`
       <div class="item" style="margin-top:10px">
         <div class="item-head"><div><b>${esc(v.sku)}</b><div class="meta">${esc(v.size||"Sin talla")} · ${esc(v.color||"Sin color")} · L ${Number(v.price||0).toFixed(2)} · Stock ${Number(v.available||0)}</div></div>
