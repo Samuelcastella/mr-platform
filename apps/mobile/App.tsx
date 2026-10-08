@@ -30,6 +30,7 @@ import {
   fetchCatalog,
   fetchDeliveryOptions,
   fetchHondurasSubdivisions,
+  fetchOrder,
   makeOperationKey,
 } from "./src/commerce";
 
@@ -521,6 +522,12 @@ export default function App() {
         ? "CASH"
         : "BANK_TRANSFER",
     );
+
+    const refreshedOrder = await fetchOrder(orderResult);
+    if (refreshedOrder.ok) {
+      setOrderResult(refreshedOrder.body.order);
+    }
+
     setSubmittingFulfillment(false);
   }, [
     addressLine,
@@ -1492,18 +1499,17 @@ export default function App() {
             ]}
           >
             <Text style={[styles.summaryLabel, { color: theme.muted }]}>
-              Total autoritativo
+              Total actual del servidor
             </Text>
             <Text style={[styles.summaryValue, { color: theme.text }]}>
               {moneyMinor(
-                orderResult.subtotalMinor +
-                  (fulfillmentResult.quote.shippingMinor || 0),
+                orderResult.grandTotalMinor,
                 orderResult.currency,
               )}
             </Text>
             <Text style={[styles.summaryFoot, { color: theme.muted }]}>
-              Checkout volverá a leer el total desde el servidor; la app no lo
-              envía como autoridad.
+              Commerce Core ya incorporó la entrega al Order; checkout vuelve
+              a validar el monto y la app no lo envía como autoridad.
             </Text>
           </View>
 
