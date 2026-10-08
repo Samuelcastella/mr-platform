@@ -2,6 +2,8 @@
 const API_BASE = (Bun.env.CATALOG_API_URL || "").replace(/\/+$/, "");
 const SESSION_COOKIE = "mrstaff";
 const CSRF_COOKIE = "mrcc_csrf";
+const VENDOR_COOKIE = "mrvendor";
+const VENDOR_CSRF_COOKIE = "mrvc_csrf";
 const statuses = new Set(["new","reviewing","contacted","qualified","converted","closed","rejected"]);
 
 const labels: Record<string,string> = {
@@ -68,6 +70,15 @@ function sessionCookieHeader(req:Request){
 
 function csrfCookie(value:string,maxAge=28800){
   return `${CSRF_COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+function vendorCsrfCookie(value:string,maxAge=28800){
+  return `${VENDOR_CSRF_COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+function vendorSessionCookieHeader(req:Request){
+  const token=cookie(req,VENDOR_COOKIE);
+  return token ? `${VENDOR_COOKIE}=${token}` : "";
 }
 
 function clearCookie(name:string){
@@ -138,6 +149,28 @@ function requireFormCsrf(fd:FormData,session:Session){
   return Boolean(supplied)&&safeEqual(supplied,session.csrf);
 }
 
+type VendorSession = {
+  csrf:string;
+  cookieHeader:string;
+  user:any;
+};
+
+async function readVendorSession(req:Request):Promise<VendorSession|null>{
+  const cookieHeader=vendorSessionCookieHeader(req);
+  const csrf=cookie(req,VENDOR_CSRF_COOKIE);
+  if(!cookieHeader||!csrf)return null;
+
+  const result=await api("/v1/vendor/auth/me",{cookieHeader});
+  if(!result.response?.ok||!result.body?.user)return null;
+
+  return {csrf,cookieHeader,user:result.body.user};
+}
+
+function requireVendorCsrf(fd:FormData,session:VendorSession){
+  const supplied=String(fd.get("csrf")||"");
+  return Boolean(supplied)&&safeEqual(supplied,session.csrf);
+}
+
 const css=`
 :root{--ink:#171513;--cream:#f4efe7;--gold:#b7923b;--line:#ded5c8;--muted:#6c645a}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,system-ui,sans-serif}
@@ -171,6 +204,36 @@ function loginPage(message=""){
 function setupPage(){
   return loginPage("El Control Center requiere CATALOG_API_URL para usar la identidad de StaffUser del Commerce Core.");
 }
+
+function vendorLoginPage(message=""){
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Portal de proveedor · MR</title><style>'+css+'</style></head><body><main class="login"><div class="eyebrow">Portal de proveedor</div><h1>Tu catálogo en MR</h1><p class="meta">Este acceso es independiente del Control Center administrativo.</p>'+(message?'<div class="notice">'+esc(message)+'</div>':'')+'<form method="post" action="/vendor/login"><label>Correo<input type="email" name="email" required maxlength="254"></label><label>Contraseña<input type="password" name="password" required maxlength="256"></label><button>Entrar</button></form></main></body></html>';
+}
+
+function vendorAcceptPage(token:string,invitation:any,message=""){
+  const email=String(invitation?.email||"");
+  const supplier=String(invitation?.supplierName||"Proveedor");
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Activar catálogo · MR</title><style>'+css+'</style></head><body><main class="login"><div class="eyebrow">Invitación de proveedor</div><h1>'+esc(supplier)+'</h1><p class="meta">Crea tu acceso para administrar únicamente el catálogo de tu negocio.</p>'+(message?'<div class="notice">'+esc(message)+'</div>':'')+'<form method="post" action="/vendor/accept"><input type="hidden" name="token" value="'+esc(token)+'"><label>Correo<input type="email" name="email" value="'+esc(email)+'" required maxlength="254"></label><label>Nombre<input name="displayName" required maxlength="120"></label><label>Contraseña<input type="password" name="password" required minlength="12" maxlength="256"></label><label>Confirmar contraseña<input type="password" name="confirmPassword" required minlength="12" maxlength="256"></label><button>Crear acceso</button></form></main></body></html>';
+}
+
+async function vendorCatalogPage(url:URL,session:VendorSession){
+  const result=await api("/v1/vendor/catalog",{cookieHeader:session.cookieHeader});
+  if(!result.response?.ok)return vendorLoginPage("No se pudo cargar tu catálogo.");
+  const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
+  const n=url.searchParams.get("n")||"";
+  const msg=n==="created"?"Producto guardado como borrador.":n==="submitted"?"Producto enviado a revisión.":n==="error"?"No se pudo completar la acción.":"";
+  const cards=rows.length?rows.map((p:any)=>{
+    const variants=Array.isArray(p.variants)?p.variants:[];
+    const images=Array.isArray(p.images)?p.images:[];
+    const first=variants[0]||{};
+    const submit=(p.review_status==="DRAFT"||p.review_status==="REJECTED")
+      ?'<form method="post" action="/vendor/products/'+Number(p.id)+'/submit"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Enviar a revisión</button></form>'
+      :"";
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(session.user.supplierName||"Proveedor")+'</div><h3>'+esc(p.name)+'</h3><div class="meta">'+esc(p.category||"Sin categoría")+' · '+esc(p.brand||"Sin marca")+' · SKU '+esc(first.sku||"—")+' · '+esc(first.currency||"HNL")+' '+esc(first.price||"0")+'</div><div class="meta">'+images.length+' imagen(es)</div></div><span class="pill">'+esc(p.review_status||p.status)+'</span></div>'+(p.review_note?'<div class="notice">'+esc(p.review_note)+'</div>':'')+'<div style="margin-top:10px">'+submit+'</div></article>';
+  }).join(""):'<div class="panel empty">Todavía no has agregado productos.</div>';
+
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mi catálogo · MR</title><style>'+css+'</style></head><body><header><b>MR · Portal de proveedor</b><span class="user">'+esc(session.user.displayName||session.user.email)+'</span><form method="post" action="/vendor/logout"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button class="ghost">Salir</button></form></header><main class="wrap"><div class="eyebrow">Mi catálogo</div><h1>'+esc(session.user.supplierName||"Proveedor")+'</h1>'+(msg?'<div class="notice">'+esc(msg)+'</div>':'')+'<section class="panel" style="margin-bottom:14px"><h3>Agregar producto</h3><p class="meta">Se guarda como borrador. Al enviarlo a revisión, MR decide si se publica.</p><form method="post" action="/vendor/products" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="name" required maxlength="180"></label><label>Categoría<input name="category" maxlength="120"></label><label>Marca<input name="brand" maxlength="120"></label><label>SKU<input name="sku" required maxlength="100"></label><label>Precio HNL<input name="price" type="number" min="0" step=".01" required></label><label>Costo<input name="cost" type="number" min="0" step=".01"></label><label>Talla<input name="size" maxlength="80"></label><label>Color<input name="color" maxlength="80"></label><label>Stock<input name="stock" type="number" min="0" step="1" value="0"></label><label>Imagen (URL)<input name="imageUrl" type="url" required maxlength="1000" placeholder="https://..."></label><button>Guardar borrador</button></form></section><section class="queue">'+cards+'</section></main></body></html>';
+}
+
 
 function bootstrapPage(message=""){
   return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Crear administrador · MR עדולם</title><style>'+css+'</style></head><body><main class="login"><div class="eyebrow">Configuración inicial</div><h1>Crear primer administrador</h1><p class="meta">Este formulario funciona una sola vez. Tu contraseña se envía directamente al Commerce Core y no se guarda en el Control Center.</p>'+(message?'<div class="notice">'+esc(message)+'</div>':'')+'<form method="post"><label>Correo<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Nombre<input type="text" name="displayName" autocomplete="name" required maxlength="120"></label><label>Contraseña de administrador<input type="password" name="password" autocomplete="new-password" required minlength="12" maxlength="256"></label><label>Confirmar contraseña<input type="password" name="confirmPassword" autocomplete="new-password" required minlength="12" maxlength="256"></label><button>Crear administrador</button></form><p class="meta" style="margin-top:16px"><a href="/login">Volver al inicio de sesión</a></p></main></body></html>';
@@ -571,6 +634,103 @@ Bun.serve({
       };
       const key=String(body&&body.error||"");
       return html(bootstrapPage(messages[key]||"No se pudo completar la configuración inicial."),response.status||400);
+    }
+
+    if(url.pathname==="/vendor/accept"&&req.method==="GET"){
+      const token=String(url.searchParams.get("token")||"").slice(0,256);
+      if(!token)return html(vendorLoginPage("Invitación inválida."),400);
+      const result=await api("/v1/vendor/invitation?token="+encodeURIComponent(token));
+      if(!result.response?.ok)return html(vendorLoginPage("La invitación no existe, venció o ya fue utilizada."),result.response?.status||400);
+      return html(vendorAcceptPage(token,result.body?.invitation||{}));
+    }
+
+    if(url.pathname==="/vendor/accept"&&req.method==="POST"){
+      const fd=await req.formData();
+      const token=String(fd.get("token")||"").slice(0,256);
+      const email=String(fd.get("email")||"").trim().slice(0,254);
+      const displayName=String(fd.get("displayName")||"").trim().slice(0,120);
+      const password=String(fd.get("password")||"").slice(0,256);
+      const confirm=String(fd.get("confirmPassword")||"").slice(0,256);
+      if(password!==confirm){
+        const inv=await api("/v1/vendor/invitation?token="+encodeURIComponent(token));
+        return html(vendorAcceptPage(token,inv.body?.invitation||{},"Las contraseñas no coinciden."),400);
+      }
+      const result=await api("/v1/vendor/invitation/accept",{method:"POST",body:{token,email,displayName,password}});
+      if(!result.response?.ok){
+        const inv=await api("/v1/vendor/invitation?token="+encodeURIComponent(token));
+        return html(vendorAcceptPage(token,inv.body?.invitation||{},"No se pudo crear el acceso."),result.response?.status||400);
+      }
+      return redirect("/vendor/login?created=1");
+    }
+
+    if(url.pathname==="/vendor/login"&&req.method==="GET"){
+      const existing=await readVendorSession(req);
+      if(existing)return redirect("/vendor/catalog");
+      return html(vendorLoginPage(url.searchParams.get("created")==="1"?"Acceso creado. Ya puedes iniciar sesión.":""));
+    }
+
+    if(url.pathname==="/vendor/login"&&req.method==="POST"){
+      const fd=await req.formData();
+      const result=await api("/v1/vendor/auth/login",{
+        method:"POST",
+        body:{email:String(fd.get("email")||"").trim(),password:String(fd.get("password")||"")}
+      });
+      if(!result.response?.ok)return html(vendorLoginPage("Credenciales incorrectas o acceso no disponible."),401);
+      const upstream=result.response.headers.get("set-cookie")||"";
+      const csrf=String(result.body?.csrfToken||"");
+      if(!upstream.startsWith(VENDOR_COOKIE+"=")||!csrf)return html(vendorLoginPage("No se pudo establecer la sesión."),502);
+      return redirect("/vendor/catalog",[upstream,vendorCsrfCookie(csrf)]);
+    }
+
+    if(url.pathname==="/vendor/catalog"&&req.method==="GET"){
+      const vendor=await readVendorSession(req);
+      if(!vendor)return redirect("/vendor/login");
+      return html(await vendorCatalogPage(url,vendor));
+    }
+
+    if(url.pathname==="/vendor/logout"&&req.method==="POST"){
+      const vendor=await readVendorSession(req);
+      if(!vendor)return redirect("/vendor/login");
+      const fd=await req.formData();
+      if(!requireVendorCsrf(fd,vendor))return html("Solicitud inválida",403);
+      await api("/v1/vendor/auth/logout",{method:"POST",cookieHeader:vendor.cookieHeader,csrf:vendor.csrf,body:{}});
+      return redirect("/vendor/login",[clearCookie(VENDOR_COOKIE),clearCookie(VENDOR_CSRF_COOKIE)]);
+    }
+
+    if(url.pathname==="/vendor/products"&&req.method==="POST"){
+      const vendor=await readVendorSession(req);
+      if(!vendor)return redirect("/vendor/login");
+      const fd=await req.formData();
+      if(!requireVendorCsrf(fd,vendor))return html("Solicitud inválida",403);
+      const cost=String(fd.get("cost")||"").trim();
+      const result=await api("/v1/vendor/catalog/products",{
+        method:"POST",cookieHeader:vendor.cookieHeader,csrf:vendor.csrf,
+        body:{
+          name:String(fd.get("name")||"").trim(),
+          category:String(fd.get("category")||"").trim()||null,
+          brand:String(fd.get("brand")||"").trim()||null,
+          sku:String(fd.get("sku")||"").trim(),
+          price:Number(fd.get("price")||0),
+          cost:cost?Number(cost):null,
+          size:String(fd.get("size")||"").trim()||null,
+          color:String(fd.get("color")||"").trim()||null,
+          stock:Number(fd.get("stock")||0),
+          imageUrl:String(fd.get("imageUrl")||"").trim()
+        }
+      });
+      return redirect("/vendor/catalog?n="+(result.response?.ok?"created":"error"));
+    }
+
+    const vendorSubmit=url.pathname.match(/^\/vendor\/products\/(\d+)\/submit$/);
+    if(vendorSubmit&&req.method==="POST"){
+      const vendor=await readVendorSession(req);
+      if(!vendor)return redirect("/vendor/login");
+      const fd=await req.formData();
+      if(!requireVendorCsrf(fd,vendor))return html("Solicitud inválida",403);
+      const result=await api("/v1/vendor/catalog/products/"+Number(vendorSubmit[1])+"/submit",{
+        method:"POST",cookieHeader:vendor.cookieHeader,csrf:vendor.csrf,body:{}
+      });
+      return redirect("/vendor/catalog?n="+(result.response?.ok?"submitted":"error"));
     }
 
     if(url.pathname==="/login"&&req.method==="GET"){
