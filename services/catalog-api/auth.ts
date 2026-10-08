@@ -45,6 +45,8 @@ const PERMISSIONS: Record<string, string> = {
   "sellers.manage": "Create/update seller accounts",
   "seller_agreements.read": "Read seller agreements",
   "seller_agreements.manage": "Create/update seller agreements",
+  "commissions.attribution.read": "Read staff sales attribution",
+  "commissions.attribution.manage": "Assign and correct staff sales attribution",
   "orders.read": "Read orders",
   "orders.create": "Create orders",
   "orders.confirm": "Confirm orders",
@@ -167,6 +169,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "payments.read",
       "fulfillment.read",
       "health.read",
+      "commissions.attribution.read",
       "reports.read"
     ]
   }
