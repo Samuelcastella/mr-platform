@@ -21,14 +21,14 @@ Add fields or an equivalent linked immutable record containing:
 
 - seller_id nullable
 - seller_agreement_id nullable
+- seller_agreement_version nullable
 - commercial_mode
-- inventory_owner_type
+- economic_owner_type
 - inventory_source_id nullable
 - unit_cost_basis_minor nullable
 - commission_basis nullable
 - commission_rate_bps nullable
 - fixed_fee_minor nullable
-- settlement_rule_version nullable
 - commercial_snapshot_at
 
 Rules:
@@ -36,8 +36,9 @@ Rules:
 1. Snapshot is derived server-side from authoritative inventory/catalog/agreement data.
 2. Browser/client cannot supply authoritative seller economics.
 3. Snapshot becomes immutable once the order reaches the defined commercial commitment point.
-4. Later SellerAgreement edits do not rewrite historical OrderItems.
-5. MR-owned lines may have seller fields null.
+4. `seller_agreement_version` snapshots M11 `SellerAgreement.agreement_version` when a seller agreement applies.
+5. Later SellerAgreement edits do not rewrite historical OrderItems.
+6. MR-owned lines may have seller fields null.
 
 ## 3. Mixed commercial ownership orders
 
@@ -110,8 +111,9 @@ Rules:
 
 1. Attribution must not change order totals.
 2. Attribution correction is audited.
-3. M13 consumes attribution; M02 does not calculate commission.
-4. If only one salesperson is supported initially, implementation may expose a simplified field backed by a migration path to the normalized model.
+3. M13 consumes the normalized attribution records; M02 does not calculate commission.
+4. For compatibility, a primary salesperson projection may expose `primary_salesperson_user_id` to M13, but the normalized attribution record remains authoritative when multiple staff are involved.
+5. If only one salesperson is supported initially, implementation may expose a simplified field backed by a migration path to the normalized model.
 
 ## 6. Order entity extension
 
