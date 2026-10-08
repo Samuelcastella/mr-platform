@@ -42,7 +42,16 @@ const get = (p, o) => fetch(base + p, o);
     // compresión
     const gz = await get('/', { headers: { 'accept-encoding': 'gzip' } });
     ok(gz.headers.get('content-encoding') === 'gzip' || gz.headers.get('content-encoding') === 'br', 'respuesta comprimida');
-    ok((await (await get('/', { headers: { 'accept-encoding': 'gzip' } })).text()).includes('Descubre') && html.includes('function brandView()') && html.includes('function requestsView()') && html.includes('function trackEvent('), 'Commerce First + marca + solicitudes + analytics presentes');
+    const compressedHome = await (await get('/', { headers: { 'accept-encoding': 'gzip' } })).text();
+    ok(
+      compressedHome.includes('Encuentra') &&
+      html.includes('function brandView()') &&
+      html.includes('function requestsView()') &&
+      html.includes('function trackEvent(') &&
+      !html.includes('La boutique es el inicio') &&
+      !/Private label/i.test(html),
+      'storefront product-first + marca breve + solicitudes + analytics presentes'
+    );
 
     // etag / 304
     const et = home.headers.get('etag');
