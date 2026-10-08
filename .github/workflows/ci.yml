@@ -76,6 +76,7 @@ jobs:
           bun run services/catalog-api/test/fulfillment.integration.ts
           bun run services/catalog-api/test/auth.integration.ts
           bun run services/catalog-api/test/rbac-internal.integration.ts
+          bun run services/control-center/test/integration.ts
       - name: Validar Control Center
         run: bun build services/control-center/index.ts --target=bun --outfile=/tmp/control-center.js
 
