@@ -86,6 +86,42 @@ const inquiry = await db`
   RETURNING id`;
 const inquiryId = Number(inquiry[0].id);
 
+const purchaseLocation = await db`
+  INSERT INTO locations(name,country_code,type,active)
+  VALUES(${"Control Center Store " + crypto.randomUUID().slice(0,6)},'HN','store',TRUE)
+  RETURNING id`;
+const purchaseLocationId = Number(purchaseLocation[0].id);
+
+const purchaseSupplier = await db`
+  INSERT INTO suppliers(name,country_code,active)
+  VALUES('Proveedor Control Center CI','HN',TRUE)
+  RETURNING id`;
+const purchaseSupplierId = Number(purchaseSupplier[0].id);
+
+const purchaseProduct = await db`
+  INSERT INTO products(name,slug,category,brand,status)
+  VALUES(
+    'Producto Compra Control CI',
+    ${"cc-purchase-" + crypto.randomUUID()},
+    'Prueba',
+    'MR',
+    'active'
+  )
+  RETURNING id`;
+const purchaseProductId = Number(purchaseProduct[0].id);
+
+const purchaseVariant = await db`
+  INSERT INTO product_variants(
+    product_id,sku,size,color,cost,price,currency,active
+  )
+  VALUES(
+    ${purchaseProductId},
+    ${"CC-PUR-" + crypto.randomUUID().slice(0,8)},
+    'M','Negro',0,300.00,'HNL',TRUE
+  )
+  RETURNING id`;
+const purchaseVariantId = Number(purchaseVariant[0].id);
+
 const child = Bun.spawn({
   cmd: ["bun", "run", "services/control-center/index.ts"],
   env: {
@@ -148,6 +184,137 @@ try {
     dashboardHtml.includes("Control Center CI") &&
     dashboardHtml.includes("Cliente Control CI"),
     "dashboard consume datos autorizados del Commerce Core"
+  );
+
+  const purchasesPage = await fetch(centerBase + "/purchases", {
+    headers: { cookie: cookies }
+  });
+  const purchasesHtml = await purchasesPage.text();
+  ok(
+    purchasesPage.status === 200 &&
+    purchasesHtml.includes("Registrar compra de mercadería") &&
+    purchasesHtml.includes("Proveedor Control Center CI") &&
+    purchasesHtml.includes("Producto Compra Control CI"),
+    "Compras muestra formulario con proveedor, ubicación y variante"
+  );
+
+  const createPurchase = await fetch(centerBase + "/purchases", {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      cookie: cookies,
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      csrf,
+      supplierId: String(purchaseSupplierId),
+      destinationLocationId: String(purchaseLocationId),
+      variantId: String(purchaseVariantId),
+      quantityOrdered: "3",
+      unitCost: "125.50",
+      supplierSku: "SUP-CC-001",
+      originCountryCode: "HN",
+      supplierReference: "CC-PO-INTEGRATION",
+      shippingEstimate: "10",
+      taxEstimate: "5",
+      otherCosts: "2.50"
+    }).toString()
+  });
+  ok(createPurchase.status === 303, "Control Center crea orden de compra");
+
+  const poRows = await db`
+    SELECT id,status,subtotal_minor,grand_total_minor
+    FROM purchase_orders
+    WHERE supplier_reference='CC-PO-INTEGRATION'
+    ORDER BY id DESC
+    LIMIT 1`;
+  const purchaseOrderId = Number(poRows[0]?.id);
+  ok(
+    purchaseOrderId > 0 &&
+    poRows[0]?.status === "DRAFT" &&
+    Number(poRows[0]?.subtotal_minor) === 37650 &&
+    Number(poRows[0]?.grand_total_minor) === 39400,
+    "orden creada desde UI conserva cálculo server-side"
+  );
+
+  const approvePurchase = await fetch(
+    centerBase + "/purchases/" + purchaseOrderId + "/approve",
+    {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: cookies,
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({ csrf }).toString()
+    }
+  );
+  ok(approvePurchase.status === 303, "Control Center aprueba orden de compra");
+
+  const orderPurchase = await fetch(
+    centerBase + "/purchases/" + purchaseOrderId + "/order",
+    {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: cookies,
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({ csrf }).toString()
+    }
+  );
+  ok(orderPurchase.status === 303, "Control Center marca compra como ordenada");
+
+  const orderedPage = await fetch(centerBase + "/purchases", {
+    headers: { cookie: cookies }
+  });
+  const orderedHtml = await orderedPage.text();
+  ok(
+    orderedPage.status === 200 &&
+    orderedHtml.includes("Recibir mercadería") &&
+    orderedHtml.includes("Producto Compra Control CI"),
+    "orden ORDERED habilita recepción de mercadería"
+  );
+
+  const poItemRows = await db`
+    SELECT id
+    FROM purchase_order_items
+    WHERE purchase_order_id=${purchaseOrderId}
+    LIMIT 1`;
+  const purchaseOrderItemId = Number(poItemRows[0]?.id);
+
+  const receivePurchase = await fetch(
+    centerBase + "/purchases/" + purchaseOrderId + "/receive",
+    {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        cookie: cookies,
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        csrf,
+        supplierDeliveryReference: "CC-DELIVERY-1",
+        ["qty_" + purchaseOrderItemId]: "3"
+      }).toString()
+    }
+  );
+  ok(receivePurchase.status === 303, "Control Center registra recepción");
+
+  const receivedPo = await db`
+    SELECT status
+    FROM purchase_orders
+    WHERE id=${purchaseOrderId}`;
+  const receivedInventory = await db`
+    SELECT quantity,reserved
+    FROM inventory
+    WHERE variant_id=${purchaseVariantId}
+      AND location_id=${purchaseLocationId}`;
+  ok(
+    receivedPo[0]?.status === "RECEIVED" &&
+    Number(receivedInventory[0]?.quantity) === 3 &&
+    Number(receivedInventory[0]?.reserved) === 0,
+    "recepción desde UI suma inventario y completa la orden"
   );
 
   const invalidUpdate = await fetch(centerBase + "/inquiries/" + inquiryId + "/update", {
