@@ -121,6 +121,16 @@ await db`
     (${codVariant}, ${locationId}, 2, 0),
     (${pickupVariant}, ${locationId}, 2, 0)`;
 
+const geography = await api("/v1/geography/countries/HN/subdivisions");
+ok(
+  geography.response.status === 200 &&
+  geography.body.countryCode === "HN" &&
+  Array.isArray(geography.body.subdivisions) &&
+  geography.body.subdivisions.length === 18 &&
+  geography.body.subdivisions.some((x: any) => x.name === "Cortés"),
+  "geography endpoint expone los 18 departamentos canónicos de Honduras"
+);
+
 const noZone = await api("/v1/fulfillment/options?department=" + encodeURIComponent("Cortés"));
 ok(noZone.response.status === 200 && noZone.body.options?.[0]?.quoteRequired === true, "departamento sin configuración retorna cotización requerida");
 

@@ -12,7 +12,9 @@ Esqueleto móvil de MR עדולם en Expo/React Native.
 - Detalle de producto y selección exacta de variante.
 - Carrito móvil en memoria con límite por disponibilidad visible.
 - Creación nativa de reservas de Order con `channel=APP` e idempotencia.
-- Continuación por WhatsApp configurable o storefront; checkout/pago nativo queda para una fase posterior.
+- Continuación por WhatsApp configurable o storefront.
+- Selección nativa de recogida/entrega con tarifas y ETA servidas por Commerce Core.
+- Checkout nativo para efectivo en recogida, transferencia bancaria y pago contra entrega, manteniendo Payment en estado autoritativo del servidor.
 
 ## Requisitos
 
