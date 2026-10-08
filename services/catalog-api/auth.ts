@@ -50,6 +50,12 @@ const PERMISSIONS: Record<string, string> = {
   "procurement.approve": "Approve purchase orders",
   "procurement.receive": "Receive purchased inventory",
   "procurement.cancel": "Cancel purchase orders",
+  "returns.read": "Read customer return cases",
+  "returns.create": "Create customer return cases",
+  "returns.approve": "Approve/reject customer return cases",
+  "returns.cancel": "Cancel customer return cases",
+  "returns.receive": "Receive returned merchandise",
+  "returns.inspect": "Inspect returned merchandise",
   "inquiries.read": "Read inquiries",
   "inquiries.write": "Update inquiries",
   "reports.read": "Read reports",
@@ -81,7 +87,9 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "payments.read",
       "payments.confirm_manual",
       "customers.read",
-      "customers.write"
+      "customers.write",
+      "returns.read",
+      "returns.create"
     ]
   },
   INVENTORY_OPERATOR: {
@@ -94,7 +102,10 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "inventory.transfer",
       "suppliers.read",
       "procurement.read",
-      "procurement.receive"
+      "procurement.receive",
+      "returns.read",
+      "returns.receive",
+      "returns.inspect"
     ]
   },
   FULFILLMENT_OPERATOR: {
@@ -106,7 +117,8 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "fulfillment.read",
       "fulfillment.prepare",
       "fulfillment.dispatch",
-      "fulfillment.deliver"
+      "fulfillment.deliver",
+      "returns.read"
     ]
   },
   CUSTOMER_SUPPORT: {
@@ -118,7 +130,9 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "customers.read",
       "customers.write",
       "inquiries.read",
-      "inquiries.write"
+      "inquiries.write",
+      "returns.read",
+      "returns.create"
     ]
   },
   ANALYST: {
