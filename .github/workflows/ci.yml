@@ -47,6 +47,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - name: Pruebas unitarias Cross-Sell Engine
+        run: bun test services/catalog-api/test/salesAlgorithm.test.ts
       - name: Validar Catalog API
         run: bun build services/catalog-api/index.ts --target=bun --outfile=/tmp/catalog-api.js
       - name: Validar rutas internas
