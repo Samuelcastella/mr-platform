@@ -354,6 +354,13 @@ export async function ensureOrdersSchema(db: DB) {
   await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS commission_basis TEXT`;
   await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS commission_rate_bps INTEGER`;
   await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS fixed_fee_minor BIGINT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS discount_allocation_rule TEXT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS shipping_allocation_rule TEXT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS payment_fee_allocation_rule TEXT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS return_allocation_rule TEXT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS shrinkage_liability_rule TEXT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS settlement_frequency TEXT`;
+  await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS settlement_delay_days INTEGER`;
   await db`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS commercial_snapshot_at TIMESTAMPTZ`;
 
   await db`
@@ -458,7 +465,14 @@ async function createOrder(req: Request, db: DB, clean: (v: unknown, max: number
                  sa.agreement_version AS seller_agreement_version,
                  sa.commission_basis,
                  sa.commission_rate_bps,
-                 sa.fixed_fee_minor
+                 sa.fixed_fee_minor,
+                 sa.discount_allocation_rule,
+                 sa.shipping_allocation_rule,
+                 sa.payment_fee_allocation_rule,
+                 sa.return_allocation_rule,
+                 sa.shrinkage_liability_rule,
+                 sa.settlement_frequency,
+                 sa.settlement_delay_days
           FROM product_variants pv
           JOIN products p ON p.id = pv.product_id
           JOIN inventory i ON i.variant_id = pv.id AND i.location_id = ${locationId}
@@ -504,6 +518,13 @@ async function createOrder(req: Request, db: DB, clean: (v: unknown, max: number
           commissionBasis: row.commission_basis || null,
           commissionRateBps: row.commission_rate_bps == null ? null : Number(row.commission_rate_bps),
           fixedFeeMinor: row.fixed_fee_minor == null ? null : Number(row.fixed_fee_minor),
+          discountAllocationRule: row.discount_allocation_rule || null,
+          shippingAllocationRule: row.shipping_allocation_rule || null,
+          paymentFeeAllocationRule: row.payment_fee_allocation_rule || null,
+          returnAllocationRule: row.return_allocation_rule || null,
+          shrinkageLiabilityRule: row.shrinkage_liability_rule || null,
+          settlementFrequency: row.settlement_frequency || null,
+          settlementDelayDays: row.settlement_delay_days == null ? null : Number(row.settlement_delay_days),
           commercialSnapshotAt: row.inventory_source_id == null ? null : new Date()
         });
         subtotalMinor += lineTotalMinor;
@@ -536,7 +557,9 @@ async function createOrder(req: Request, db: DB, clean: (v: unknown, max: number
             seller_id, seller_agreement_id, seller_agreement_version,
             commercial_mode, economic_owner_type, inventory_source_id,
             unit_cost_basis_minor, commission_basis, commission_rate_bps,
-            fixed_fee_minor, commercial_snapshot_at
+            fixed_fee_minor, discount_allocation_rule, shipping_allocation_rule,
+            payment_fee_allocation_rule, return_allocation_rule, shrinkage_liability_rule,
+            settlement_frequency, settlement_delay_days, commercial_snapshot_at
           )
           VALUES (
             ${orderId}, ${line.variantId}, ${line.sku}, ${line.productName}, ${JSON.stringify(line.variant)}::jsonb,
@@ -544,7 +567,9 @@ async function createOrder(req: Request, db: DB, clean: (v: unknown, max: number
             ${line.sellerId}, ${line.sellerAgreementId}, ${line.sellerAgreementVersion},
             ${line.commercialMode}, ${line.economicOwnerType}, ${line.inventorySourceId},
             ${line.unitCostBasisMinor}, ${line.commissionBasis}, ${line.commissionRateBps},
-            ${line.fixedFeeMinor}, ${line.commercialSnapshotAt}
+            ${line.fixedFeeMinor}, ${line.discountAllocationRule}, ${line.shippingAllocationRule},
+            ${line.paymentFeeAllocationRule}, ${line.returnAllocationRule}, ${line.shrinkageLiabilityRule},
+            ${line.settlementFrequency}, ${line.settlementDelayDays}, ${line.commercialSnapshotAt}
           )`;
 
         const inv = await tx`
