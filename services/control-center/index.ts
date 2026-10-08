@@ -98,6 +98,7 @@ async function api(
     method?:string;
     cookieHeader?:string;
     csrf?:string;
+    idempotencyKey?:string;
     body?:unknown;
   }={}
 ){
@@ -105,6 +106,7 @@ async function api(
   const headers:Record<string,string>={"accept":"application/json"};
   if(options.cookieHeader)headers.cookie=options.cookieHeader;
   if(options.csrf)headers["x-csrf-token"]=options.csrf;
+  if(options.idempotencyKey)headers["idempotency-key"]=options.idempotencyKey;
   if(options.body!==undefined)headers["content-type"]="application/json";
 
   try{
