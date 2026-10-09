@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -414,6 +414,166 @@ async function customersPage(url:URL,session:Session){
   }).join(""):'<div class="panel empty">Todavía no hay clientes.</div>';
   return shell('<div class="eyebrow">Clientes</div><h1>Directorio de clientes</h1>'+opsNotice(url)+'<section class="panel" style="margin-bottom:14px"><h3>Nuevo cliente</h3><form method="post" action="/customers" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="displayName" required maxlength="160"></label><label>Tipo<select name="customerType"><option value="PERSON">Persona</option><option value="BUSINESS">Empresa</option></select></label><button>Crear cliente</button></form></section><section class="queue">'+cards+'</section>',session);
 }
+
+async function productSpecificationsPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canManage=permissions.has("product_specs.manage");
+  const canApprove=permissions.has("product_specs.approve");
+  const specId=Number(url.searchParams.get("specId")||0);
+
+  const [listResult,catalogResultApi]=await Promise.all([
+    api("/v1/internal/product-specifications",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(listResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso product_specs.read.</p></div>',session);
+  }
+  if(!listResult.response?.ok||!catalogResultApi.response?.ok){
+    return shell('<div class="panel empty"><h2>Especificaciones no disponibles</h2></div>',session);
+  }
+
+  const specs:any[]=Array.isArray(listResult.body?.data)?listResult.body.data:[];
+  const products:any[]=Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Especificación creada.",
+    updated:"Especificación actualizada.",
+    version_created:"Nueva versión creada.",
+    version_updated:"Borrador actualizado.",
+    approved:"Versión aprobada.",
+    withdrawn:"Versión retirada.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const targetOptions=products.map((p:any)=>{
+    const productOption='<option value="PRODUCT:'+Number(p.id)+'">Producto · '+esc(p.name)+' · '+esc(p.commercial_model||"sin clasificar")+'</option>';
+    const variants=(Array.isArray(p.variants)?p.variants:[]).map((v:any)=>
+      '<option value="VARIANT:'+Number(v.id)+'">Variante · '+esc(p.name)+' · '+esc(v.sku)+' · '+esc(v.size||"sin talla")+' · '+esc(v.color||"sin color")+'</option>'
+    ).join("");
+    return productOption+variants;
+  }).join("");
+
+  const createForm=canManage&&targetOptions
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Nueva specification</h3>'+
+      '<p class="meta">La serie identifica el documento técnico; las versiones contienen los snapshots. Crear la serie no modifica catálogo ni producción.</p>'+
+      '<form method="post" action="/product-specifications" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Código<input name="code" required maxlength="80" placeholder="TECH-DRESS-001"></label>'+
+        '<label>Título<input name="title" required maxlength="240"></label>'+
+        '<label>Producto / variante<select name="target" required><option value="" selected disabled>Seleccionar</option>'+targetOptions+'</select></label>'+
+        '<button>Crear specification</button>'+
+      '</form></section>'
+    :'';
+
+  const cards=specs.length?specs.map((s:any)=>{
+    const target=s.targetType==="VARIANT"
+      ?esc(s.productName||"Producto")+' · '+esc(s.sku||"Variante")
+      :esc(s.productName||"Producto");
+    const approved=s.approvedVersion
+      ?' · aprobada v'+Number(s.approvedVersion.versionNo)
+      :' · sin versión aprobada';
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(s.code)+' · '+esc(s.targetType)+'</div>'+
+      '<h3>'+esc(s.title)+'</h3><div class="meta">'+target+' · '+esc(s.commercialModel||"sin clasificar")+approved+'</div></div>'+
+      '<span class="pill">'+(s.active?'ACTIVA':'INACTIVA')+'</span></div>'+
+      '<div style="margin-top:10px"><a class="ghost" href="/product-specifications?specId='+Number(s.id)+'" style="display:inline-flex;text-decoration:none;border-radius:999px;padding:10px 14px;font-weight:900">Abrir versiones</a></div></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay specifications.</div>';
+
+  let detail="";
+  if(Number.isSafeInteger(specId)&&specId>0){
+    const detailResult=await api("/v1/internal/product-specifications/"+specId,{cookieHeader:session.cookieHeader});
+    if(detailResult.response?.ok){
+      const spec=detailResult.body?.specification||{};
+      const versions:any[]=Array.isArray(detailResult.body?.versions)?detailResult.body.versions:[];
+      const jsonText=(value:any)=>esc(JSON.stringify(value||{},null,2));
+
+      const specEdit=canManage
+        ?'<details style="margin-top:12px"><summary>Editar serie</summary>'+
+          '<form method="post" action="/product-specifications/'+Number(spec.id)+'/update" class="actions" style="margin-top:10px">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+            '<label>Título<input name="title" required maxlength="240" value="'+esc(spec.title||"")+'"></label>'+
+            '<label style="display:flex;align-items:center;gap:8px"><input name="active" type="checkbox" style="width:auto" '+(spec.active?'checked':'')+'> Activa</label>'+
+            '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label>'+
+            '<button>Guardar serie</button>'+
+          '</form></details>'
+        :'';
+
+      const cloneOptions=versions.map((v:any)=>
+        '<option value="'+Number(v.id)+'">v'+Number(v.versionNo)+' · '+esc(v.status)+' · '+esc(v.changeSummary||"")+'</option>'
+      ).join("");
+
+      const newVersion=canManage&&spec.active
+        ?'<section class="panel" style="margin-top:18px"><h3>Nueva versión</h3>'+
+          '<form method="post" action="/product-specifications/'+Number(spec.id)+'/versions" class="actions">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+            '<label>Clonar versión<select name="cloneVersionId"><option value="">Empezar vacía</option>'+cloneOptions+'</select></label>'+
+            '<label>Resumen del cambio<input name="changeSummary" required minlength="5" maxlength="1000"></label>'+
+            '<label>Materiales JSON<textarea name="materials" placeholder="{&quot;fabric&quot;:&quot;cotton&quot;}"></textarea></label>'+
+            '<label>Medidas JSON<textarea name="measurements" placeholder="{}"></textarea></label>'+
+            '<label>Construcción JSON<textarea name="construction" placeholder="{}"></textarea></label>'+
+            '<label>Empaque JSON<textarea name="packaging" placeholder="{}"></textarea></label>'+
+            '<label>Etiquetado JSON<textarea name="labeling" placeholder="{}"></textarea></label>'+
+            '<label>Requisitos de calidad JSON<textarea name="qualityRequirements" placeholder="{}"></textarea></label>'+
+            '<label>Notas<textarea name="notes" maxlength="4000"></textarea></label>'+
+            '<button>Crear borrador</button>'+
+          '</form></section>'
+        :'';
+
+      const versionCards=versions.length?versions.map((v:any)=>{
+        const edit=v.status==="DRAFT"&&canManage
+          ?'<details style="margin-top:12px"><summary>Editar borrador</summary>'+
+            '<form method="post" action="/product-specification-versions/'+Number(v.id)+'/update" class="actions" style="margin-top:10px">'+
+              '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+              '<label>Resumen del cambio<input name="changeSummary" required minlength="5" maxlength="1000" value="'+esc(v.changeSummary||"")+'"></label>'+
+              '<label>Materiales JSON<textarea name="materials">'+jsonText(v.sections?.materials)+'</textarea></label>'+
+              '<label>Medidas JSON<textarea name="measurements">'+jsonText(v.sections?.measurements)+'</textarea></label>'+
+              '<label>Construcción JSON<textarea name="construction">'+jsonText(v.sections?.construction)+'</textarea></label>'+
+              '<label>Empaque JSON<textarea name="packaging">'+jsonText(v.sections?.packaging)+'</textarea></label>'+
+              '<label>Etiquetado JSON<textarea name="labeling">'+jsonText(v.sections?.labeling)+'</textarea></label>'+
+              '<label>Requisitos de calidad JSON<textarea name="qualityRequirements">'+jsonText(v.sections?.qualityRequirements)+'</textarea></label>'+
+              '<label>Notas<textarea name="notes" maxlength="4000">'+esc(v.notes||"")+'</textarea></label>'+
+              '<label>Nota de edición<input name="changeNote" maxlength="1000"></label>'+
+              '<button>Guardar borrador</button>'+
+            '</form></details>'
+          :'';
+
+        const approve=v.status==="DRAFT"&&canApprove
+          ?'<form method="post" action="/product-specification-versions/'+Number(v.id)+'/approve" class="toolbar" style="margin-top:10px">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nota de aprobación<input name="note" maxlength="1000"></label><button>Aprobar v'+Number(v.versionNo)+'</button></form>'
+          :'';
+
+        const withdraw=v.status==="APPROVED"&&canApprove
+          ?'<form method="post" action="/product-specification-versions/'+Number(v.id)+'/withdraw" class="toolbar" style="margin-top:10px">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Motivo<input name="note" required minlength="5" maxlength="1000"></label><button class="ghost">Retirar versión</button></form>'
+          :'';
+
+        return '<article class="item"><div class="item-head"><div><div class="eyebrow">v'+Number(v.versionNo)+' · '+esc(v.status)+'</div>'+
+          '<h3>'+esc(v.changeSummary||"Sin resumen")+'</h3>'+
+          '<div class="meta">Aprobación: '+esc(v.approvedBy?.displayName||"—")+' · '+esc(v.approvedAt||"—")+'</div></div>'+
+          '<span class="pill">'+(v.technicalContentMutable?'EDITABLE':'INMUTABLE')+'</span></div>'+
+          '<details style="margin-top:10px"><summary>Ver snapshot técnico</summary>'+
+            '<div class="message"><b>Materiales</b><pre>'+jsonText(v.sections?.materials)+'</pre><b>Medidas</b><pre>'+jsonText(v.sections?.measurements)+'</pre><b>Construcción</b><pre>'+jsonText(v.sections?.construction)+'</pre><b>Empaque</b><pre>'+jsonText(v.sections?.packaging)+'</pre><b>Etiquetado</b><pre>'+jsonText(v.sections?.labeling)+'</pre><b>Calidad</b><pre>'+jsonText(v.sections?.qualityRequirements)+'</pre></div></details>'+
+          edit+approve+withdraw+'</article>';
+      }).join(""):'<div class="panel empty">Esta specification todavía no tiene versiones.</div>';
+
+      detail='<section style="margin-top:28px"><div class="eyebrow">'+esc(spec.code||"")+' · '+esc(spec.targetType||"")+'</div>'+
+        '<h2>'+esc(spec.title||"")+'</h2><p class="meta">'+esc(spec.productName||"Producto")+(spec.sku?' · '+esc(spec.sku):'')+' · modelo '+esc(spec.commercialModel||"sin clasificar")+'</p>'+
+        '<p class="meta">Las versiones aprobadas son inmutables y no se aplican automáticamente a producción.</p>'+
+        specEdit+newVersion+'<div class="queue" style="margin-top:18px">'+versionCards+'</div></section>';
+    }else{
+      detail='<div class="panel empty" style="margin-top:18px">No se pudo cargar la specification solicitada.</div>';
+    }
+  }
+
+  return shell(
+    '<div class="eyebrow">W8 · Producto propio</div><h1>Especificaciones técnicas</h1>'+
+    '<p class="meta">Series versionadas con aprobación humana. Aprobar una versión no modifica catálogo, inventario ni producción.</p>'+
+    notice+createForm+'<section class="queue">'+cards+'</section>'+detail,
+    session
+  );
+}
+
 
 async function manufacturersPage(url:URL,session:Session){
   const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
@@ -1462,6 +1622,18 @@ function catalogResult(result:any,ok:string){
   return result.response?.ok?ok:"error";
 }
 
+function formJsonObject(fd:FormData,name:string){
+  const raw=String(fd.get(name)||"").trim();
+  if(!raw)return {ok:true as const,value:undefined};
+  try{
+    const value=JSON.parse(raw);
+    if(value&&typeof value==="object"&&!Array.isArray(value)){
+      return {ok:true as const,value};
+    }
+  }catch{}
+  return {ok:false as const,value:null};
+}
+
 Bun.serve({
   port:Number(Bun.env.PORT||3000),
   async fetch(req){
@@ -1698,6 +1870,7 @@ Bun.serve({
     if(url.pathname==="/customers"&&req.method==="GET")return html(await customersPage(url,session));
     if(url.pathname==="/suppliers"&&req.method==="GET")return html(await suppliersPage(url,session));
     if(url.pathname==="/manufacturers"&&req.method==="GET")return html(await manufacturersPage(url,session));
+    if(url.pathname==="/product-specifications"&&req.method==="GET")return html(await productSpecificationsPage(url,session));
     if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
     if(url.pathname==="/fulfillment"&&req.method==="GET")return html(await fulfillmentPage(url,session));
@@ -1711,6 +1884,118 @@ Bun.serve({
     if(url.pathname==="/supplier-evaluations"&&req.method==="GET")return html(await supplierEvaluationsPage(url,session));
 
 
+
+    if(url.pathname==="/product-specifications"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const target=String(fd.get("target")||"");
+      const match=target.match(/^(PRODUCT|VARIANT):(\d+)$/);
+      if(!match)return redirect("/product-specifications?n=error");
+      const result=await api("/v1/internal/product-specifications",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          code:String(fd.get("code")||"").trim(),
+          title:String(fd.get("title")||"").trim(),
+          targetType:match[1],
+          targetId:Number(match[2])
+        }
+      });
+      const id=Number(result.body?.specification?.id||0);
+      return redirect("/product-specifications?n="+catalogResult(result,"created")+(id?"&specId="+id:""));
+    }
+
+    const productSpecUpdate=url.pathname.match(/^\/product-specifications\/(\d+)\/update$/);
+    if(productSpecUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(productSpecUpdate[1]);
+      const result=await api("/v1/internal/product-specifications/"+id,{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          title:String(fd.get("title")||"").trim(),
+          active:fd.get("active")==="on",
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/product-specifications?specId="+id+"&n="+catalogResult(result,"updated"));
+    }
+
+    const productSpecVersions=url.pathname.match(/^\/product-specifications\/(\d+)\/versions$/);
+    if(productSpecVersions&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(productSpecVersions[1]);
+      const sections:any={};
+      for(const field of ["materials","measurements","construction","packaging","labeling","qualityRequirements"]){
+        const parsed=formJsonObject(fd,field);
+        if(!parsed.ok)return redirect("/product-specifications?specId="+id+"&n=error");
+        if(parsed.value!==undefined)sections[field]=parsed.value;
+      }
+      const cloneRaw=String(fd.get("cloneVersionId")||"").trim();
+      const result=await api("/v1/internal/product-specifications/"+id+"/versions",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          cloneVersionId:cloneRaw?Number(cloneRaw):null,
+          changeSummary:String(fd.get("changeSummary")||"").trim(),
+          sections,
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      return redirect("/product-specifications?specId="+id+"&n="+catalogResult(result,"version_created"));
+    }
+
+    const productSpecVersionUpdate=url.pathname.match(/^\/product-specification-versions\/(\d+)\/update$/);
+    if(productSpecVersionUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const versionId=Number(productSpecVersionUpdate[1]);
+      const sections:any={};
+      for(const field of ["materials","measurements","construction","packaging","labeling","qualityRequirements"]){
+        const parsed=formJsonObject(fd,field);
+        if(!parsed.ok)return redirect("/product-specifications?n=error");
+        if(parsed.value!==undefined)sections[field]=parsed.value;
+      }
+      const detail=await api("/v1/internal/product-specification-versions/"+versionId,{cookieHeader:session.cookieHeader});
+      const specId=Number(detail.body?.version?.specificationId||0);
+      const result=await api("/v1/internal/product-specification-versions/"+versionId,{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          changeSummary:String(fd.get("changeSummary")||"").trim(),
+          sections,
+          notes:String(fd.get("notes")||"").trim()||null,
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/product-specifications"+(specId?"?specId="+specId+"&":"?")+"n="+catalogResult(result,"version_updated"));
+    }
+
+    const productSpecApprove=url.pathname.match(/^\/product-specification-versions\/(\d+)\/approve$/);
+    if(productSpecApprove&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const versionId=Number(productSpecApprove[1]);
+      const detail=await api("/v1/internal/product-specification-versions/"+versionId,{cookieHeader:session.cookieHeader});
+      const specId=Number(detail.body?.version?.specificationId||0);
+      const result=await api("/v1/internal/product-specification-versions/"+versionId+"/approve",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{note:String(fd.get("note")||"").trim()||null}
+      });
+      return redirect("/product-specifications"+(specId?"?specId="+specId+"&":"?")+"n="+catalogResult(result,"approved"));
+    }
+
+    const productSpecWithdraw=url.pathname.match(/^\/product-specification-versions\/(\d+)\/withdraw$/);
+    if(productSpecWithdraw&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const versionId=Number(productSpecWithdraw[1]);
+      const detail=await api("/v1/internal/product-specification-versions/"+versionId,{cookieHeader:session.cookieHeader});
+      const specId=Number(detail.body?.version?.specificationId||0);
+      const result=await api("/v1/internal/product-specification-versions/"+versionId+"/withdraw",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{note:String(fd.get("note")||"").trim()}
+      });
+      return redirect("/product-specifications"+(specId?"?specId="+specId+"&":"?")+"n="+catalogResult(result,"withdrawn"));
+    }
 
     if(url.pathname==="/supplier-evaluations"&&req.method==="POST"){
       const fd=await req.formData();
