@@ -33,7 +33,12 @@ function cookieFrom(response:Response){
   return (response.headers.get("set-cookie")||"").split(";")[0]||"";
 }
 
-async function createStaff(roleCode:string,displayName:string){
+async function createStaff(
+  roleCode:string,
+  displayName:string,
+  scopeType:"GLOBAL"|"LOCATION"="GLOBAL",
+  scopeLocationId:number|null=null
+){
   const slug=displayName.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
   const email=slug+"-"+crypto.randomUUID().slice(0,8)+"@example.test";
   const password="LAND-"+crypto.randomUUID()+"-R9!";
@@ -47,7 +52,10 @@ async function createStaff(roleCode:string,displayName:string){
   if(!roles.length)throw new Error("role_missing:"+roleCode);
   await db`
     INSERT INTO user_role_assignments(user_id,role_id,scope_type,scope_location_id)
-    VALUES(${Number(users[0].id)},${Number(roles[0].id)},'GLOBAL',NULL)`;
+    VALUES(
+      ${Number(users[0].id)},${Number(roles[0].id)},
+      ${scopeType},${scopeLocationId}
+    )`;
 
   const login=await api("/v1/auth/login",{
     method:"POST",
@@ -88,9 +96,21 @@ ok(analyst.login.response.status===200,"analyst inicia sesión");
 
 const locations=await db`
   INSERT INTO locations(name,country_code,type,active)
-  VALUES(${"Landed Cost CI "+crypto.randomUUID().slice(0,6)},'HN','store',TRUE)
+  VALUES
+    (${"Landed Cost CI "+crypto.randomUUID().slice(0,6)},'HN','store',TRUE),
+    (${"Landed Cost Other "+crypto.randomUUID().slice(0,6)},'HN','warehouse',TRUE)
   RETURNING id`;
 const locationId=Number(locations[0].id);
+const otherLocationId=Number(locations[1].id);
+
+const scopedReader=await createStaff(
+  "INVENTORY_OPERATOR","Landed Cost Scoped Reader CI","LOCATION",locationId
+);
+const wrongScopedReader=await createStaff(
+  "INVENTORY_OPERATOR","Landed Cost Wrong Scoped Reader CI","LOCATION",otherLocationId
+);
+ok(scopedReader.login.response.status===200,"inventory operator scoped inicia sesión");
+ok(wrongScopedReader.login.response.status===200,"inventory operator otra ubicación inicia sesión");
 
 const receiptProduct=await api("/v1/internal/catalog/products",{
   method:"POST",
