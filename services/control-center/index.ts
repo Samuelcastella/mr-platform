@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/landed-cost" style="color:#e7cf89;text-decoration:none;font-weight:800">Costeo</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/landed-cost" style="color:#e7cf89;text-decoration:none;font-weight:800">Costeo</a><a href="/traceability" style="color:#e7cf89;text-decoration:none;font-weight:800">Trazabilidad</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -737,6 +737,191 @@ async function productSpecificationsPage(url:URL,session:Session){
     '<div class="eyebrow">W8 · Producto propio</div><h1>Especificaciones técnicas</h1>'+
     '<p class="meta">Series versionadas con aprobación humana. Aprobar una versión no modifica catálogo, inventario ni producción.</p>'+
     notice+createForm+'<section class="queue">'+cards+'</section>'+detail,
+    session
+  );
+}
+
+
+
+async function traceabilityPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canManage=permissions.has("traceability.manage");
+  const productId=Number(url.searchParams.get("productId")||0);
+  const variantId=Number(url.searchParams.get("variantId")||0);
+
+  const catalogResultApi=await api("/v1/internal/catalog",{cookieHeader:session.cookieHeader});
+  if(!catalogResultApi.response?.ok){
+    return shell('<div class="panel empty"><h2>Trazabilidad no disponible</h2><p>No se pudo cargar el catálogo.</p></div>',session);
+  }
+  const products:any[]=Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+
+  const productOptions=products.map((p:any)=>
+    '<option value="'+Number(p.id)+'" '+(productId===Number(p.id)?'selected':'')+'>'+esc(p.name)+' · '+esc(p.commercial_model||"sin clasificar")+'</option>'
+  ).join("");
+  const variantOptions=products.flatMap((p:any)=>
+    (Array.isArray(p.variants)?p.variants:[]).map((v:any)=>
+      '<option value="'+Number(v.id)+'" '+(variantId===Number(v.id)?'selected':'')+'>'+esc(p.name)+' · '+esc(v.sku)+' · '+esc(v.size||"sin talla")+' · '+esc(v.color||"sin color")+'</option>'
+    )
+  ).join("");
+
+  const selector='<section class="panel" style="margin-bottom:18px"><h3>Consultar linaje</h3>'+
+    '<div class="toolbar"><form method="get" action="/traceability" class="toolbar"><label>Producto<select name="productId" required><option value="" selected disabled>Seleccionar</option>'+productOptions+'</select></label><button>Ver producto</button></form>'+
+    '<form method="get" action="/traceability" class="toolbar"><label>Variante<select name="variantId" required><option value="" selected disabled>Seleccionar</option>'+variantOptions+'</select></label><button>Ver variante</button></form></div></section>';
+
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    linked:"Vínculo de calidad registrado.",
+    link_updated:"Vínculo de calidad actualizado.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  if(!productId&&!variantId){
+    return shell(
+      '<div class="eyebrow">W8 · Proveniencia</div><h1>Trazabilidad</h1>'+
+      '<p class="meta">Consulta eventos fuente explícitos. El inventario actual es agregado y no se atribuye automáticamente a un lote o recepción.</p>'+
+      notice+selector,
+      session
+    );
+  }
+
+  const targetQuery=productId?"productId="+productId:"variantId="+variantId;
+  const traceResult=await api("/v1/internal/traceability?"+targetQuery,{cookieHeader:session.cookieHeader});
+  if(traceResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso traceability.read.</p></div>',session);
+  }
+  if(!traceResult.response?.ok){
+    return shell(
+      '<div class="eyebrow">W8 · Proveniencia</div><h1>Trazabilidad</h1>'+
+      notice+selector+'<div class="panel empty">No se pudo construir el linaje solicitado.</div>',
+      session
+    );
+  }
+
+  const d:any=traceResult.body||{};
+  const target:any=d.target||{};
+  const traceProductId=Number(target.product?.id||0);
+  const traceVariantId=Number(target.variantId||0);
+  const candidates:any[]=Array.isArray(d.qualityCandidates)?d.qualityCandidates:[];
+  const procurement:any[]=Array.isArray(d.procurementLineage)?d.procurementLineage:[];
+  const production:any[]=Array.isArray(d.productionLineage)?d.productionLineage:[];
+  const inventory:any[]=Array.isArray(d.currentInventory?.entries)?d.currentInventory.entries:[];
+  const gaps:any[]=Array.isArray(d.traceabilityGaps)?d.traceabilityGaps:[];
+
+  const linksResult=traceProductId
+    ?await api("/v1/internal/traceability/quality-links?productId="+traceProductId,{cookieHeader:session.cookieHeader})
+    :null;
+  const allLinks:any[]=linksResult?.response?.ok&&Array.isArray(linksResult.body?.data)
+    ?linksResult.body.data
+    :[];
+
+  const returnFields='<input type="hidden" name="returnProductId" value="'+(productId||"")+'"><input type="hidden" name="returnVariantId" value="'+(variantId||"")+'">';
+
+  const compatibleCandidates=(source:any)=>{
+    return candidates.filter((q:any)=>{
+      if(Number(q.productId)!==Number(source.productId))return false;
+      if(q.targetType==="VARIANT"&&Number(q.variantId)!==Number(source.variantId))return false;
+      if(
+        source.sourceType==="PRODUCTION_LOT" &&
+        q.specificationVersion?.id &&
+        Number(q.specificationVersion.id)!==Number(source.specificationVersionId)
+      )return false;
+      return true;
+    });
+  };
+
+  const qualityLinkForm=(source:any)=>{
+    if(!canManage)return "";
+    const compatible=compatibleCandidates(source);
+    if(!compatible.length)return '<div class="meta">No hay inspecciones FINAL compatibles disponibles para vincular.</div>';
+    const options=compatible.map((q:any)=>
+      '<option value="'+Number(q.id)+'">QC #'+Number(q.id)+' · '+esc(q.inspectionType)+' · '+esc(q.result)+(q.specificationVersion?' · spec v'+Number(q.specificationVersion.versionNo):'')+'</option>'
+    ).join("");
+    return '<details style="margin-top:10px"><summary>Vincular inspección FINAL</summary>'+
+      '<form method="post" action="/traceability/quality-links" class="toolbar" style="margin-top:10px">'+
+      '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+returnFields+
+      '<input type="hidden" name="sourceType" value="'+esc(source.sourceType)+'">'+
+      '<input type="hidden" name="sourceId" value="'+Number(source.sourceId)+'">'+
+      '<label>Inspección<select name="qualityInspectionId" required>'+options+'</select></label>'+
+      '<label>Nota<input name="notes" maxlength="2000"></label><button>Crear vínculo explícito</button></form></details>';
+  };
+
+  const qualityLinksHtml=(links:any[])=>{
+    if(!links.length)return '<div class="meta">Sin QC explícitamente vinculado.</div>';
+    return links.map((l:any)=>{
+      const q=l.qualityInspection||{};
+      const manage=canManage
+        ?'<form method="post" action="/traceability/quality-links/'+Number(l.id)+'/update" class="toolbar" style="margin-top:8px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+returnFields+
+          '<input type="hidden" name="active" value="">'+
+          '<label>Nota<input name="notes" maxlength="2000" value="'+esc(l.notes||"")+'"></label>'+
+          '<button class="ghost">Desactivar vínculo</button></form>'
+        :'';
+      return '<div class="panel" style="padding:12px;margin-top:8px"><b>QC #'+Number(q.id||0)+' · '+esc(q.result||"")+'</b>'+
+        '<div class="meta">'+esc(q.inspectionType||"")+' · relación EXPLICIT · inferida: no</div>'+
+        (q.evidenceReference?'<div class="meta">Evidencia: '+esc(q.evidenceReference)+'</div>':'')+manage+'</div>';
+    }).join("");
+  };
+
+  const costHtml=(cost:any)=>{
+    if(!cost)return '<div class="meta">Sin Landed Cost FINAL.</div>';
+    if(cost.visibility==="REDACTED"){
+      return '<div class="meta">Landed Cost FINAL presente · importes ocultos (requiere landed_cost.read).</div>';
+    }
+    return '<div class="meta">Landed Cost '+esc(cost.caseCode||"")+' · '+esc(cost.currency||"")+' '+(Number(cost.totalCostMinor||0)/100).toFixed(2)+' · asignado '+(Number(cost.allocatedCostMinor||0)/100).toFixed(2)+'</div>';
+  };
+
+  const procurementCards=procurement.length?procurement.map((entry:any)=>{
+    const s=entry.source||{};
+    const p=s.procurement||{};
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">PROCUREMENT · DIRECT_SOURCE_EVENT</div>'+
+      '<h3>'+esc(s.productName||"Producto")+' · '+esc(s.sku||"")+'</h3>'+
+      '<div class="meta">Supplier snapshot: '+esc(p.supplierNameSnapshot||"—")+' · PO '+esc(p.purchaseOrderNumber||"—")+' → Receipt '+esc(p.receiptNumber||"—")+' → Item #'+Number(s.sourceId||0)+'</div>'+
+      '<div class="meta">Cantidad recibida: '+Number(s.quantity||0)+' · inferencia automática: no</div></div><span class="pill">RECEIPT</span></div>'+
+      costHtml(entry.landedCost)+'<div style="margin-top:10px"><b>Calidad vinculada</b>'+qualityLinksHtml(entry.qualityLinks||[])+qualityLinkForm(s)+'</div></article>';
+  }).join(""):'<div class="panel empty">Sin eventos de procurement para este objetivo.</div>';
+
+  const productionCards=production.length?production.map((entry:any)=>{
+    const s=entry.source||{};
+    const p=s.production||{};
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">PRODUCTION · DIRECT_SOURCE_EVENT</div>'+
+      '<h3>'+esc(s.productName||"Producto")+' · '+esc(s.sku||"")+' · '+esc(p.lotCode||"")+'</h3>'+
+      '<div class="meta">Spec '+esc(p.specification?.code||"—")+' v'+Number(p.specification?.versionNo||0)+' → '+esc(p.manufacturer?.name||"Fabricante")+' → Run '+esc(p.runCode||"—")+' → Lot '+esc(p.lotCode||"—")+'</div>'+
+      '<div class="meta">Producido: '+Number(p.producedQuantity||0)+' · inferencia automática: no</div></div><span class="pill">'+esc(p.lotStatus||"")+'</span></div>'+
+      costHtml(entry.landedCost)+'<div style="margin-top:10px"><b>Calidad vinculada</b>'+qualityLinksHtml(entry.qualityLinks||[])+qualityLinkForm(s)+'</div></article>';
+  }).join(""):'<div class="panel empty">Sin eventos de producción para este objetivo.</div>';
+
+  const inventoryCards=inventory.length?inventory.map((x:any)=>
+    '<article class="item"><b>'+esc(x.sku||"")+' · '+esc(x.locationName||"Ubicación")+'</b><div class="meta">quantity '+Number(x.quantity||0)+' · reserved '+Number(x.reserved||0)+' · atribución física a fuente: NO</div></article>'
+  ).join(""):'<div class="panel empty">Sin inventario agregado registrado.</div>';
+
+  const gapCards=gaps.length?gaps.map((g:any)=>
+    '<article class="item"><div class="item-head"><div><b>'+esc(g.code||"GAP")+'</b><div class="meta">'+esc(g.message||((g.sourceType||"")+" #"+(g.sourceId||"")))+'</div></div><span class="pill">'+esc(g.severity||"")+'</span></div></article>'
+  ).join(""):'<div class="panel empty">No se detectaron gaps de evidencia para los eventos visibles.</div>';
+
+  const inactiveLinks=allLinks.filter((l:any)=>!l.active);
+  const inactiveHtml=inactiveLinks.length?inactiveLinks.map((l:any)=>{
+    const q=l.qualityInspection||{};
+    const reactivate=canManage
+      ?'<form method="post" action="/traceability/quality-links/'+Number(l.id)+'/update" class="toolbar" style="margin-top:8px">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+returnFields+
+        '<input type="hidden" name="active" value="on">'+
+        '<label>Nota<input name="notes" maxlength="2000" value="'+esc(l.notes||"")+'"></label>'+
+        '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label><button>Reactivar</button></form>'
+      :'';
+    return '<article class="item"><b>Link #'+Number(l.id)+' · QC #'+Number(q.id||0)+'</b><div class="meta">'+esc(l.sourceType||"")+' #'+Number(l.sourceId||0)+' · INACTIVO</div>'+reactivate+'</article>';
+  }).join(""):"";
+
+  return shell(
+    '<div class="eyebrow">W8 · Proveniencia</div><h1>Trazabilidad</h1>'+
+    '<p class="meta">Los vínculos QC→fuente son explícitos. El inventario actual permanece agregado por variante/ubicación y no se atribuye automáticamente a un ReceiptItem o ProductionLot.</p>'+
+    notice+selector+
+    '<section class="panel" style="margin-bottom:18px"><h2>'+esc(target.product?.name||"Producto")+'</h2><div class="meta">Modelo '+esc(target.product?.commercialModel||"sin clasificar")+' · condición '+esc(target.product?.defaultCondition||"sin clasificar")+' · costos '+esc(d.visibility?.landedCost||"REDACTED")+'</div></section>'+
+    '<section style="margin-bottom:26px"><h2>Inventario actual — no source-attributed</h2><div class="queue">'+inventoryCards+'</div></section>'+
+    '<section style="margin-bottom:26px"><h2>Linaje de compras</h2><div class="queue">'+procurementCards+'</div></section>'+
+    '<section style="margin-bottom:26px"><h2>Linaje de producción</h2><div class="queue">'+productionCards+'</div></section>'+
+    '<section style="margin-bottom:26px"><h2>Gaps de trazabilidad</h2><div class="queue">'+gapCards+'</div></section>'+
+    (inactiveHtml?'<section><h2>Vínculos QC inactivos</h2><div class="queue">'+inactiveHtml+'</div></section>':''),
     session
   );
 }
@@ -2384,6 +2569,7 @@ Bun.serve({
     if(url.pathname==="/product-specifications"&&req.method==="GET")return html(await productSpecificationsPage(url,session));
     if(url.pathname==="/production"&&req.method==="GET")return html(await productionRunsPage(url,session));
     if(url.pathname==="/landed-cost"&&req.method==="GET")return html(await landedCostPage(url,session));
+    if(url.pathname==="/traceability"&&req.method==="GET")return html(await traceabilityPage(url,session));
     if(url.pathname==="/quality-control"&&req.method==="GET")return html(await qualityControlPage(url,session));
     if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
@@ -2495,6 +2681,43 @@ Bun.serve({
         }
       });
       return redirect("/quality-control?inspectionId="+id+"&n="+catalogResult(result,"finalized"));
+    }
+
+
+    if(url.pathname==="/traceability/quality-links"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/traceability/quality-links",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          qualityInspectionId:Number(fd.get("qualityInspectionId")||0),
+          sourceType:String(fd.get("sourceType")||"").trim(),
+          sourceId:Number(fd.get("sourceId")||0),
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      const rp=Number(fd.get("returnProductId")||0);
+      const rv=Number(fd.get("returnVariantId")||0);
+      const q=rp?"productId="+rp:rv?"variantId="+rv:"";
+      return redirect("/traceability?"+q+(q?"&":"")+"n="+catalogResult(result,"linked"));
+    }
+
+    const traceabilityLinkUpdate=url.pathname.match(/^\/traceability\/quality-links\/(\d+)\/update$/);
+    if(traceabilityLinkUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/traceability/quality-links/"+Number(traceabilityLinkUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          active:fd.get("active")==="on",
+          notes:String(fd.get("notes")||"").trim()||null,
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      const rp=Number(fd.get("returnProductId")||0);
+      const rv=Number(fd.get("returnVariantId")||0);
+      const q=rp?"productId="+rp:rv?"variantId="+rv:"";
+      return redirect("/traceability?"+q+(q?"&":"")+"n="+catalogResult(result,"link_updated"));
     }
 
     if(url.pathname==="/landed-cost"&&req.method==="POST"){
