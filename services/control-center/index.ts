@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/production-runs" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -414,6 +414,178 @@ async function customersPage(url:URL,session:Session){
   }).join(""):'<div class="panel empty">Todavía no hay clientes.</div>';
   return shell('<div class="eyebrow">Clientes</div><h1>Directorio de clientes</h1>'+opsNotice(url)+'<section class="panel" style="margin-bottom:14px"><h3>Nuevo cliente</h3><form method="post" action="/customers" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="displayName" required maxlength="160"></label><label>Tipo<select name="customerType"><option value="PERSON">Persona</option><option value="BUSINESS">Empresa</option></select></label><button>Crear cliente</button></form></section><section class="queue">'+cards+'</section>',session);
 }
+
+async function productionRunsPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canManage=permissions.has("production_runs.manage");
+  const canRelease=permissions.has("production_runs.release");
+  const runId=Number(url.searchParams.get("runId")||0);
+
+  const [runsResult,catalogResultApi,specResult,linksResult]=await Promise.all([
+    api("/v1/internal/production-runs",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/product-specifications",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/manufacturer-links?active=true",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(runsResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso production_runs.read.</p></div>',session);
+  }
+  if(!runsResult.response?.ok||!catalogResultApi.response?.ok||!specResult.response?.ok||!linksResult.response?.ok){
+    return shell('<div class="panel empty"><h2>Producción no disponible</h2></div>',session);
+  }
+
+  const runs:any[]=Array.isArray(runsResult.body?.data)?runsResult.body.data:[];
+  const products:any[]=Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+  const specs:any[]=Array.isArray(specResult.body?.data)?specResult.body.data:[];
+  const links:any[]=Array.isArray(linksResult.body?.data)?linksResult.body.data:[];
+
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Production run creado.",
+    updated:"Production run actualizado.",
+    lot_created:"Lote creado.",
+    lot_updated:"Lote actualizado.",
+    released:"Run liberado.",
+    started:"Run iniciado.",
+    lot_started:"Lote iniciado.",
+    lot_completed:"Lote completado.",
+    lot_cancelled:"Lote cancelado.",
+    completed:"Run completado.",
+    cancelled:"Run cancelado.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const specOptions=specs.filter((s:any)=>s.approvedVersion).map((s:any)=>
+    '<option value="'+Number(s.approvedVersion.id)+'">'+esc(s.code)+' · v'+Number(s.approvedVersion.versionNo)+' · '+esc(s.productName||"Producto")+(s.sku?' · '+esc(s.sku):'')+'</option>'
+  ).join("");
+
+  const manufacturerOptions=links.filter((l:any)=>l.active&&l.manufacturer?.active).map((l:any)=>{
+    const target=l.targetType==="VARIANT"
+      ?esc(l.productName||"Producto")+' · '+esc(l.sku||"Variante")
+      :esc(l.productName||"Producto");
+    return '<option value="'+Number(l.id)+'">'+esc(l.manufacturer?.name||"Fabricante")+' · '+esc(l.targetType)+' · '+target+'</option>';
+  }).join("");
+
+  const variantOptions=products.flatMap((p:any)=>
+    (Array.isArray(p.variants)?p.variants:[]).map((v:any)=>
+      '<option value="'+Number(v.id)+'">'+esc(p.name)+' · '+esc(v.sku)+' · '+esc(v.size||"sin talla")+' · '+esc(v.color||"sin color")+'</option>'
+    )
+  ).join("");
+
+  const createForm=canManage&&specOptions&&manufacturerOptions
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Nuevo production run</h3>'+
+      '<p class="meta">Usa una specification APPROVED y un ManufacturerLink activo. Crear/completar un run no recibe inventario.</p>'+
+      '<form method="post" action="/production-runs" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Código del run<input name="runCode" required maxlength="100" placeholder="RUN-2026-001"></label>'+
+        '<label>Specification aprobada<select name="productSpecificationVersionId" required><option value="" selected disabled>Seleccionar</option>'+specOptions+'</select></label>'+
+        '<label>Fabricante / vínculo<select name="manufacturerLinkId" required><option value="" selected disabled>Seleccionar</option>'+manufacturerOptions+'</select></label>'+
+        '<label>Referencia externa<input name="externalReference" maxlength="240"></label>'+
+        '<label>Inicio planificado<input name="plannedStartAt" type="datetime-local"></label>'+
+        '<label>Fin planificado<input name="plannedEndAt" type="datetime-local"></label>'+
+        '<label>Notas<textarea name="notes" maxlength="4000"></textarea></label>'+
+        '<button>Crear run</button>'+
+      '</form></section>'
+    :'';
+
+  const cards=runs.length?runs.map((r:any)=>{
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(r.runCode)+' · '+esc(r.status)+'</div>'+
+      '<h3>'+esc(r.productName||"Producto")+'</h3>'+
+      '<div class="meta">'+esc(r.specificationVersion?.code||"Spec")+' v'+Number(r.specificationVersion?.versionNo||0)+' · '+esc(r.manufacturerLink?.manufacturerName||"Fabricante")+'</div></div>'+
+      '<span class="pill">'+esc(r.status)+'</span></div>'+
+      '<div style="margin-top:10px"><a class="ghost" href="/production-runs?runId='+Number(r.id)+'" style="display:inline-flex;text-decoration:none;border-radius:999px;padding:10px 14px;font-weight:900">Abrir run</a></div></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay production runs.</div>';
+
+  let detail="";
+  if(Number.isSafeInteger(runId)&&runId>0){
+    const detailResult=await api("/v1/internal/production-runs/"+runId,{cookieHeader:session.cookieHeader});
+    if(detailResult.response?.ok){
+      const run=detailResult.body?.productionRun||{};
+      const lots:any[]=Array.isArray(detailResult.body?.lots)?detailResult.body.lots:[];
+
+      const edit=run.status==="PLANNED"&&canManage
+        ?'<details style="margin-top:12px"><summary>Editar planificación</summary>'+
+          '<form method="post" action="/production-runs/'+Number(run.id)+'/update" class="actions" style="margin-top:10px">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+            '<label>Referencia externa<input name="externalReference" maxlength="240" value="'+esc(run.externalReference||"")+'"></label>'+
+            '<label>Inicio planificado<input name="plannedStartAt" type="datetime-local"></label>'+
+            '<label>Fin planificado<input name="plannedEndAt" type="datetime-local"></label>'+
+            '<label>Notas<textarea name="notes" maxlength="4000">'+esc(run.notes||"")+'</textarea></label>'+
+            '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label>'+
+            '<button>Guardar planificación</button>'+
+          '</form></details>'
+        :'';
+
+      const addLot=run.status==="PLANNED"&&canManage&&variantOptions
+        ?'<section class="panel" style="margin-top:18px"><h3>Agregar lote</h3>'+
+          '<form method="post" action="/production-runs/'+Number(run.id)+'/lots" class="actions">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+            '<label>Código de lote<input name="lotCode" required maxlength="120"></label>'+
+            '<label>Variante<select name="variantId" required><option value="" selected disabled>Seleccionar</option>'+variantOptions+'</select></label>'+
+            '<label>Cantidad planificada<input name="plannedQuantity" type="number" min="1" step="1" required></label>'+
+            '<label>Notas<textarea name="notes" maxlength="2000"></textarea></label>'+
+            '<button>Agregar lote</button>'+
+          '</form></section>'
+        :'';
+
+      const lifecycle=canRelease
+        ?(run.status==="PLANNED"
+          ?'<form method="post" action="/production-runs/'+Number(run.id)+'/release" class="toolbar" style="margin-top:12px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nota<input name="note" maxlength="1000"></label><button>Liberar producción</button></form>'+
+           '<form method="post" action="/production-runs/'+Number(run.id)+'/cancel" class="toolbar" style="margin-top:10px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Motivo<input name="note" required minlength="5" maxlength="1000"></label><button class="ghost">Cancelar run</button></form>'
+          :run.status==="RELEASED"
+            ?'<form method="post" action="/production-runs/'+Number(run.id)+'/start" class="toolbar" style="margin-top:12px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nota<input name="note" maxlength="1000"></label><button>Iniciar producción</button></form>'+
+             '<form method="post" action="/production-runs/'+Number(run.id)+'/cancel" class="toolbar" style="margin-top:10px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Motivo<input name="note" required minlength="5" maxlength="1000"></label><button class="ghost">Cancelar run</button></form>'
+            :run.status==="IN_PRODUCTION"
+              ?'<form method="post" action="/production-runs/'+Number(run.id)+'/complete" class="toolbar" style="margin-top:12px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nota<input name="note" maxlength="1000"></label><button>Completar run</button></form>'+
+               '<form method="post" action="/production-runs/'+Number(run.id)+'/cancel" class="toolbar" style="margin-top:10px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Motivo<input name="note" required minlength="5" maxlength="1000"></label><button class="ghost">Cancelar run</button></form>'
+              :"")
+        :"";
+
+      const lotCards=lots.length?lots.map((l:any)=>{
+        const editLot=run.status==="PLANNED"&&l.status==="PLANNED"&&canManage
+          ?'<details style="margin-top:10px"><summary>Editar lote</summary>'+
+            '<form method="post" action="/production-lots/'+Number(l.id)+'/update" class="actions" style="margin-top:10px">'+
+              '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="runId" value="'+Number(run.id)+'">'+
+              '<label>Cantidad planificada<input name="plannedQuantity" type="number" min="1" step="1" required value="'+Number(l.plannedQuantity)+'"></label>'+
+              '<label>Notas<textarea name="notes" maxlength="2000">'+esc(l.notes||"")+'</textarea></label>'+
+              '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label><button>Guardar lote</button></form></details>'
+          :'';
+
+        let actions="";
+        if(canRelease&&run.status==="IN_PRODUCTION"&&l.status==="PLANNED"){
+          actions='<form method="post" action="/production-lots/'+Number(l.id)+'/start" class="toolbar" style="margin-top:10px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="runId" value="'+Number(run.id)+'"><button>Iniciar lote</button></form>';
+        }else if(canRelease&&run.status==="IN_PRODUCTION"&&l.status==="IN_PRODUCTION"){
+          actions='<form method="post" action="/production-lots/'+Number(l.id)+'/complete" class="toolbar" style="margin-top:10px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="runId" value="'+Number(run.id)+'"><label>Cantidad producida<input name="producedQuantity" type="number" min="0" step="1" required></label><button>Completar lote</button></form>'+
+            '<form method="post" action="/production-lots/'+Number(l.id)+'/cancel" class="toolbar" style="margin-top:10px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="runId" value="'+Number(run.id)+'"><label>Motivo<input name="note" required minlength="5" maxlength="1000"></label><button class="ghost">Cancelar lote</button></form>';
+        }
+
+        return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(l.lotCode)+' · '+esc(l.status)+'</div>'+
+          '<h3>'+esc(l.sku)+' · '+esc(l.size||"sin talla")+' · '+esc(l.color||"sin color")+'</h3>'+
+          '<div class="meta">Plan '+Number(l.plannedQuantity)+' · producido '+Number(l.producedQuantity)+' · inventario recibido: no</div></div>'+
+          '<span class="pill">'+esc(l.status)+'</span></div>'+editLot+actions+'</article>';
+      }).join(""):'<div class="panel empty">El run todavía no tiene lotes.</div>';
+
+      detail='<section style="margin-top:28px"><div class="eyebrow">'+esc(run.runCode)+' · '+esc(run.status)+'</div>'+
+        '<h2>'+esc(run.productName||"Producto")+'</h2>'+
+        '<p class="meta">'+esc(run.specificationVersion?.code||"Spec")+' v'+Number(run.specificationVersion?.versionNo||0)+' · '+esc(run.manufacturerLink?.manufacturerName||"Fabricante")+'</p>'+
+        '<p class="meta">Plan '+esc(run.plannedStartAt||"—")+' → '+esc(run.plannedEndAt||"—")+' · real '+esc(run.actualStartAt||"—")+' → '+esc(run.actualEndAt||"—")+'</p>'+
+        '<p class="meta">Completar producción no crea GoodsReceipt ni aumenta inventario.</p>'+
+        edit+lifecycle+addLot+'<div class="queue" style="margin-top:18px">'+lotCards+'</div></section>';
+    }else{
+      detail='<div class="panel empty" style="margin-top:18px">No se pudo cargar el production run.</div>';
+    }
+  }
+
+  return shell(
+    '<div class="eyebrow">W8 · Manufacturing</div><h1>Production Runs / Lots</h1>'+
+    '<p class="meta">Trazabilidad de fabricación contra specification aprobada y fabricante explícito. La producción completada todavía no es inventario recibido.</p>'+
+    notice+createForm+'<section class="queue">'+cards+'</section>'+detail,
+    session
+  );
+}
+
 
 async function qualityControlPage(url:URL,session:Session){
   const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
