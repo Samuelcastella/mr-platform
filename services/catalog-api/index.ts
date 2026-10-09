@@ -12,6 +12,7 @@ import { ensureHealthDeskSchema, handleHealthDesk } from "./health-desk";
 import { ensureSellerFoundationSchema, handleSellerFoundation } from "./seller-foundation";
 import { ensureStaffAttributionSchema, handleStaffAttribution } from "./staff-attribution";
 import { ensureEconomicReadinessSchema, handleEconomicReadiness } from "./economic-readiness";
+import { handleProductIntelligence } from "./product-intelligence";
 import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 import { handleInternalCatalog } from "./catalog-internal";
 import { ensureVendorPortalSchema, handleVendorPortal } from "./vendor-portal";
@@ -210,6 +211,9 @@ Bun.serve({
 
     const economicReadinessResponse = await handleEconomicReadiness(req, url, db);
     if (economicReadinessResponse) return economicReadinessResponse;
+
+    const productIntelligenceResponse = await handleProductIntelligence(req, url, db);
+    if (productIntelligenceResponse) return productIntelligenceResponse;
 
     const sellerFoundationResponse = await handleSellerFoundation(req, url, db);
     if (sellerFoundationResponse) return sellerFoundationResponse;
