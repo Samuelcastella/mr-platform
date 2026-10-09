@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -1084,6 +1084,139 @@ async function sourcingPage(url:URL,session:Session){
 }
 
 
+async function supplierEvaluationsPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canWrite=permissions.has("suppliers.write");
+
+  const status=String(url.searchParams.get("status")||"").toUpperCase();
+  const [evalResult,suppliersResult,offersResult]=await Promise.all([
+    api("/v1/internal/sourcing/evaluations"+(status?"?status="+encodeURIComponent(status):""),{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/suppliers",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/sourcing/offers?active=true",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(evalResult.response?.status===403||suppliersResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso suppliers.read.</p></div>',session);
+  }
+  if(!evalResult.response?.ok||!suppliersResult.response?.ok||!offersResult.response?.ok){
+    return shell('<div class="panel empty"><h2>Evaluaciones no disponibles</h2><p>No se pudo consultar proveedores, ofertas o evaluaciones.</p></div>',session);
+  }
+
+  const rows:any[]=Array.isArray(evalResult.body?.data)?evalResult.body.data:[];
+  const suppliers:any[]=Array.isArray(suppliersResult.body?.data)?suppliersResult.body.data:[];
+  const offers:any[]=Array.isArray(offersResult.body?.data)?offersResult.body.data:[];
+
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Evaluación registrada.",
+    updated:"Evaluación actualizada.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const supplierOptions=suppliers.map((s:any)=>
+    '<option value="'+Number(s.id)+'">'+esc(s.name)+' · '+(s.active?"activo":"inactivo")+'</option>'
+  ).join("");
+
+  const offerOptions=offers.map((o:any)=>
+    '<option value="'+Number(o.id)+'">'+esc(o.supplier?.name||"Proveedor")+' · '+esc(o.variant?.productName||"Producto")+' · '+esc(o.variant?.sku||"")+'</option>'
+  ).join("");
+
+  const criterionOptions=(selected:string)=>[
+    ["NOT_REVIEWED","No evaluado"],
+    ["ACCEPTABLE","Aceptable"],
+    ["CONCERN","Con observaciones"],
+    ["UNACCEPTABLE","No aceptable"]
+  ].map(([value,label])=>'<option value="'+value+'" '+(selected===value?'selected':'')+'>'+label+'</option>').join("");
+
+  const decisionOptions=(selected:string)=>[
+    ["CONTINUE","Continuar evaluación"],
+    ["SHORTLIST","Preseleccionar"],
+    ["REQUEST_REVISION","Solicitar revisión/muestra"],
+    ["HOLD","En espera"],
+    ["DECLINE","Descartar"]
+  ].map(([value,label])=>'<option value="'+value+'" '+(selected===value?'selected':'')+'>'+label+'</option>').join("");
+
+  const statusOptions=(selected:string)=>[
+    ["OPEN","Abierta"],
+    ["FINAL","Final"],
+    ["ARCHIVED","Archivada"]
+  ].map(([value,label])=>'<option value="'+value+'" '+(selected===value?'selected':'')+'>'+label+'</option>').join("");
+
+  const filter='<form method="get" action="/supplier-evaluations" class="toolbar"><label>Estado<select name="status"><option value="">Todos</option>'+
+    ["OPEN","FINAL","ARCHIVED"].map(v=>'<option value="'+v+'" '+(status===v?'selected':'')+'>'+v+'</option>').join("")+
+    '</select></label><button>Filtrar</button></form>';
+
+  const createForm=canWrite&&suppliers.length
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Nueva evaluación</h3>'+
+      '<p class="meta">Los criterios son observaciones humanas. No existe score compuesto ni selección automática de proveedor.</p>'+
+      '<form method="post" action="/supplier-evaluations" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Tipo<select name="type"><option value="SUPPLIER">Proveedor</option><option value="SAMPLE">Muestra</option></select></label>'+
+        '<label>Proveedor<select name="supplierId" required>'+supplierOptions+'</select></label>'+
+        '<label>Oferta / variante<select name="supplierVariantId"><option value="">Sin vínculo</option>'+offerOptions+'</select></label>'+
+        '<label>Referencia de muestra<input name="sampleReference" maxlength="240" placeholder="Requerida si es muestra sin oferta"></label>'+
+        '<label>Decisión<select name="decision">'+decisionOptions("CONTINUE")+'</select></label>'+
+        '<label>Calidad<select name="quality">'+criterionOptions("NOT_REVIEWED")+'</select></label>'+
+        '<label>Consistencia<select name="consistency">'+criterionOptions("NOT_REVIEWED")+'</select></label>'+
+        '<label>Comunicación<select name="communication">'+criterionOptions("NOT_REVIEWED")+'</select></label>'+
+        '<label>Confianza lead time<select name="leadTimeConfidence">'+criterionOptions("NOT_REVIEWED")+'</select></label>'+
+        '<label>Empaque<select name="packaging">'+criterionOptions("NOT_REVIEWED")+'</select></label>'+
+        '<label>Razonamiento<textarea name="rationale" required minlength="8" maxlength="4000" placeholder="Qué se observó y por qué se toma esta decisión"></textarea></label>'+
+        '<label>Evidencia / referencia<input name="evidenceReference" maxlength="1000" placeholder="Fotos, conversación, muestra, documento..."></label>'+
+        '<button>Registrar evaluación</button>'+
+      '</form></section>'
+    :'';
+
+  const cards=rows.length?rows.map((e:any)=>{
+    const criteria=e.criteria||{};
+    const offer=e.sourcingOffer;
+    const context=offer
+      ?esc(offer.productName||"Producto")+' · '+esc(offer.sku||"")
+      :(e.sampleReference?'Muestra '+esc(e.sampleReference):'Proveedor general');
+
+    const edit=canWrite&&e.status!=="ARCHIVED"
+      ?'<details style="margin-top:12px"><summary>Actualizar evaluación</summary>'+
+        '<form method="post" action="/supplier-evaluations/'+Number(e.id)+'/update" class="actions" style="margin-top:10px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<label>Estado<select name="status">'+statusOptions(String(e.status))+'</select></label>'+
+          '<label>Decisión<select name="decision">'+decisionOptions(String(e.decision))+'</select></label>'+
+          '<label>Calidad<select name="quality">'+criterionOptions(String(criteria.quality||"NOT_REVIEWED"))+'</select></label>'+
+          '<label>Consistencia<select name="consistency">'+criterionOptions(String(criteria.consistency||"NOT_REVIEWED"))+'</select></label>'+
+          '<label>Comunicación<select name="communication">'+criterionOptions(String(criteria.communication||"NOT_REVIEWED"))+'</select></label>'+
+          '<label>Confianza lead time<select name="leadTimeConfidence">'+criterionOptions(String(criteria.leadTimeConfidence||"NOT_REVIEWED"))+'</select></label>'+
+          '<label>Empaque<select name="packaging">'+criterionOptions(String(criteria.packaging||"NOT_REVIEWED"))+'</select></label>'+
+          '<label>Referencia muestra<input name="sampleReference" maxlength="240" value="'+esc(e.sampleReference||"")+'"></label>'+
+          '<label>Razonamiento<textarea name="rationale" required minlength="8" maxlength="4000">'+esc(e.rationale||"")+'</textarea></label>'+
+          '<label>Evidencia<input name="evidenceReference" maxlength="1000" value="'+esc(e.evidenceReference||"")+'"></label>'+
+          '<label>Nota de cambio<input name="note" maxlength="1000" placeholder="Qué cambió"></label>'+
+          '<button>Guardar</button>'+
+        '</form></details>'
+      :'';
+
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(e.type)+' · '+esc(context)+'</div>'+
+      '<h3>'+esc(e.supplier?.name||"Proveedor")+'</h3>'+
+      '<div class="meta">Decisión '+esc(e.decision)+' · score compuesto: ninguno</div></div>'+
+      '<span class="pill">'+esc(e.status)+'</span></div>'+
+      '<div class="meta" style="margin-top:10px">Calidad '+esc(criteria.quality||"NOT_REVIEWED")+
+      ' · Consistencia '+esc(criteria.consistency||"NOT_REVIEWED")+
+      ' · Comunicación '+esc(criteria.communication||"NOT_REVIEWED")+
+      ' · Lead time '+esc(criteria.leadTimeConfidence||"NOT_REVIEWED")+
+      ' · Empaque '+esc(criteria.packaging||"NOT_REVIEWED")+'</div>'+
+      '<div class="message">'+esc(e.rationale||"")+'</div>'+
+      (e.evidenceReference?'<div class="meta">Evidencia: '+esc(e.evidenceReference)+'</div>':'')+
+      edit+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay evaluaciones registradas.</div>';
+
+  return shell(
+    '<div class="eyebrow">W8 · Abastecimiento</div><h1>Evaluación de proveedores y muestras</h1>'+
+    '<p class="meta">Revisión humana estructurada antes de comprar. No cambia preferencia, no crea PO y no toca inventario.</p>'+
+    notice+filter+createForm+'<section class="queue">'+cards+'</section>',
+    session
+  );
+}
+
+
 async function catalogPage(url:URL,session:Session){
   const result=await api("/v1/internal/catalog",{cookieHeader:session.cookieHeader});
   if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso catalog.read.</p></div>',session);
@@ -1414,8 +1547,59 @@ Bun.serve({
     if(url.pathname==="/product-intelligence"&&req.method==="GET")return html(await productIntelligencePage(url,session));
     if(url.pathname==="/assortment-decisions"&&req.method==="GET")return html(await assortmentDecisionsPage(url,session));
     if(url.pathname==="/sourcing"&&req.method==="GET")return html(await sourcingPage(url,session));
+    if(url.pathname==="/supplier-evaluations"&&req.method==="GET")return html(await supplierEvaluationsPage(url,session));
 
 
+
+    if(url.pathname==="/supplier-evaluations"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/sourcing/evaluations",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          type:String(fd.get("type")||""),
+          supplierId:Number(fd.get("supplierId")||0),
+          supplierVariantId:String(fd.get("supplierVariantId")||"").trim()||null,
+          sampleReference:String(fd.get("sampleReference")||"").trim()||null,
+          decision:String(fd.get("decision")||""),
+          criteria:{
+            quality:String(fd.get("quality")||""),
+            consistency:String(fd.get("consistency")||""),
+            communication:String(fd.get("communication")||""),
+            leadTimeConfidence:String(fd.get("leadTimeConfidence")||""),
+            packaging:String(fd.get("packaging")||"")
+          },
+          rationale:String(fd.get("rationale")||"").trim(),
+          evidenceReference:String(fd.get("evidenceReference")||"").trim()||null
+        }
+      });
+      return redirect("/supplier-evaluations?n="+catalogResult(result,"created"));
+    }
+
+    const supplierEvaluationUpdate=url.pathname.match(/^\/supplier-evaluations\/(\d+)\/update$/);
+    if(supplierEvaluationUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/sourcing/evaluations/"+Number(supplierEvaluationUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          status:String(fd.get("status")||""),
+          decision:String(fd.get("decision")||""),
+          criteria:{
+            quality:String(fd.get("quality")||""),
+            consistency:String(fd.get("consistency")||""),
+            communication:String(fd.get("communication")||""),
+            leadTimeConfidence:String(fd.get("leadTimeConfidence")||""),
+            packaging:String(fd.get("packaging")||"")
+          },
+          sampleReference:String(fd.get("sampleReference")||"").trim()||null,
+          rationale:String(fd.get("rationale")||"").trim(),
+          evidenceReference:String(fd.get("evidenceReference")||"").trim()||null,
+          note:String(fd.get("note")||"").trim()||null
+        }
+      });
+      return redirect("/supplier-evaluations?n="+catalogResult(result,"updated"));
+    }
 
     if(url.pathname==="/sourcing/offers"&&req.method==="POST"){
       const fd=await req.formData();
