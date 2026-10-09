@@ -896,3 +896,21 @@ Still gated:
 - external credit-provider integration remains behind provider/legal/commercial validation.
 
 No Railway or production deployment is implied by this documentation checkpoint. Repository implementation facts and production deployment facts remain separate under the traceability rules in Section 17.
+
+
+## 26. Economic policy readiness checkpoint — 2026-10-08
+
+Repository/main now includes the safe pre-economic foundation:
+
+- M11/M13 Phase B0 Policy Readiness merged through PR #70;
+- Control Center read-only readiness view merged through PR #72;
+- economic configuration remains fail-closed;
+- no SettlementLine, SettlementStatement, CommissionAccrual or CommissionStatement is activated;
+- payout, payroll, marketplace self-service and live third-party fiscal treatment remain gated.
+
+A decision worksheet is maintained at:
+`docs/decisions/THIRD_PARTY_SELLING_HONDURAS_QUESTIONNAIRE_2026-10-08.md`.
+
+Its purpose is to collect operational and professional/fiscal input from Honduras before turning readiness blockers into approved economic rules.
+
+This checkpoint does not approve settlement triggers, commission rates, payout cadence, seller fiscal issuer treatment or staff commission policy.
