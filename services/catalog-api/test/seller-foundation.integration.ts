@@ -57,7 +57,7 @@ function headers(session: { cookie: string; csrf: string }) {
   };
 }
 
-async function createStaff(email: string, displayName: string) {
+async function createStaff(email: string, displayName: string, roleCode = "MANAGER") {
   const password = "M11-" + crypto.randomUUID() + "-R9!";
   const hash = await Bun.password.hash(password, { algorithm: "argon2id" });
   const users = await db`
@@ -66,7 +66,7 @@ async function createStaff(email: string, displayName: string) {
     )
     VALUES(${email}, ${displayName}, ${hash}, 'ACTIVE', NOW())
     RETURNING id`;
-  const roles = await db`SELECT id FROM roles WHERE code='MANAGER' LIMIT 1`;
+  const roles = await db`SELECT id FROM roles WHERE code=${roleCode} LIMIT 1`;
   await db`
     INSERT INTO user_role_assignments(user_id,role_id,scope_type,scope_location_id)
     VALUES(${Number(users[0].id)},${Number(roles[0].id)},'GLOBAL',NULL)`;
@@ -132,7 +132,8 @@ const manager1 = await createStaff(
 );
 const manager2 = await createStaff(
   "m11-manager2-" + crypto.randomUUID().slice(0,6) + "@example.test",
-  "M11 Manager Two"
+  "M11 Manager Two",
+  "ADMIN"
 );
 
 ok(manager1.session.response.status === 200, "Manager 1 inicia sesión");
@@ -172,6 +173,36 @@ const agreementCreate = await api("/v1/internal/sellers/" + sellerId + "/agreeme
 ok(agreementCreate.response.status === 201, "crea SellerAgreement DRAFT");
 const agreementId = Number(agreementCreate.body.agreement?.id);
 
+const incompleteApprove = await api("/v1/internal/seller-agreements/" + agreementId + "/approve", {
+  method: "POST",
+  headers: headers(manager2.session),
+  body: "{}"
+});
+ok(
+  incompleteApprove.response.status === 409 &&
+  incompleteApprove.body.error === "agreement_policy_incomplete",
+  "acuerdo incompleto no puede aprobarse"
+);
+
+const policy = await api("/v1/internal/seller-agreements/" + agreementId + "/policy", {
+  method: "PATCH",
+  headers: headers(manager1.session),
+  body: JSON.stringify({
+    settlementTrigger: "ORDER_COMPLETED",
+    paymentEligibilityPolicy: "PAYMENT_PAID_REQUIRED",
+    settlementFrequency: "WEEKLY",
+    settlementDelayDays: 7,
+    discountAllocationRule: "MR",
+    returnAllocationRule: "SELLER",
+    shippingAllocationRule: "PROPORTIONAL",
+    paymentFeeAllocationRule: "SELLER",
+    shrinkageLiabilityRule: "SELLER_AFTER_APPROVAL",
+    commissionBasis: "NET_SALES",
+    commissionRateBps: 1500
+  })
+});
+ok(policy.response.status === 200 && policy.body.configurationReady === true, "policy completa deja el acuerdo configuration-ready");
+
 const selfApprove = await api("/v1/internal/seller-agreements/" + agreementId + "/approve", {
   method: "POST",
   headers: headers(manager1.session),
@@ -189,12 +220,33 @@ const approve = await api("/v1/internal/seller-agreements/" + agreementId + "/ap
 });
 ok(approve.response.status === 200, "segundo manager aprueba acuerdo");
 
+const prematureActivate = await api("/v1/internal/seller-agreements/" + agreementId + "/activate", {
+  method: "POST",
+  headers: headers(manager2.session),
+  body: "{}"
+});
+ok(
+  prematureActivate.response.status === 409 &&
+  prematureActivate.body.error === "agreement_not_activation_ready",
+  "acuerdo aprobado no se activa sin validación fiscal explícita"
+);
+
+const fiscalValidation = await api("/v1/internal/seller-agreements/" + agreementId + "/fiscal-validation", {
+  method: "POST",
+  headers: headers(manager2.session),
+  body: JSON.stringify({
+    fiscalIssuerModel: "OTHER",
+    validationReference: "CI evidence placeholder for approved fiscal treatment"
+  })
+});
+ok(fiscalValidation.response.status === 200, "admin registra validación fiscal explícita");
+
 const activate = await api("/v1/internal/seller-agreements/" + agreementId + "/activate", {
   method: "POST",
   headers: headers(manager2.session),
   body: "{}"
 });
-ok(activate.response.status === 200, "acuerdo aprobado puede activarse");
+ok(activate.response.status === 200, "acuerdo completo y validado puede activarse");
 
 const ownedSource = await api("/v1/internal/inventory-sources", {
   method: "POST",

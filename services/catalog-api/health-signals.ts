@@ -34,7 +34,9 @@ export async function collectHealthSignals(db: DB): Promise<HealthSignalDefiniti
     fulfillmentBacklog,
     failedFulfillments,
     returningBacklog,
-    codBacklog
+    codBacklog,
+    sellerPolicyBlockers,
+    commissionPolicyBlockers
   ] = await Promise.all([
     db`
       SELECT COUNT(*)::int AS count,
@@ -75,13 +77,47 @@ export async function collectHealthSignals(db: DB): Promise<HealthSignalDefiniti
              COALESCE(MAX(EXTRACT(EPOCH FROM (NOW()-COALESCE(collected_at,updated_at)))/3600),0)::int AS oldest_hours
       FROM cod_collections
       WHERE status='COLLECTED'
-        AND COALESCE(collected_at,updated_at)<=NOW()-(${codSla}::text||' hours')::interval`
+        AND COALESCE(collected_at,updated_at)<=NOW()-(${codSla}::text||' hours')::interval`,
+    db`
+      SELECT COUNT(*)::int AS count
+      FROM seller_agreements
+      WHERE status='ACTIVE'
+        AND (
+          settlement_trigger IS NULL OR payment_eligibility_policy IS NULL OR
+          settlement_frequency IS NULL OR settlement_delay_configured=FALSE OR
+          discount_allocation_rule IS NULL OR shipping_allocation_rule IS NULL OR
+          payment_fee_allocation_rule IS NULL OR return_allocation_rule IS NULL OR
+          shrinkage_liability_rule IS NULL OR commission_basis IS NULL OR
+          fiscal_issuer_model IS NULL OR fiscal_treatment_validated_at IS NULL OR
+          fiscal_validation_reference IS NULL
+        )`,
+    db`
+      SELECT COUNT(*)::int AS count
+      FROM commission_rules
+      WHERE status='ACTIVE'
+        AND (
+          earning_trigger IS NULL OR calculation_basis IS NULL OR
+          eligible_attribution_roles IS NULL OR jsonb_array_length(eligible_attribution_roles)=0 OR
+          eligible_commercial_modes IS NULL OR jsonb_array_length(eligible_commercial_modes)=0 OR
+          discount_treatment IS NULL OR shipping_treatment IS NULL OR
+          return_reversal_policy IS NULL OR cancellation_reversal_policy IS NULL OR
+          statement_frequency IS NULL OR negative_carry_forward_policy IS NULL OR
+          (
+            calculation_basis IN ('GROSS_SALES','NET_SALES','GROSS_MARGIN')
+            AND rate_bps IS NULL
+          ) OR
+          (
+            calculation_basis IN ('FIXED_PER_ORDER','FIXED_PER_UNIT')
+            AND (fixed_amount_minor IS NULL OR currency IS NULL)
+          )
+        )`
   ]);
 
   const n = (rows: any[]) => Number(rows[0]?.count || 0);
   const rCount=n(expiredReservations), oCount=n(stuckOrders), tCount=n(pendingTransfers);
   const pFail=n(failedAttempts), fBack=n(fulfillmentBacklog), fFail=n(failedFulfillments);
   const rBack=n(returningBacklog), cBack=n(codBacklog);
+  const sPolicy=n(sellerPolicyBlockers), cPolicy=n(commissionPolicyBlockers);
 
   return [
     {
@@ -147,6 +183,26 @@ export async function collectHealthSignals(db: DB): Promise<HealthSignalDefiniti
       message:cBack?cBack+" cobro(s) COD COLLECTED siguen sin RECONCILED > "+codSla+" h.":"COD dentro del SLA.",
       correlationKey:"cod:unreconciled",
       metadata:{slaHours:codSla,oldestHours:Number(codBacklog[0]?.oldest_hours||0)}, active:cBack>0
+    },
+    {
+      sourceType:"economics", signalType:"seller_policy_readiness",
+      status:sPolicy?"DEGRADED":"HEALTHY", severity:sPolicy?"WARNING":"INFO",
+      observedValue:sPolicy, thresholdValue:0, unit:"active_agreements",
+      message:sPolicy
+        ? sPolicy+" acuerdo(s) de seller ACTIVE tienen policy blockers; settlement permanece fail-closed."
+        : "No hay acuerdos ACTIVE con policy blockers.",
+      correlationKey:"economics:seller-policy-readiness",
+      metadata:{moneyCreationEnabled:false}, active:sPolicy>0
+    },
+    {
+      sourceType:"economics", signalType:"commission_policy_readiness",
+      status:cPolicy?"DEGRADED":"HEALTHY", severity:cPolicy?"WARNING":"INFO",
+      observedValue:cPolicy, thresholdValue:0, unit:"active_rules",
+      message:cPolicy
+        ? cPolicy+" regla(s) de comisión ACTIVE tienen policy blockers; accrual permanece fail-closed."
+        : "No hay reglas de comisión ACTIVE con policy blockers.",
+      correlationKey:"economics:commission-policy-readiness",
+      metadata:{moneyCreationEnabled:false}, active:cPolicy>0
     },
     {
       sourceType:"fiscal", signalType:"fiscal_authority_state",

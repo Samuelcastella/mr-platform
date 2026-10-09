@@ -11,6 +11,7 @@ import { ensureInventoryAdjustmentsSchema, handleInventoryAdjustments } from "./
 import { ensureHealthDeskSchema, handleHealthDesk } from "./health-desk";
 import { ensureSellerFoundationSchema, handleSellerFoundation } from "./seller-foundation";
 import { ensureStaffAttributionSchema, handleStaffAttribution } from "./staff-attribution";
+import { ensureEconomicReadinessSchema, handleEconomicReadiness } from "./economic-readiness";
 import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 import { handleInternalCatalog } from "./catalog-internal";
 import { ensureVendorPortalSchema, handleVendorPortal } from "./vendor-portal";
@@ -158,6 +159,7 @@ await ensureInventoryAdjustmentsSchema(db);
 await ensureHealthDeskSchema(db);
 await ensureSellerFoundationSchema(db);
 await ensureStaffAttributionSchema(db);
+await ensureEconomicReadinessSchema(db);
 await ensureInternalOpsSchema(db);
 await ensureVendorPortalSchema(db);
 
@@ -205,6 +207,9 @@ Bun.serve({
 
     const healthDeskResponse = await handleHealthDesk(req, url, db);
     if (healthDeskResponse) return healthDeskResponse;
+
+    const economicReadinessResponse = await handleEconomicReadiness(req, url, db);
+    if (economicReadinessResponse) return economicReadinessResponse;
 
     const sellerFoundationResponse = await handleSellerFoundation(req, url, db);
     if (sellerFoundationResponse) return sellerFoundationResponse;
