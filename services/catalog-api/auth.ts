@@ -145,6 +145,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "suppliers.read",
       "manufacturers.read",
       "product_specs.read",
+      "production_runs.read",
       "quality.read",
       "quality.manage",
       "procurement.read",
