@@ -21,6 +21,7 @@ import { ensureManufacturerRegistrySchema, handleManufacturerRegistry } from "./
 import { ensureProductSpecificationSchema, handleProductSpecifications } from "./product-specifications";
 import { ensureProductionRunsSchema, handleProductionRuns } from "./production-runs";
 import { ensureQualityControlSchema, handleQualityControl } from "./quality-control";
+import { ensureLandedCostSchema, handleLandedCost } from "./landed-cost";
 import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 import { handleInternalCatalog } from "./catalog-internal";
 import { ensureVendorPortalSchema, handleVendorPortal } from "./vendor-portal";
@@ -178,6 +179,7 @@ await ensureManufacturerRegistrySchema(db);
 await ensureProductSpecificationSchema(db);
 await ensureProductionRunsSchema(db);
 await ensureQualityControlSchema(db);
+await ensureLandedCostSchema(db);
 await ensureInternalOpsSchema(db);
 await ensureVendorPortalSchema(db);
 
@@ -249,6 +251,9 @@ Bun.serve({
 
     const qualityControlResponse = await handleQualityControl(req, url, db);
     if (qualityControlResponse) return qualityControlResponse;
+
+    const landedCostResponse = await handleLandedCost(req, url, db);
+    if (landedCostResponse) return landedCostResponse;
 
     const sourcingOffersResponse = await handleSourcingOffers(req, url, db);
     if (sourcingOffersResponse) return sourcingOffersResponse;
