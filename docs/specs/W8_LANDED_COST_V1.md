@@ -224,6 +224,14 @@ Role policy:
 - INVENTORY_OPERATOR: read
 - ANALYST: reports.read does not imply landed-cost access
 
+Read scope semantics:
+
+- GLOBAL `landed_cost.read` may read both GoodsReceipt and ProductionRun cost data;
+- LOCATION `landed_cost.read` may read only GoodsReceipt sources/cases whose `GoodsReceipt.location_id` matches that grant;
+- LOCATION grants do not expose ProductionRun cost data in v1 because ProductionRun has no authoritative location field;
+- case-detail reads apply the same rule and fail with `forbidden` outside scope;
+- internal service authentication remains global for internal workflows.
+
 Staff mutations require CSRF.
 
 ## API
@@ -233,6 +241,8 @@ Staff mutations require CSRF.
 `GET /v1/internal/landed-cost/sources`
 
 Returns eligible posted GoodsReceipts and completed ProductionRuns, including whether a case already exists.
+
+Response visibility is filtered by the caller's landed-cost read scope.
 
 ### Cases
 
@@ -326,10 +336,13 @@ Landed Cost v1 must not automatically:
 8. Manual allocations must equal active component total before finalization.
 9. Service actor cannot finalize.
 10. Inventory Operator can read but cannot manage/finalize.
-11. Analyst cannot read solely through reports.read.
-12. FINAL case, components and allocations are immutable.
-13. Source costs remain unchanged.
-14. Inventory quantity/reserved/movements remain unchanged.
-15. InventorySource, PO, receipt, production and QC state remain unchanged.
-16. No FX is applied.
-17. History/audit are complete.
+11. LOCATION-scoped Inventory Operator sees only GoodsReceipt landed-cost data for its own location.
+12. LOCATION-scoped Inventory Operator cannot read ProductionRun landed-cost data in v1.
+13. Out-of-scope GoodsReceipt case detail returns forbidden.
+14. Analyst cannot read solely through reports.read.
+15. FINAL case, components and allocations are immutable.
+16. Source costs remain unchanged.
+17. Inventory quantity/reserved/movements remain unchanged.
+18. InventorySource, PO, receipt, production and QC state remain unchanged.
+19. No FX is applied.
+20. History/audit are complete.
