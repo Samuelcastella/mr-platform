@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -711,6 +711,66 @@ async function healthDeskPage(url:URL,session:Session){
   );
 }
 
+async function economicReadinessPage(session:Session){
+  const result=await api("/v1/internal/economic-readiness",{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso economics.policy.read.</p></div>',session);
+  }
+  if(!result.response?.ok){
+    return shell('<div class="panel empty"><h2>Readiness no disponible</h2><p>No se pudo consultar el Commerce Core.</p></div>',session);
+  }
+
+  const settlement:any=result.body?.settlement||{};
+  const commissions:any=result.body?.commissions||{};
+  const sellerItems:any[]=Array.isArray(settlement.items)?settlement.items:[];
+  const commissionItems:any[]=Array.isArray(commissions.items)?commissions.items:[];
+
+  const blockerList=(values:unknown)=>{
+    const rows=Array.isArray(values)?values:[];
+    return rows.length
+      ?'<ul class="meta" style="margin:8px 0 0;padding-left:20px">'+rows.map((x:any)=>'<li>'+esc(x)+'</li>').join("")+'</ul>'
+      :'<div class="meta" style="margin-top:8px">Sin blockers.</div>';
+  };
+
+  const sellerCards=sellerItems.length?sellerItems.map((x:any)=>{
+    const activation=Array.isArray(x.blockers?.activation)?x.blockers.activation:[];
+    const fiscal=Array.isArray(x.blockers?.fiscal)?x.blockers.fiscal:[];
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(x.sellerDisplayName||("Seller "+x.sellerId))+'</h3>'+
+      '<div class="meta">Agreement #'+Number(x.agreementId)+' · '+esc(x.status)+'</div></div>'+
+      '<span class="pill '+(!x.settlementReady?'high':'')+'">'+(x.settlementReady?'READY':'BLOCKED')+'</span></div>'+
+      '<div class="meta" style="margin-top:10px"><b>Activación</b></div>'+blockerList(activation)+
+      '<div class="meta" style="margin-top:10px"><b>Fiscal</b></div>'+blockerList(fiscal)+
+      '</article>';
+  }).join(""):'<div class="panel empty">No hay acuerdos aprobados o activos para evaluar.</div>';
+
+  const commissionCards=commissionItems.length?commissionItems.map((x:any)=>{
+    const activation=Array.isArray(x.blockers?.activation)?x.blockers.activation:[];
+    return '<article class="item"><div class="item-head"><div><h3>'+esc(x.name||("Rule "+x.ruleId))+'</h3>'+
+      '<div class="meta">Versión '+Number(x.version||0)+' · '+esc(x.status)+'</div></div>'+
+      '<span class="pill '+(!x.commissionReady?'high':'')+'">'+(x.commissionReady?'READY':'BLOCKED')+'</span></div>'+
+      blockerList(activation)+'</article>';
+  }).join(""):'<div class="panel empty">No hay CommissionRule aprobadas o activas para evaluar.</div>';
+
+  const moneyEnabled=Boolean(result.body?.moneyCreationEnabled);
+  const guard='<div class="notice"><b>Creación de dinero: '+(moneyEnabled?'HABILITADA':'DESACTIVADA')+'.</b> Esta pantalla es solo de diagnóstico y no calcula liquidaciones, comisiones ni pagos.</div>';
+
+  return shell(
+    '<div class="eyebrow">Gobernanza económica</div><h1>Policy Readiness</h1>'+
+    '<p class="meta">Muestra qué políticas están completas y cuáles siguen bloqueadas. No modifica acuerdos ni reglas.</p>'+
+    guard+
+    '<section class="grid" style="margin-bottom:20px">'+
+      '<div class="metric"><span>Seller agreements</span><b>'+Number(settlement.configured||0)+'</b></div>'+
+      '<div class="metric"><span>Seller ready</span><b>'+Number(settlement.ready||0)+'</b></div>'+
+      '<div class="metric"><span>Commission rules</span><b>'+Number(commissions.configured||0)+'</b></div>'+
+      '<div class="metric"><span>Commission ready</span><b>'+Number(commissions.ready||0)+'</b></div>'+
+    '</section>'+
+    '<section style="margin-bottom:28px"><h2>Seller settlement readiness</h2><div class="queue">'+sellerCards+'</div></section>'+
+    '<section><h2>Staff commission readiness</h2><div class="queue">'+commissionCards+'</div></section>',
+    session
+  );
+}
+
+
 async function catalogPage(url:URL,session:Session){
   const result=await api("/v1/internal/catalog",{cookieHeader:session.cookieHeader});
   if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso catalog.read.</p></div>',session);
@@ -1037,6 +1097,7 @@ Bun.serve({
     if(url.pathname==="/returns"&&req.method==="GET")return html(await returnsPage(url,session));
     if(url.pathname==="/inventory-adjustments"&&req.method==="GET")return html(await inventoryAdjustmentsPage(url,session));
     if(url.pathname==="/health-desk"&&req.method==="GET")return html(await healthDeskPage(url,session));
+    if(url.pathname==="/economic-readiness"&&req.method==="GET")return html(await economicReadinessPage(session));
 
 
 
