@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -807,6 +807,7 @@ async function productIntelligencePage(url:URL,session:Session){
       '<div class="meta" style="margin-top:12px">Ownership histórico: MR '+Number(mix.mrOwnedUnits||0)+' · terceros '+Number(mix.thirdPartyUnits||0)+' · sin clasificar '+Number(mix.unclassifiedUnits||0)+'</div>'+
       '<div class="meta">Interés reposición '+Number(p.restockInterest||0)+' · solicitudes vinculadas '+Number(p.productRequests||0)+' · cobertura de costo '+Number(p.costCoveragePct||0).toFixed(1)+'%</div>'+
       '<div class="meta">Margen bruto proxy conocido: '+money(p.knownGrossMarginProxyByCurrency)+'</div>'+
+      (p.productId?'<div style="margin-top:12px"><a class="ghost" href="/assortment-decisions?productId='+Number(p.productId)+'" style="display:inline-flex;text-decoration:none;border-radius:999px;padding:10px 13px;font-weight:900">Registrar decisión</a></div>':'')+
       '</article>';
   }).join(""):'<div class="panel empty">Aún no hay actividad suficiente en esta ventana.</div>';
 
@@ -814,7 +815,8 @@ async function productIntelligencePage(url:URL,session:Session){
     '<article class="item"><div class="item-head"><div><div class="eyebrow">#'+(index+1)+'</div><h3>'+esc(x.category)+'</h3>'+
     '<div class="meta">'+Number(x.productsWithActivity||0)+' productos con señal · venta completada '+money(x.completedGrossByCurrency)+'</div></div>'+
     '<span class="pill">'+Number(x.completedUnits||0)+' unidades</span></div>'+
-    '<div class="meta">Devueltas '+Number(x.returnedUnits||0)+' · stock '+Number(x.currentAvailableUnits||0)+' · demanda '+Number(x.demandSignals||0)+' · cobertura de costo '+Number(x.costCoveragePct||0).toFixed(1)+'%</div></article>'
+    '<div class="meta">Devueltas '+Number(x.returnedUnits||0)+' · stock '+Number(x.currentAvailableUnits||0)+' · demanda '+Number(x.demandSignals||0)+' · cobertura de costo '+Number(x.costCoveragePct||0).toFixed(1)+'%</div>'+
+    '<div style="margin-top:12px"><a class="ghost" href="/assortment-decisions?category='+encodeURIComponent(String(x.category||""))+'" style="display:inline-flex;text-decoration:none;border-radius:999px;padding:10px 13px;font-weight:900">Registrar decisión</a></div></article>'
   ).join(""):'<div class="panel empty">Sin categorías con actividad.</div>';
 
   const missingDemand=missing.length
@@ -839,6 +841,113 @@ async function productIntelligencePage(url:URL,session:Session){
     '<section style="margin-bottom:28px"><h2>Productos</h2><div class="queue">'+productCards+'</div></section>'+
     '<section style="margin-bottom:28px"><h2>Categorías</h2><div class="queue">'+categoryCards+'</div></section>'+
     '<section class="intel-card"><div class="eyebrow" style="color:#d8b96d">Demanda no cubierta</div><h3>Solicitudes sin producto vinculado</h3>'+missingDemand+'</section>',
+    session
+  );
+}
+
+
+async function assortmentDecisionsPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canManage=permissions.has("assortment.decisions.manage");
+
+  const status=String(url.searchParams.get("status")||"").toUpperCase();
+  const query=status?"?status="+encodeURIComponent(status):"";
+  const [decisionsResult,catalogResultApi]=await Promise.all([
+    api("/v1/internal/assortment-decisions"+query,{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(decisionsResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso assortment.decisions.read.</p></div>',session);
+  }
+  if(!decisionsResult.response?.ok){
+    return shell('<div class="panel empty"><h2>Decisiones no disponibles</h2><p>No se pudo consultar el registro de surtido.</p></div>',session);
+  }
+
+  const rows:any[]=Array.isArray(decisionsResult.body?.data)?decisionsResult.body.data:[];
+  const products:any[]=catalogResultApi.response?.ok&&Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+  const prefillProductId=Number(url.searchParams.get("productId")||0);
+  const prefillCategory=String(url.searchParams.get("category")||"").slice(0,120);
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Decisión registrada.",
+    updated:"Decisión actualizada.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const productOptions=products.map((p:any)=>
+    '<option value="'+Number(p.id)+'" '+(Number(p.id)===prefillProductId?'selected':'')+'>'+esc(p.name)+' · '+esc(p.category||"Sin categoría")+'</option>'
+  ).join("");
+
+  const directionOptions=(selected:string)=>[
+    ["WATCH","Observar"],
+    ["SOURCE_SUPPLIER","Buscar proveedor"],
+    ["EVALUATE_DIRECT_BUY","Evaluar compra directa"],
+    ["PRIVATE_LABEL_CANDIDATE","Candidato a marca propia"],
+    ["HOLD","En espera"],
+    ["DECLINED","Descartado"]
+  ].map(([value,label])=>'<option value="'+value+'" '+(selected===value?'selected':'')+'>'+label+'</option>').join("");
+
+  const statusOptions=(selected:string)=>[
+    ["OPEN","Abierta"],
+    ["VALIDATED","Validada"],
+    ["DISMISSED","Desestimada"],
+    ["ARCHIVED","Archivada"]
+  ].map(([value,label])=>'<option value="'+value+'" '+(selected===value?'selected':'')+'>'+label+'</option>').join("");
+
+  const createForm=canManage
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Nueva decisión</h3>'+
+      '<p class="meta">Registrar una dirección no ejecuta compras ni cambia el catálogo. La evidencia y el razonamiento quedan auditados.</p>'+
+      '<form method="post" action="/assortment-decisions" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Target<select name="targetType"><option value="PRODUCT" '+(prefillCategory?'':'selected')+'>Producto</option><option value="CATEGORY" '+(prefillCategory?'selected':'')+'>Categoría</option></select></label>'+
+        '<label>Producto<select name="productId"><option value="">—</option>'+productOptions+'</select></label>'+
+        '<label>Categoría<input name="category" maxlength="120" value="'+esc(prefillCategory)+'" placeholder="Ej. Calzado"></label>'+
+        '<label>Dirección<select name="direction">'+directionOptions("WATCH")+'</select></label>'+
+        '<label>Prioridad<select name="priority"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select></label>'+
+        '<label>Razonamiento<textarea name="rationale" required minlength="8" maxlength="4000" placeholder="Qué observamos y por qué vale la pena seguir esta dirección"></textarea></label>'+
+        '<label>Evidencia / referencia<input name="evidenceReference" maxlength="1000" placeholder="Reporte, conversación, proveedor, métrica..."></label>'+
+        '<button>Registrar</button>'+
+      '</form></section>'
+    :'';
+
+  const cards=rows.length?rows.map((d:any)=>{
+    const owner=d.owner?.displayName||"Sin responsable";
+    const actor=d.updatedBy?.displayName||d.createdBy?.displayName||"—";
+    const target=d.targetType==="PRODUCT"?"Producto":"Categoría";
+    const edit=canManage&&d.status!=="ARCHIVED"
+      ?'<details style="margin-top:12px"><summary>Actualizar decisión</summary>'+
+        '<form method="post" action="/assortment-decisions/'+Number(d.id)+'/update" class="actions" style="margin-top:10px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<label>Dirección<select name="direction">'+directionOptions(String(d.direction))+'</select></label>'+
+          '<label>Estado<select name="status">'+statusOptions(String(d.status))+'</select></label>'+
+          '<label>Prioridad<select name="priority">'+[0,1,2,3].map(v=>'<option value="'+v+'" '+(Number(d.priority)===v?'selected':'')+'>'+v+'</option>').join("")+'</select></label>'+
+          '<label>Razonamiento<textarea name="rationale" required minlength="8" maxlength="4000">'+esc(d.rationale||"")+'</textarea></label>'+
+          '<label>Evidencia<input name="evidenceReference" maxlength="1000" value="'+esc(d.evidenceReference||"")+'"></label>'+
+          '<label>Nota de cambio<input name="note" maxlength="1000" placeholder="Por qué cambia la decisión"></label>'+
+          '<button>Guardar cambio</button>'+
+        '</form></details>'
+      :'';
+
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(target)+' · prioridad '+Number(d.priority||0)+'</div><h3>'+esc(d.targetLabel)+'</h3>'+
+      '<div class="meta">'+esc(d.direction)+' · responsable '+esc(owner)+' · actualizado por '+esc(actor)+'</div></div>'+
+      '<span class="pill '+(d.status==="DISMISSED"?'high':'')+'">'+esc(d.status)+'</span></div>'+
+      '<div class="message">'+esc(d.rationale)+'</div>'+
+      (d.evidenceReference?'<div class="meta">Evidencia: '+esc(d.evidenceReference)+'</div>':'')+
+      '<div class="meta">Actualizado: '+esc(String(d.updatedAt||"—"))+'</div>'+
+      edit+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay decisiones registradas.</div>';
+
+  const filters='<form method="get" action="/assortment-decisions" class="toolbar"><label>Estado<select name="status"><option value="">Todos</option>'+
+    ["OPEN","VALIDATED","DISMISSED","ARCHIVED"].map(v=>'<option value="'+v+'" '+(status===v?'selected':'')+'>'+v+'</option>').join("")+
+    '</select></label><button>Filtrar</button></form>';
+
+  return shell(
+    '<div class="eyebrow">Gobernanza de surtido</div><h1>Registro de decisiones</h1>'+
+    '<p class="meta">Convierte señales en decisiones humanas trazables. No crea compras, no publica productos y no activa marca propia.</p>'+
+    notice+filters+createForm+
+    '<section class="queue">'+cards+'</section>',
     session
   );
 }
@@ -1171,9 +1280,45 @@ Bun.serve({
     if(url.pathname==="/inventory-adjustments"&&req.method==="GET")return html(await inventoryAdjustmentsPage(url,session));
     if(url.pathname==="/health-desk"&&req.method==="GET")return html(await healthDeskPage(url,session));
     if(url.pathname==="/economic-readiness"&&req.method==="GET")return html(await economicReadinessPage(session));
-    if(url.pathname==="/product-intelligence"&&req.method==="GET")return html(await productIntelligencePage(url,session));
+    if(url.pathname==="/product-intelligence"&&req.method==="GET")return html(await productIntelligencePage(url,session));\n    if(url.pathname==="/assortment-decisions"&&req.method==="GET")return html(await assortmentDecisionsPage(url,session));
 
 
+
+    if(url.pathname==="/assortment-decisions"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/assortment-decisions",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          targetType:String(fd.get("targetType")||""),
+          productId:String(fd.get("productId")||"").trim()||null,
+          category:String(fd.get("category")||"").trim()||null,
+          direction:String(fd.get("direction")||"WATCH"),
+          priority:Number(fd.get("priority")||1),
+          rationale:String(fd.get("rationale")||"").trim(),
+          evidenceReference:String(fd.get("evidenceReference")||"").trim()||null
+        }
+      });
+      return redirect("/assortment-decisions?n="+catalogResult(result,"created"));
+    }
+
+    const assortmentUpdate=url.pathname.match(/^\/assortment-decisions\/(\d+)\/update$/);
+    if(assortmentUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/assortment-decisions/"+Number(assortmentUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          direction:String(fd.get("direction")||""),
+          status:String(fd.get("status")||""),
+          priority:Number(fd.get("priority")||0),
+          rationale:String(fd.get("rationale")||"").trim(),
+          evidenceReference:String(fd.get("evidenceReference")||"").trim()||null,
+          note:String(fd.get("note")||"").trim()||null
+        }
+      });
+      return redirect("/assortment-decisions?n="+catalogResult(result,"updated"));
+    }
 
     if(url.pathname==="/health-desk/refresh"&&req.method==="POST"){
       const fd=await req.formData();
