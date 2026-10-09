@@ -183,16 +183,37 @@ const queuedProduct = reviewQueue.body?.data?.find((p: any) => Number(p.id) === 
 ok(queuedProduct?.commercialModel == null, "producto proveedor llega sin commercialModel inferido");
 ok(queuedProduct?.defaultCondition == null, "producto proveedor llega sin condición inferida");
 
+const approvalWithoutClassification = await api("/v1/internal/vendor-products/" + productId + "/review", {
+  method: "POST",
+  headers: internalHeaders,
+  body: JSON.stringify({ decision: "APPROVE", note: "Intento sin clasificación" })
+});
+ok(
+  approvalWithoutClassification.response.status === 409 &&
+  approvalWithoutClassification.body?.error === "classification_required",
+  "aprobación exige clasificación explícita del staff"
+);
+
 const approved = await api("/v1/internal/vendor-products/" + productId + "/review", {
   method: "POST",
   headers: internalHeaders,
-  body: JSON.stringify({ decision: "APPROVE", note: "Aprobado por CI" })
+  body: JSON.stringify({
+    decision: "APPROVE",
+    note: "Aprobado por CI",
+    commercialModel: "curated",
+    defaultCondition: "new"
+  })
 });
-ok(approved.response.status === 200, "administrador aprueba producto externo");
+ok(approved.response.status === 200, "administrador clasifica y aprueba producto externo");
 ok(
   approved.body?.product?.review_status === "APPROVED" &&
   approved.body?.product?.status === "active",
   "aprobación publica producto"
+);
+ok(
+  approved.body?.product?.commercial_model === "curated" &&
+  approved.body?.product?.default_condition === "new",
+  "aprobación persiste clasificación del revisor"
 );
 
 const visible = await api("/v1/products?status=active");
