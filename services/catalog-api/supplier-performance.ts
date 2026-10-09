@@ -17,6 +17,7 @@ function n(value: unknown) {
 }
 
 function oneDecimal(value: unknown) {
+  if (value == null || value === "") return null;
   const x=Number(value);
   return Number.isFinite(x)?Math.round(x*10)/10:null;
 }
