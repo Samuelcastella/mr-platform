@@ -14,6 +14,7 @@ import { ensureStaffAttributionSchema, handleStaffAttribution } from "./staff-at
 import { ensureEconomicReadinessSchema, handleEconomicReadiness } from "./economic-readiness";
 import { handleProductIntelligence } from "./product-intelligence";
 import { ensureAssortmentDecisionSchema, handleAssortmentDecisions } from "./assortment-decisions";
+import { ensureSourcingOffersSchema, handleSourcingOffers } from "./sourcing-offers";
 import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 import { handleInternalCatalog } from "./catalog-internal";
 import { ensureVendorPortalSchema, handleVendorPortal } from "./vendor-portal";
@@ -163,6 +164,7 @@ await ensureSellerFoundationSchema(db);
 await ensureStaffAttributionSchema(db);
 await ensureEconomicReadinessSchema(db);
 await ensureAssortmentDecisionSchema(db);
+await ensureSourcingOffersSchema(db);
 await ensureInternalOpsSchema(db);
 await ensureVendorPortalSchema(db);
 
@@ -219,6 +221,9 @@ Bun.serve({
 
     const assortmentDecisionResponse = await handleAssortmentDecisions(req, url, db);
     if (assortmentDecisionResponse) return assortmentDecisionResponse;
+
+    const sourcingOffersResponse = await handleSourcingOffers(req, url, db);
+    if (sourcingOffersResponse) return sourcingOffersResponse;
 
     const sellerFoundationResponse = await handleSellerFoundation(req, url, db);
     if (sellerFoundationResponse) return sellerFoundationResponse;

@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -953,6 +953,137 @@ async function assortmentDecisionsPage(url:URL,session:Session){
 }
 
 
+async function sourcingPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canWrite=permissions.has("suppliers.write");
+  const selectedVariantId=Number(url.searchParams.get("variantId")||0);
+
+  const [offersResult,suppliersResult,catalogResultApi]=await Promise.all([
+    api("/v1/internal/sourcing/offers"+(selectedVariantId?"?variantId="+selectedVariantId:""),{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/suppliers?active=true",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(offersResult.response?.status===403||suppliersResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso suppliers.read.</p></div>',session);
+  }
+  if(!offersResult.response?.ok||!suppliersResult.response?.ok||!catalogResultApi.response?.ok){
+    return shell('<div class="panel empty"><h2>Sourcing no disponible</h2><p>No se pudieron cargar proveedores, catálogo u ofertas.</p></div>',session);
+  }
+
+  const offers:any[]=Array.isArray(offersResult.body?.data)?offersResult.body.data:[];
+  const suppliers:any[]=Array.isArray(suppliersResult.body?.data)?suppliersResult.body.data:[];
+  const products:any[]=Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+  const variants:any[]=products.flatMap((p:any)=>
+    (Array.isArray(p.variants)?p.variants:[]).map((v:any)=>({
+      ...v,
+      productId:Number(p.id),
+      productName:p.name,
+      category:p.category||"Sin categoría"
+    }))
+  );
+
+  let comparison:any=null;
+  if(selectedVariantId){
+    const r=await api("/v1/internal/sourcing/comparison?variantId="+selectedVariantId,{cookieHeader:session.cookieHeader});
+    if(r.response?.ok)comparison=r.body;
+  }
+
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Oferta de sourcing registrada.",
+    updated:"Oferta de sourcing actualizada.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const supplierOptions=suppliers.map((s:any)=>
+    '<option value="'+Number(s.id)+'">'+esc(s.name)+' · '+esc(s.defaultCurrency||"sin moneda")+'</option>'
+  ).join("");
+
+  const variantOptions=variants.map((v:any)=>
+    '<option value="'+Number(v.id)+'" '+(Number(v.id)===selectedVariantId?'selected':'')+'>'+
+    esc(v.productName)+' · '+esc(v.sku)+' · '+esc(v.size||"Sin talla")+' · '+esc(v.color||"Sin color")+'</option>'
+  ).join("");
+
+  const filter='<section class="panel" style="margin-bottom:18px"><form method="get" action="/sourcing" class="toolbar">'+
+    '<label>Comparar variante<select name="variantId"><option value="">Todas</option>'+variantOptions+'</select></label>'+
+    '<button>Comparar</button></form></section>';
+
+  const createForm=canWrite&&suppliers.length&&variants.length
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Nueva relación proveedor-variante</h3>'+
+      '<p class="meta">Registrar una oferta no crea una orden de compra. Los valores son términos de sourcing vigentes/verificados.</p>'+
+      '<form method="post" action="/sourcing/offers" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<input type="hidden" name="returnVariantId" value="'+(selectedVariantId||"")+'">'+
+        '<label>Proveedor<select name="supplierId" required>'+supplierOptions+'</select></label>'+
+        '<label>Variante<select name="variantId" required>'+variantOptions+'</select></label>'+
+        '<label>SKU proveedor<input name="supplierSku" maxlength="160"></label>'+
+        '<label>Costo cotizado<input name="quotedCost" type="number" min="0" step="0.01" placeholder="Opcional"></label>'+
+        '<label>Moneda<input name="currency" maxlength="3" value="HNL" required></label>'+
+        '<label>MOQ<input name="moq" type="number" min="1" step="1" placeholder="Opcional"></label>'+
+        '<label>Lead time (días)<input name="leadTimeDays" type="number" min="0" step="1" placeholder="Opcional"></label>'+
+        '<label>País origen<input name="originCountryCode" maxlength="2" placeholder="HN"></label>'+
+        '<label style="display:flex;align-items:center;gap:8px"><input name="preferred" type="checkbox" style="width:auto"> Preferido</label>'+
+        '<label>Nota<input name="note" maxlength="1000"></label>'+
+        '<button>Registrar oferta</button>'+
+      '</form></section>'
+    :'';
+
+  const comparisonHtml=comparison
+    ?'<section class="panel" style="margin-bottom:18px"><div class="eyebrow">Comparación por variante</div><h2>'+esc(comparison.variant?.productName||"")+' · '+esc(comparison.variant?.sku||"")+'</h2>'+
+      '<p class="meta">Precio retail: '+esc(comparison.variant?.retailCurrency||"")+' '+(Number(comparison.variant?.retailPriceMinor||0)/100).toFixed(2)+
+      '. No se aplica conversión FX y el spread mostrado no es margen landed ni utilidad contable.</p>'+
+      ((Array.isArray(comparison.currencyGroups)?comparison.currencyGroups:[]).map((g:any)=>
+        '<div style="margin-top:16px"><h3>'+esc(g.currency)+' '+(g.comparableToRetail?'· comparable con retail':'· moneda distinta')+'</h3>'+
+        '<div class="queue">'+(Array.isArray(g.offers)?g.offers:[]).map((o:any)=>
+          '<article class="item"><div class="item-head"><div><b>'+esc(o.supplier?.name||"Proveedor")+'</b>'+
+          '<div class="meta">Costo '+(o.quotedCostMinor==null?'sin cotizar':esc(o.currency)+' '+(Number(o.quotedCostMinor)/100).toFixed(2))+
+          ' · MOQ '+(o.moq==null?'—':Number(o.moq))+' · lead '+(o.leadTimeDays==null?'—':Number(o.leadTimeDays)+' días')+'</div></div>'+
+          '<span class="pill">'+(o.preferred?'PREFERIDO':'OFERTA')+'</span></div>'+
+          '<div class="meta">Spread retail: '+(o.retailSpreadMinor==null?'no comparable':esc(o.currency)+' '+(Number(o.retailSpreadMinor)/100).toFixed(2))+
+          ' · verificado '+esc(String(o.lastVerifiedAt||"—"))+'</div></article>'
+        ).join("")+'</div></div>'
+      ).join("")||'<div class="empty">No hay ofertas activas para esta variante.</div>')+
+      '</section>'
+    :'';
+
+  const cards=offers.length?offers.map((o:any)=>{
+    const edit=canWrite
+      ?'<details style="margin-top:12px"><summary>Actualizar oferta</summary><form method="post" action="/sourcing/offers/'+Number(o.id)+'/update" class="actions" style="margin-top:10px">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<input type="hidden" name="returnVariantId" value="'+(selectedVariantId||"")+'">'+
+        '<label>SKU proveedor<input name="supplierSku" maxlength="160" value="'+esc(o.supplierSku||"")+'"></label>'+
+        '<label>Costo cotizado<input name="quotedCost" type="number" min="0" step="0.01" value="'+(o.quotedCostMinor==null?'':(Number(o.quotedCostMinor)/100).toFixed(2))+'"></label>'+
+        '<label>Moneda<input name="currency" maxlength="3" value="'+esc(o.currency)+'" required></label>'+
+        '<label>MOQ<input name="moq" type="number" min="1" step="1" value="'+(o.moq==null?'':Number(o.moq))+'"></label>'+
+        '<label>Lead time<input name="leadTimeDays" type="number" min="0" step="1" value="'+(o.leadTimeDays==null?'':Number(o.leadTimeDays))+'"></label>'+
+        '<label>Origen<input name="originCountryCode" maxlength="2" value="'+esc(o.originCountryCode||"")+'"></label>'+
+        '<label style="display:flex;align-items:center;gap:8px"><input name="preferred" type="checkbox" style="width:auto" '+(o.preferred?'checked':'')+'> Preferido</label>'+
+        '<label style="display:flex;align-items:center;gap:8px"><input name="active" type="checkbox" style="width:auto" '+(o.active?'checked':'')+'> Activa</label>'+
+        '<label>Nota<input name="note" maxlength="1000"></label>'+
+        '<button>Guardar</button></form></details>'
+      :'';
+
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(o.variant?.category||"Sin categoría")+'</div>'+
+      '<h3>'+esc(o.variant?.productName||"Producto")+' · '+esc(o.variant?.sku||"")+'</h3>'+
+      '<div class="meta">'+esc(o.supplier?.name||"Proveedor")+' · costo '+(o.quotedCostMinor==null?'sin cotizar':esc(o.currency)+' '+(Number(o.quotedCostMinor)/100).toFixed(2))+
+      ' · MOQ '+(o.moq==null?'—':Number(o.moq))+' · lead '+(o.leadTimeDays==null?'—':Number(o.leadTimeDays)+' días')+'</div></div>'+
+      '<span class="pill">'+(o.active?(o.preferred?'PREFERIDO':'ACTIVA'):'INACTIVA')+'</span></div>'+
+      '<div class="meta">SKU proveedor '+esc(o.supplierSku||"—")+' · origen '+esc(o.originCountryCode||"—")+
+      ' · verificado '+esc(String(o.lastVerifiedAt||"—"))+'</div>'+edit+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay relaciones proveedor-variante registradas.</div>';
+
+  return shell(
+    '<div class="eyebrow">Abastecimiento</div><h1>Ofertas de sourcing</h1>'+
+    '<p class="meta">Compara proveedores por variante antes de crear compras. Las monedas distintas permanecen separadas y no se convierten automáticamente.</p>'+
+    notice+filter+comparisonHtml+createForm+
+    '<section><h2>Relaciones proveedor-variante</h2><div class="queue">'+cards+'</div></section>',
+    session
+  );
+}
+
+
 async function catalogPage(url:URL,session:Session){
   const result=await api("/v1/internal/catalog",{cookieHeader:session.cookieHeader});
   if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso catalog.read.</p></div>',session);
@@ -1282,8 +1413,55 @@ Bun.serve({
     if(url.pathname==="/economic-readiness"&&req.method==="GET")return html(await economicReadinessPage(session));
     if(url.pathname==="/product-intelligence"&&req.method==="GET")return html(await productIntelligencePage(url,session));
     if(url.pathname==="/assortment-decisions"&&req.method==="GET")return html(await assortmentDecisionsPage(url,session));
+    if(url.pathname==="/sourcing"&&req.method==="GET")return html(await sourcingPage(url,session));
 
 
+
+    if(url.pathname==="/sourcing/offers"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const quoted=String(fd.get("quotedCost")||"").trim();
+      const result=await api("/v1/internal/sourcing/offers",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          supplierId:Number(fd.get("supplierId")||0),
+          variantId:Number(fd.get("variantId")||0),
+          supplierSku:String(fd.get("supplierSku")||"").trim()||null,
+          quotedCostMinor:quoted?Math.round(Number(quoted)*100):null,
+          currency:String(fd.get("currency")||"").trim().toUpperCase(),
+          moq:String(fd.get("moq")||"").trim()||null,
+          leadTimeDays:String(fd.get("leadTimeDays")||"").trim()||null,
+          originCountryCode:String(fd.get("originCountryCode")||"").trim().toUpperCase()||null,
+          preferred:fd.get("preferred")==="on",
+          note:String(fd.get("note")||"").trim()||null
+        }
+      });
+      const returnVariantId=Number(fd.get("returnVariantId")||fd.get("variantId")||0);
+      return redirect("/sourcing"+(returnVariantId?"?variantId="+returnVariantId+"&":"?")+"n="+catalogResult(result,"created"));
+    }
+
+    const sourcingUpdate=url.pathname.match(/^\/sourcing\/offers\/(\d+)\/update$/);
+    if(sourcingUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const quoted=String(fd.get("quotedCost")||"").trim();
+      const result=await api("/v1/internal/sourcing/offers/"+Number(sourcingUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          supplierSku:String(fd.get("supplierSku")||"").trim()||null,
+          quotedCostMinor:quoted?Math.round(Number(quoted)*100):null,
+          currency:String(fd.get("currency")||"").trim().toUpperCase(),
+          moq:String(fd.get("moq")||"").trim()||null,
+          leadTimeDays:String(fd.get("leadTimeDays")||"").trim()||null,
+          originCountryCode:String(fd.get("originCountryCode")||"").trim().toUpperCase()||null,
+          preferred:fd.get("preferred")==="on",
+          active:fd.get("active")==="on",
+          note:String(fd.get("note")||"").trim()||null
+        }
+      });
+      const returnVariantId=Number(fd.get("returnVariantId")||0);
+      return redirect("/sourcing"+(returnVariantId?"?variantId="+returnVariantId+"&":"?")+"n="+catalogResult(result,"updated"));
+    }
 
     if(url.pathname==="/assortment-decisions"&&req.method==="POST"){
       const fd=await req.formData();
