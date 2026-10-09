@@ -194,6 +194,18 @@ ok(
   "aprobación exige clasificación explícita del staff"
 );
 
+const stillSubmitted = await db`
+  SELECT review_status,status,commercial_model,default_condition
+  FROM products
+  WHERE id=${productId}`;
+ok(
+  stillSubmitted[0]?.review_status === "SUBMITTED" &&
+  stillSubmitted[0]?.status === "draft" &&
+  stillSubmitted[0]?.commercial_model == null &&
+  stillSubmitted[0]?.default_condition == null,
+  "fallo de clasificación no publica ni infiere campos"
+);
+
 const approved = await api("/v1/internal/vendor-products/" + productId + "/review", {
   method: "POST",
   headers: internalHeaders,
@@ -222,6 +234,8 @@ const publicProduct = Array.isArray(visible.body?.data)
   : null;
 ok(Boolean(publicProduct), "producto aprobado llega al catálogo público");
 ok(Number(publicProduct?.stock) === 4, "stock del proveedor llega al catálogo");
+ok(publicProduct?.commercialModel === "curated", "catálogo público expone clasificación revisada");
+ok(publicProduct?.defaultCondition === "new", "catálogo público expone condición revisada");
 
 const vendorLocation = await db`
   SELECT supplier_id, type
