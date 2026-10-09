@@ -914,3 +914,49 @@ A decision worksheet is maintained at:
 Its purpose is to collect operational and professional/fiscal input from Honduras before turning readiness blockers into approved economic rules.
 
 This checkpoint does not approve settlement triggers, commission rates, payout cadence, seller fiscal issuer treatment or staff commission policy.
+
+
+## 27. Product Intelligence checkpoint — 2026-10-08
+
+Product Intelligence v1 is now a repository/main implementation fact through PR #76.
+
+Implemented read-only signals include:
+
+- completed-order and completed-unit performance;
+- completed gross by currency;
+- completed returned units;
+- current available stock;
+- linked restock/product-request demand;
+- uncovered product demand;
+- MR-owned / THIRD_PARTY / unclassified historical unit mix;
+- cost-basis coverage;
+- an internal gross-margin proxy only where historical cost basis exists;
+- product and category rollups over a selectable analytical window.
+
+Guardrails:
+
+- no composite private-label score is calculated;
+- no product is automatically converted to private label / owned;
+- no sourcing or investment recommendation is executed automatically;
+- the analytical margin proxy is not accounting profit;
+- Product Intelligence is read-only and gated by `reports.read`.
+
+### Remaining merchandising-model gap
+
+The roadmap still calls for a Product merchandising relationship equivalent to:
+
+- `third_party`
+- `curated`
+- `private_label`
+- `owned`
+
+That `Product.commercial_model` field is still absent from the implemented catalog schema.
+
+It must remain separate from M11 `economic_owner_type` / `InventorySource`:
+
+- merchandising relationship describes how MR positions/controls the product or brand;
+- economic ownership describes who owns the inventory and is entitled to proceeds.
+
+Product Intelligence must not infer one from the other.
+
+Implementing the Product commercial-model lifecycle remains gated by explicit M01 approval and a compatible migration plan.
