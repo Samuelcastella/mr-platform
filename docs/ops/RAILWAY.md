@@ -7,12 +7,13 @@
 | `storefront` | `ac9a59db-2277-42fc-900d-65e9f33411e5` | GitHub `Samuelcastella/mr-platform`, rama `main`, root `web/storefront` (Railpack, `npm start`); variable `CATALOG_API_URL` → catalog-api | Activo |
 | `catalog-api` | `a84c7ffa-dfdd-4bac-a7df-dff0ea43478d` | GitHub `Samuelcastella/mr-platform`, rama `main`, root `services/catalog-api` (`bun run index.ts`); conserva las variables `PG*` | Activo |
 | `Postgres` | `6b467a0d-6dc3-409a-bdb6-50482d92907c` | Plantilla Postgres | Activo |
+| `control-center` | `0d04efe8-d19c-4948-9155-d0fa0ab4a1f6` | Railway Function Bun; **no** está conectado al repo | Activo, pero despliegue live del 2026-10-08; pendiente sincronizar cambios W8 del repo |
 | `storefront-preview` | `9de528ca-014b-4436-aa5a-bd320b0bda4e` | Function Bun (HTML incrustado) | **Apagado** (sin despliegue activo); sustituido por `storefront` |
 
 ## Pendientes
 
 1. Borrar el servicio `storefront-preview` (apagado y reemplazado). Irreversible: lo hace el propietario en el panel de Railway.
 2. **[PENDIENTE]** Dominio `mr-adulam.com`: agregado en Railway pero sin registrar ni verificar; ver issue con etiqueta `pendiente`.
-3. La base de datos del catálogo está vacía: el storefront muestra productos de demostración hasta que `/v1/products?status=active` devuelva datos.
+3. El storefront trata `/v1/products?status=active` como fuente autoritativa; si el catálogo activo está vacío o no disponible, usa un estado vacío/error explícito en lugar de conservar datos demo como inventario autoritativo.
 4. Postgres: sin proxy TCP público (verificado 2026-10-07).
-5. **[PENDIENTE]** App móvil: no existe todavía (M10 previsto); assets listos en `brand/app/`. Ver issue con etiqueta `pendiente`.
+5. **[PENDIENTE]** Sincronizar/desplegar `services/control-center/index.ts` en el servicio Railway `control-center` y verificar Producción, Costeo y Trazabilidad. No sobrescribir la Function hasta resolver explícitamente el flujo/cuenta de despliegue.
