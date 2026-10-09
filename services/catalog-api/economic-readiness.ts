@@ -526,6 +526,9 @@ async function patchCommissionRule(req: Request, db: DB, id: number) {
     return json({ error: "currency_required_for_fixed_basis" }, 400);
   }
 
+  const rolesArrayLiteral = "{" + roles.join(",") + "}";
+  const modesArrayLiteral = "{" + modes.join(",") + "}";
+
   await db`
     UPDATE commission_rules
     SET earning_trigger=${earningTrigger},
@@ -535,8 +538,8 @@ async function patchCommissionRule(req: Request, db: DB, id: number) {
         currency=${currency},
         minimum_margin_bps=${minMargin},
         cap_minor=${cap},
-        eligible_attribution_roles=to_jsonb(${roles}::text[]),
-        eligible_commercial_modes=to_jsonb(${modes}::text[]),
+        eligible_attribution_roles=to_jsonb(${rolesArrayLiteral}::text[]),
+        eligible_commercial_modes=to_jsonb(${modesArrayLiteral}::text[]),
         discount_treatment=${discount},
         shipping_treatment=${shipping},
         return_reversal_policy=${returnPolicy},
