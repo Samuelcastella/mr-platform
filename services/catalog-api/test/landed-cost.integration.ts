@@ -33,7 +33,12 @@ function cookieFrom(response:Response){
   return (response.headers.get("set-cookie")||"").split(";")[0]||"";
 }
 
-async function createStaff(roleCode:string,displayName:string){
+async function createStaff(
+  roleCode:string,
+  displayName:string,
+  scopeType:"GLOBAL"|"LOCATION"="GLOBAL",
+  locationId:number|null=null
+){
   const slug=displayName.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
   const email=slug+"-"+crypto.randomUUID().slice(0,8)+"@example.test";
   const password="LAND-"+crypto.randomUUID()+"-R9!";
@@ -47,7 +52,10 @@ async function createStaff(roleCode:string,displayName:string){
   if(!roles.length)throw new Error("role_missing:"+roleCode);
   await db`
     INSERT INTO user_role_assignments(user_id,role_id,scope_type,scope_location_id)
-    VALUES(${Number(users[0].id)},${Number(roles[0].id)},'GLOBAL',NULL)`;
+    VALUES(
+      ${Number(users[0].id)},${Number(roles[0].id)},${scopeType},
+      ${scopeType==="LOCATION"?locationId:null}
+    )`;
 
   const login=await api("/v1/auth/login",{
     method:"POST",
@@ -78,19 +86,37 @@ const internalHeaders={
   "x-internal-key":serviceKey
 };
 
+const locations=await db`
+  INSERT INTO locations(name,country_code,type,active)
+  VALUES(${"Landed Cost CI A "+crypto.randomUUID().slice(0,6)},'HN','store',TRUE)
+  RETURNING id`;
+const locationId=Number(locations[0].id);
+
+const otherLocations=await db`
+  INSERT INTO locations(name,country_code,type,active)
+  VALUES(${"Landed Cost CI B "+crypto.randomUUID().slice(0,6)},'HN','store',TRUE)
+  RETURNING id`;
+const otherLocationId=Number(otherLocations[0].id);
+
 const manager=await createStaff("MANAGER","Landed Cost Manager CI");
-const inventoryReader=await createStaff("INVENTORY_OPERATOR","Landed Cost Reader CI");
+const inventoryReader=await createStaff(
+  "INVENTORY_OPERATOR",
+  "Landed Cost Reader CI",
+  "LOCATION",
+  locationId
+);
+const otherLocationReader=await createStaff(
+  "INVENTORY_OPERATOR",
+  "Landed Cost Other Location CI",
+  "LOCATION",
+  otherLocationId
+);
 const analyst=await createStaff("ANALYST","Landed Cost Analyst CI");
 
 ok(manager.login.response.status===200,"manager inicia sesión");
-ok(inventoryReader.login.response.status===200,"inventory operator inicia sesión");
+ok(inventoryReader.login.response.status===200,"inventory operator scoped inicia sesión");
+ok(otherLocationReader.login.response.status===200,"segundo inventory operator scoped inicia sesión");
 ok(analyst.login.response.status===200,"analyst inicia sesión");
-
-const locations=await db`
-  INSERT INTO locations(name,country_code,type,active)
-  VALUES(${"Landed Cost CI "+crypto.randomUUID().slice(0,6)},'HN','store',TRUE)
-  RETURNING id`;
-const locationId=Number(locations[0].id);
 
 const receiptProduct=await api("/v1/internal/catalog/products",{
   method:"POST",
@@ -194,10 +220,25 @@ const receiptItemBefore=(await db`
 const readerSources=await api("/v1/internal/landed-cost/sources",{
   headers:{cookie:inventoryReader.cookie}
 });
-ok(readerSources.response.status===200,"Inventory Operator global puede leer fuentes de costeo");
+ok(readerSources.response.status===200,"Inventory Operator LOCATION puede leer fuentes de su ubicación");
 ok(
   readerSources.body.goodsReceipts?.some((x:any)=>Number(x.sourceId)===receiptId),
   "fuentes incluyen GoodsReceipt"
+);
+
+ok(
+  Array.isArray(readerSources.body.productionRuns) &&
+  readerSources.body.productionRuns.length===0,
+  "grant LOCATION no expone fuentes ProductionRun sin ubicación autoritativa"
+);
+
+const otherReaderSources=await api("/v1/internal/landed-cost/sources",{
+  headers:{cookie:otherLocationReader.cookie}
+});
+ok(otherReaderSources.response.status===200,"otro LOCATION obtiene listado filtrado");
+ok(
+  !otherReaderSources.body.goodsReceipts?.some((x:any)=>Number(x.sourceId)===receiptId),
+  "otra ubicación no ve GoodsReceipt ajeno"
 );
 
 const analystRead=await api("/v1/internal/landed-cost/cases",{
@@ -255,6 +296,33 @@ ok(
   "costo base receipt = quantity × unit cost"
 );
 ok(receiptCase.body.fxConversionApplied===false,"caso declara cero FX");
+
+const scopedReceiptCases=await api("/v1/internal/landed-cost/cases",{
+  headers:{cookie:inventoryReader.cookie}
+});
+ok(
+  scopedReceiptCases.response.status===200 &&
+  scopedReceiptCases.body.data?.some((x:any)=>Number(x.id)===receiptCaseId),
+  "LOCATION ve landed cost case de su GoodsReceipt"
+);
+
+const otherScopedReceiptCases=await api("/v1/internal/landed-cost/cases",{
+  headers:{cookie:otherLocationReader.cookie}
+});
+ok(
+  otherScopedReceiptCases.response.status===200 &&
+  !otherScopedReceiptCases.body.data?.some((x:any)=>Number(x.id)===receiptCaseId),
+  "LOCATION ajena no ve landed cost case del receipt"
+);
+
+const otherReceiptDetail=await api("/v1/internal/landed-cost/cases/"+receiptCaseId,{
+  headers:{cookie:otherLocationReader.cookie}
+});
+ok(
+  otherReceiptDetail.response.status===403 &&
+  otherReceiptDetail.body.error==="forbidden",
+  "detalle GoodsReceipt exige location compatible"
+);
 
 const duplicateReceiptCase=await api("/v1/internal/landed-cost/cases",{
   method:"POST",
@@ -635,6 +703,31 @@ ok(Number(prodTotals.totalCostMinor)===55000,"total producción es componentes e
 const prodAllocationFinal=productionFinal.body.landedCostCase?.allocations?.[0];
 ok(Number(prodAllocationFinal?.totalCostMinor)===55000,"lote conserva total allocated");
 ok(Number(prodAllocationFinal?.exactUnitTotalCostMinor)===11000,"unitario producción exacto 11000");
+
+const scopedCasesAfterProduction=await api("/v1/internal/landed-cost/cases",{
+  headers:{cookie:inventoryReader.cookie}
+});
+ok(
+  scopedCasesAfterProduction.response.status===200 &&
+  !scopedCasesAfterProduction.body.data?.some((x:any)=>Number(x.id)===productionCaseId),
+  "LOCATION no ve landed cost case de ProductionRun"
+);
+
+const scopedProductionDetail=await api(
+  "/v1/internal/landed-cost/cases/"+productionCaseId,
+  {headers:{cookie:inventoryReader.cookie}}
+);
+ok(
+  scopedProductionDetail.response.status===403 &&
+  scopedProductionDetail.body.error==="forbidden",
+  "LOCATION no abre detalle ProductionRun sin grant GLOBAL"
+);
+
+const managerProductionDetail=await api(
+  "/v1/internal/landed-cost/cases/"+productionCaseId,
+  {headers:{cookie:manager.cookie}}
+);
+ok(managerProductionDetail.response.status===200,"MANAGER GLOBAL conserva acceso a ProductionRun");
 
 const productionInventoryAfter=await db`
   SELECT COALESCE(SUM(quantity),0)::int quantity,COALESCE(SUM(reserved),0)::int reserved
