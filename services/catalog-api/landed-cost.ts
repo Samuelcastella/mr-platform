@@ -79,6 +79,24 @@ function landedCostRowVisible(scope:any,row:any){
   return locationId>0&&scope.locationIds.includes(locationId);
 }
 
+
+async function landedCostCaseScope(db:DB,c:any){
+  const source:any=await sourceContext(
+    db,
+    String(c.source_type),
+    c.source_type==="GOODS_RECEIPT"
+      ?Number(c.goods_receipt_id)
+      :Number(c.production_run_id)
+  );
+  if(source.error)return source;
+  return {
+    source,
+    locationId:c.source_type==="GOODS_RECEIPT"
+      ?Number(source.locationId)
+      :null
+  };
+}
+
 export async function ensureLandedCostSchema(db:DB){
   await db`
     CREATE TABLE IF NOT EXISTS landed_cost_cases (
@@ -656,9 +674,6 @@ async function listCases(req:Request,url:URL,db:DB){
 }
 
 async function createCase(req:Request,db:DB){
-  const auth=await authorizeInternal(req,db,"landed_cost.manage",{mutation:true});
-  if(!auth.ok)return auth.response;
-
   let body:any;
   try{body=await req.json();}catch{return json({error:"invalid_json"},400);}
 
@@ -673,6 +688,12 @@ async function createCase(req:Request,db:DB){
 
   const source:any=await sourceContext(db,sourceType,sourceId);
   if(source.error)return json({error:source.error},source.status||400);
+
+  const auth=await authorizeInternal(req,db,"landed_cost.manage",{
+    locationId:sourceType==="GOODS_RECEIPT"?Number(source.locationId):null,
+    mutation:true
+  });
+  if(!auth.ok)return auth.response;
 
   let currency="";
   if(sourceType==="GOODS_RECEIPT"){
@@ -764,10 +785,15 @@ async function getCase(req:Request,db:DB,id:number){
 }
 
 async function updateCase(req:Request,db:DB,id:number){
-  const auth=await authorizeInternal(req,db,"landed_cost.manage",{mutation:true});
-  if(!auth.ok)return auth.response;
   const existing=await caseRow(db,id);
   if(!existing)return json({error:"not_found"},404);
+  const scope:any=await landedCostCaseScope(db,existing);
+  if(scope.error)return json({error:scope.error},scope.status||400);
+  const auth=await authorizeInternal(req,db,"landed_cost.manage",{
+    locationId:scope.locationId,
+    mutation:true
+  });
+  if(!auth.ok)return auth.response;
   if(existing.status!=="DRAFT")return json({error:"final_case_immutable"},409);
 
   let body:any;
@@ -798,7 +824,14 @@ async function updateCase(req:Request,db:DB,id:number){
 }
 
 async function createComponent(req:Request,db:DB,caseId:number){
-  const auth=await authorizeInternal(req,db,"landed_cost.manage",{mutation:true});
+  const currentCase=await caseRow(db,caseId);
+  if(!currentCase)return json({error:"case_not_found"},404);
+  const scope:any=await landedCostCaseScope(db,currentCase);
+  if(scope.error)return json({error:scope.error},scope.status||400);
+  const auth=await authorizeInternal(req,db,"landed_cost.manage",{
+    locationId:scope.locationId,
+    mutation:true
+  });
   if(!auth.ok)return auth.response;
 
   let body:any;
@@ -851,7 +884,19 @@ async function createComponent(req:Request,db:DB,caseId:number){
 }
 
 async function updateComponent(req:Request,db:DB,id:number){
-  const auth=await authorizeInternal(req,db,"landed_cost.manage",{mutation:true});
+  const lookup=await db`
+    SELECT c.*
+    FROM landed_cost_components cc
+    JOIN landed_cost_cases c ON c.id=cc.case_id
+    WHERE cc.id=${id}
+    LIMIT 1`;
+  if(!lookup.length)return json({error:"not_found"},404);
+  const scope:any=await landedCostCaseScope(db,lookup[0]);
+  if(scope.error)return json({error:scope.error},scope.status||400);
+  const auth=await authorizeInternal(req,db,"landed_cost.manage",{
+    locationId:scope.locationId,
+    mutation:true
+  });
   if(!auth.ok)return auth.response;
 
   let body:any;
@@ -964,7 +1009,14 @@ async function resolveAllocationTarget(db:DB,c:any,targetId:number){
 }
 
 async function createAllocation(req:Request,db:DB,caseId:number){
-  const auth=await authorizeInternal(req,db,"landed_cost.manage",{mutation:true});
+  const currentCase=await caseRow(db,caseId);
+  if(!currentCase)return json({error:"case_not_found"},404);
+  const scope:any=await landedCostCaseScope(db,currentCase);
+  if(scope.error)return json({error:scope.error},scope.status||400);
+  const auth=await authorizeInternal(req,db,"landed_cost.manage",{
+    locationId:scope.locationId,
+    mutation:true
+  });
   if(!auth.ok)return auth.response;
 
   let body:any;
@@ -1032,7 +1084,19 @@ async function createAllocation(req:Request,db:DB,caseId:number){
 }
 
 async function updateAllocation(req:Request,db:DB,id:number){
-  const auth=await authorizeInternal(req,db,"landed_cost.manage",{mutation:true});
+  const lookup=await db`
+    SELECT c.*
+    FROM landed_cost_allocations a
+    JOIN landed_cost_cases c ON c.id=a.case_id
+    WHERE a.id=${id}
+    LIMIT 1`;
+  if(!lookup.length)return json({error:"not_found"},404);
+  const scope:any=await landedCostCaseScope(db,lookup[0]);
+  if(scope.error)return json({error:scope.error},scope.status||400);
+  const auth=await authorizeInternal(req,db,"landed_cost.manage",{
+    locationId:scope.locationId,
+    mutation:true
+  });
   if(!auth.ok)return auth.response;
 
   let body:any;
@@ -1084,7 +1148,14 @@ async function updateAllocation(req:Request,db:DB,id:number){
 }
 
 async function finalizeCase(req:Request,db:DB,id:number){
-  const auth=await authorizeInternal(req,db,"landed_cost.finalize",{mutation:true});
+  const currentCase=await caseRow(db,id);
+  if(!currentCase)return json({error:"not_found"},404);
+  const scope:any=await landedCostCaseScope(db,currentCase);
+  if(scope.error)return json({error:scope.error},scope.status||400);
+  const auth=await authorizeInternal(req,db,"landed_cost.finalize",{
+    locationId:scope.locationId,
+    mutation:true
+  });
   if(!auth.ok)return auth.response;
   if(auth.actor.type!=="USER")return json({error:"human_finalization_required"},403);
 
