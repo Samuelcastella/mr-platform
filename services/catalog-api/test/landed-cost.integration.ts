@@ -739,6 +739,22 @@ const qcBefore=Number((await db`
   FROM quality_inspections
   WHERE product_id=${productionProductId} OR variant_id=${productionVariantId}`)[0]?.count||0);
 
+const scopedProductionCreate=await api("/v1/internal/landed-cost/cases",{
+  method:"POST",
+  headers:staffHeaders(scopedCostManager),
+  body:JSON.stringify({
+    caseCode:"LC-PROD-SCOPED-"+crypto.randomUUID().slice(0,5),
+    sourceType:"PRODUCTION_RUN",
+    sourceId:productionRunId,
+    currency:"HNL"
+  })
+});
+ok(
+  scopedProductionCreate.response.status===403 &&
+  scopedProductionCreate.body.error==="forbidden",
+  "ProductionRun landed cost exige manage GLOBAL"
+);
+
 const productionMissingCurrency=await api("/v1/internal/landed-cost/cases",{
   method:"POST",
   headers:staffHeaders(manager),
@@ -767,6 +783,21 @@ const productionCase=await api("/v1/internal/landed-cost/cases",{
 });
 ok(productionCase.response.status===201,"crea caso de ProductionRun");
 const productionCaseId=Number(productionCase.body.landedCostCase?.id);
+
+const scopedProductionComponent=await api("/v1/internal/landed-cost/cases/"+productionCaseId+"/components",{
+  method:"POST",
+  headers:staffHeaders(scopedCostManager),
+  body:JSON.stringify({
+    componentType:"MANUFACTURING",
+    amountMinor:1
+  })
+});
+ok(
+  scopedProductionComponent.response.status===403 &&
+  scopedProductionComponent.body.error==="forbidden",
+  "ProductionRun landed cost exige manage GLOBAL en componentes"
+);
+
 ok(productionCase.body.landedCostCase?.totals?.sourceBaseCostMinor==null,"producción no inventa costo base");
 ok(Number(productionCase.body.landedCostCase?.source?.quantityTotal)===5,"source conserva produced quantity");
 
@@ -804,6 +835,17 @@ const productionAllocation=await api("/v1/internal/landed-cost/cases/"+productio
 ok(productionAllocation.response.status===201,"asigna landed cost al ProductionLot");
 ok(productionAllocation.body.allocation?.baseCostMinor==null,"allocation producción conserva base null");
 ok(Number(productionAllocation.body.allocation?.quantitySnapshot)===5,"snapshot usa produced_quantity");
+
+const scopedProductionFinalize=await api("/v1/internal/landed-cost/cases/"+productionCaseId+"/finalize",{
+  method:"POST",
+  headers:staffHeaders(scopedCostManager),
+  body:JSON.stringify({note:"No debe finalizar production con scope LOCATION"})
+});
+ok(
+  scopedProductionFinalize.response.status===403 &&
+  scopedProductionFinalize.body.error==="forbidden",
+  "ProductionRun landed cost exige finalize GLOBAL"
+);
 
 const productionFinal=await api("/v1/internal/landed-cost/cases/"+productionCaseId+"/finalize",{
   method:"POST",
