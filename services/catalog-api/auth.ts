@@ -47,6 +47,12 @@ const PERMISSIONS: Record<string, string> = {
   "seller_agreements.manage": "Create/update seller agreements",
   "commissions.attribution.read": "Read staff sales attribution",
   "commissions.attribution.manage": "Assign and correct staff sales attribution",
+  "commissions.rules.read": "Read commission rules",
+  "commissions.rules.manage": "Create/update commission rules",
+  "commissions.rules.approve": "Approve commission rules",
+  "economics.policy.read": "Read economic policy readiness",
+  "economics.policy.manage": "Manage draft economic policy configuration",
+  "economics.fiscal.validate": "Validate seller fiscal policy evidence",
   "orders.read": "Read orders",
   "orders.create": "Create orders",
   "orders.confirm": "Confirm orders",
@@ -91,7 +97,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
   MANAGER: {
     name: "Manager",
     permissions: Object.keys(PERMISSIONS).filter(
-      p => !["users.manage", "roles.manage", "health.admin"].includes(p)
+      p => !["users.manage", "roles.manage", "health.admin", "economics.fiscal.validate"].includes(p)
     )
   },
   CASHIER: {
@@ -170,6 +176,8 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "fulfillment.read",
       "health.read",
       "commissions.attribution.read",
+      "commissions.rules.read",
+      "economics.policy.read",
       "reports.read"
     ]
   }
