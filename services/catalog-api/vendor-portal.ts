@@ -1,4 +1,5 @@
 import { auditActor, authorizeInternal, writeAuditEvent } from "./auth";
+import { validCommercialModel, validProductCondition } from "./product-classification";
 
 type DB = any;
 
@@ -605,6 +606,7 @@ async function listVendorProductsForReview(req: Request, url: URL, db: DB) {
   const rows = await db`
     SELECT
       p.id,p.name,p.slug,p.category,p.brand,p.status,p.review_status,p.review_note,
+      p.commercial_model,p.default_condition,
       p.owner_supplier_id,s.name AS supplier_name,p.created_at,p.updated_at,
       COALESCE(
         (SELECT COUNT(*)::int FROM product_variants v WHERE v.product_id=p.id),
@@ -638,6 +640,8 @@ async function listVendorProductsForReview(req: Request, url: URL, db: DB) {
       publicationStatus:row.status,
       reviewStatus:row.review_status,
       reviewNote:row.review_note||null,
+      commercialModel:row.commercial_model||null,
+      defaultCondition:row.default_condition||null,
       supplierId:Number(row.owner_supplier_id),
       supplierName:row.supplier_name,
       variantCount:Number(row.variant_count),
@@ -659,28 +663,81 @@ async function reviewProduct(req: Request, db: DB, productId: number) {
   const note = clean(body?.note, 2000) || null;
   if (!["APPROVE","REJECT"].includes(decision)) return json({ error: "invalid_decision" }, 400);
 
+  let commercialModel: string | null = null;
+  let defaultCondition: string | null = null;
+
+  if (decision === "APPROVE") {
+    commercialModel = validCommercialModel(body?.commercialModel) || null;
+    defaultCondition = validProductCondition(body?.defaultCondition) || null;
+
+    if (body?.commercialModel != null && !commercialModel) {
+      return json({ error: "invalid_commercial_model" }, 400);
+    }
+    if (body?.defaultCondition != null && !defaultCondition) {
+      return json({ error: "invalid_default_condition" }, 400);
+    }
+    if (!commercialModel || !defaultCondition) {
+      return json({
+        error: "classification_required",
+        required: ["commercialModel","defaultCondition"]
+      }, 409);
+    }
+  }
+
   const targetReview = decision === "APPROVE" ? "APPROVED" : "REJECTED";
   const targetStatus = decision === "APPROVE" ? "active" : "draft";
 
-  const rows = await db`
-    UPDATE products
-    SET review_status=${targetReview},review_note=${note},status=${targetStatus},updated_at=NOW()
-    WHERE id=${productId}
-      AND owner_supplier_id IS NOT NULL
-      AND review_status='SUBMITTED'
-    RETURNING id,name,owner_supplier_id,status,review_status,review_note`;
-  if (!rows.length) return json({ error: "product_not_reviewable" }, 409);
+  const result:any = await db.begin(async (tx: DB) => {
+    const rows = decision === "APPROVE"
+      ? await tx`
+          UPDATE products
+          SET review_status=${targetReview},
+              review_note=${note},
+              status=${targetStatus},
+              commercial_model=${commercialModel},
+              default_condition=${defaultCondition},
+              updated_at=NOW()
+          WHERE id=${productId}
+            AND owner_supplier_id IS NOT NULL
+            AND review_status='SUBMITTED'
+          RETURNING
+            id,name,owner_supplier_id,status,review_status,review_note,
+            commercial_model,default_condition`
+      : await tx`
+          UPDATE products
+          SET review_status=${targetReview},
+              review_note=${note},
+              status=${targetStatus},
+              updated_at=NOW()
+          WHERE id=${productId}
+            AND owner_supplier_id IS NOT NULL
+            AND review_status='SUBMITTED'
+          RETURNING
+            id,name,owner_supplier_id,status,review_status,review_note,
+            commercial_model,default_condition`;
 
-  await writeAuditEvent(db, {
-    ...auditActor(auth.actor),
-    action: decision === "APPROVE" ? "vendor.product_approved" : "vendor.product_rejected",
-    resourceType: "Product",
-    resourceId: productId,
-    outcome: "SUCCESS",
-    metadata: { supplierId: Number(rows[0].owner_supplier_id), note }
+    if (!rows.length) return { error: "product_not_reviewable", status:409 };
+
+    await writeAuditEvent(tx, {
+      ...auditActor(auth.actor),
+      action: decision === "APPROVE" ? "vendor.product_approved" : "vendor.product_rejected",
+      resourceType: "Product",
+      resourceId: productId,
+      outcome: "SUCCESS",
+      metadata: {
+        supplierId: Number(rows[0].owner_supplier_id),
+        note,
+        commercialModel: rows[0].commercial_model || null,
+        defaultCondition: rows[0].default_condition || null,
+        economicOwnershipChanged: false
+      }
+    });
+
+    return { product: rows[0] };
   });
 
-  return json({ product: rows[0] });
+  if (result.error) return json({ error: result.error }, result.status || 409);
+  return json(result);
 }
 
 export async function handleVendorPortal(req: Request, url: URL, db: DB) {
