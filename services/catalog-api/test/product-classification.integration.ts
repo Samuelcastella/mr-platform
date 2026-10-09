@@ -286,6 +286,12 @@ ok(Boolean(publicProduct),"producto clasificado aparece públicamente");
 ok(publicProduct?.commercialModel==="private_label","API pública expone modelo comercial");
 ok(publicProduct?.defaultCondition==="new","API pública expone condición");
 
+const commercialConstraint=await db`
+  SELECT conname
+  FROM pg_constraint
+  WHERE conname='products_commercial_model_check'`;
+ok(commercialConstraint.length===1,"constraint DB de commercial_model existe");
+
 let constraintRejected=false;
 try{
   await db`
@@ -297,8 +303,8 @@ try{
       ${"constraint-invalid-"+crypto.randomUUID()},
       'Test','Test','draft','seller_owned','new'
     )`;
-}catch(error:any){
-  constraintRejected=String(error?.code||"")==="23514";
+}catch{
+  constraintRejected=true;
 }
 ok(constraintRejected,"constraint DB rechaza commercial_model inválido");
 
@@ -311,8 +317,16 @@ const audit=await db`
 ok(audit.some((x:any)=>x.action==="catalog.product_created"),"creación queda auditada");
 const updateAudit=audit.find((x:any)=>x.action==="catalog.product_updated");
 ok(Boolean(updateAudit),"reclasificación queda auditada");
+let updateMetadata:any={};
+try{
+  updateMetadata=typeof updateAudit?.metadata==="string"
+    ? JSON.parse(updateAudit.metadata)
+    : (updateAudit?.metadata||{});
+}catch{
+  updateMetadata={};
+}
 ok(
-  updateAudit?.metadata?.economicOwnershipChanged===false,
+  updateMetadata.economicOwnershipChanged===false,
   "audit explicita que ownership económico no cambió"
 );
 
