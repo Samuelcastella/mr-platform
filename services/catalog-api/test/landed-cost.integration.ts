@@ -290,6 +290,21 @@ ok(
   "landed_cost.read no concede manage"
 );
 
+const wrongScopedCreate=await api("/v1/internal/landed-cost/cases",{
+  method:"POST",
+  headers:staffHeaders(wrongScopedCostManager),
+  body:JSON.stringify({
+    caseCode:"LC-WRONG-SCOPE-"+crypto.randomUUID().slice(0,6),
+    sourceType:"GOODS_RECEIPT",
+    sourceId:receiptId
+  })
+});
+ok(
+  wrongScopedCreate.response.status===403 &&
+  wrongScopedCreate.body.error==="forbidden",
+  "landed_cost.manage LOCATION no puede crear case para otra ubicación"
+);
+
 const wrongCurrency=await api("/v1/internal/landed-cost/cases",{
   method:"POST",
   headers:staffHeaders(manager),
@@ -307,7 +322,7 @@ ok(
 
 const receiptCase=await api("/v1/internal/landed-cost/cases",{
   method:"POST",
-  headers:staffHeaders(manager),
+  headers:staffHeaders(scopedCostManager),
   body:JSON.stringify({
     caseCode:"LC-REC-"+crypto.randomUUID().slice(0,6),
     sourceType:"GOODS_RECEIPT",
@@ -323,6 +338,18 @@ ok(
   "costo base receipt = quantity × unit cost"
 );
 ok(receiptCase.body.fxConversionApplied===false,"caso declara cero FX");
+
+const wrongScopedUpdate=await api("/v1/internal/landed-cost/cases/"+receiptCaseId,{
+  method:"PATCH",
+  headers:staffHeaders(wrongScopedCostManager),
+  body:JSON.stringify({notes:"No autorizado por ubicación"})
+});
+ok(
+  wrongScopedUpdate.response.status===403 &&
+  wrongScopedUpdate.body.error==="forbidden",
+  "landed_cost.manage LOCATION bloquea update fuera de scope"
+);
+
 
 const scopedReceiptCases=await api("/v1/internal/landed-cost/cases",{
   headers:{cookie:inventoryReader.cookie}
@@ -367,7 +394,7 @@ ok(
 
 const freight=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/components",{
   method:"POST",
-  headers:staffHeaders(manager),
+  headers:staffHeaders(scopedCostManager),
   body:JSON.stringify({
     componentType:"FREIGHT",
     amountMinor:1200,
@@ -379,7 +406,7 @@ const freightId=Number(freight.body.component?.id);
 
 const duty=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/components",{
   method:"POST",
-  headers:staffHeaders(manager),
+  headers:staffHeaders(scopedCostManager),
   body:JSON.stringify({
     componentType:"DUTY",
     amountMinor:800,
@@ -390,7 +417,7 @@ ok(duty.response.status===201,"agrega arancel");
 
 const allocation=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/allocations",{
   method:"POST",
-  headers:staffHeaders(manager),
+  headers:staffHeaders(scopedCostManager),
   body:JSON.stringify({
     targetId:receiptItemId,
     allocatedCostMinor:1500,
@@ -405,7 +432,7 @@ ok(Number(allocation.body.allocation?.baseCostMinor)===40000,"snapshot conserva 
 
 const mismatchFinalize=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/finalize",{
   method:"POST",
-  headers:staffHeaders(manager),
+  headers:staffHeaders(scopedCostManager),
   body:JSON.stringify({note:"Debe fallar por delta"})
 });
 ok(
@@ -427,7 +454,7 @@ ok(
 
 const allocationFixed=await api("/v1/internal/landed-cost/allocations/"+receiptAllocationId,{
   method:"PATCH",
-  headers:staffHeaders(manager),
+  headers:staffHeaders(scopedCostManager),
   body:JSON.stringify({
     allocatedCostMinor:2000,
     notes:"Asignación completa",
@@ -438,7 +465,7 @@ ok(allocationFixed.response.status===200,"corrige asignación a total exacto");
 
 const finalizedReceipt=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/finalize",{
   method:"POST",
-  headers:staffHeaders(manager),
+  headers:staffHeaders(scopedCostManager),
   body:JSON.stringify({note:"Costeo receipt conciliado"})
 });
 ok(
