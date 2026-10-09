@@ -38,6 +38,19 @@ function section(value:unknown){
   return value as Record<string,unknown>;
 }
 
+function jsonObject(value:unknown){
+  if(value==null)return {};
+  if(typeof value==="string"){
+    try{
+      const parsed=JSON.parse(value);
+      return parsed&&typeof parsed==="object"&&!Array.isArray(parsed)?parsed:{};
+    }catch{
+      return {};
+    }
+  }
+  return typeof value==="object"&&!Array.isArray(value)?value:{};
+}
+
 function actorFields(actor:any){
   return actor.type==="USER"
     ? {userId:actor.userId,service:null}
@@ -239,12 +252,12 @@ function mapVersion(row:any){
     versionNo:Number(row.version_no),
     status:row.status,
     sections:{
-      materials:row.materials||{},
-      measurements:row.measurements||{},
-      construction:row.construction||{},
-      packaging:row.packaging||{},
-      labeling:row.labeling||{},
-      qualityRequirements:row.quality_requirements||{}
+      materials:jsonObject(row.materials),
+      measurements:jsonObject(row.measurements),
+      construction:jsonObject(row.construction),
+      packaging:jsonObject(row.packaging),
+      labeling:jsonObject(row.labeling),
+      qualityRequirements:jsonObject(row.quality_requirements)
     },
     notes:row.notes||null,
     changeSummary:row.change_summary,
