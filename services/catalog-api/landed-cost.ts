@@ -1,4 +1,4 @@
-import { auditActor, authorizeInternal, machineAuthorized, permissionAllowed, readStaffSession, writeAuditEvent } from "./auth";
+import { auditActor, authorizeInternal, machineAuthorized, readStaffSession, writeAuditEvent } from "./auth";
 
 type DB = any;
 
@@ -633,12 +633,14 @@ async function listCases(req:Request,url:URL,db:DB){
   const rows=await db`
     SELECT
       c.id,c.case_code,c.source_type,c.goods_receipt_id,c.production_run_id,
+      gr.location_id AS source_location_id,
       c.currency,c.status,c.allocation_method,c.notes,
       c.finalized_by_user_id,finalizer.display_name AS finalized_by_display_name,
       c.finalized_at,c.created_by_user_id,creator.display_name AS created_by_display_name,
       c.updated_by_user_id,updater.display_name AS updated_by_display_name,
       c.created_at,c.updated_at
     FROM landed_cost_cases c
+    LEFT JOIN goods_receipts gr ON gr.id=c.goods_receipt_id
     LEFT JOIN staff_users finalizer ON finalizer.id=c.finalized_by_user_id
     LEFT JOIN staff_users creator ON creator.id=c.created_by_user_id
     LEFT JOIN staff_users updater ON updater.id=c.updated_by_user_id
