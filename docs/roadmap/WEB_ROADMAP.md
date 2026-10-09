@@ -27,7 +27,7 @@ A phase is not considered complete until:
 - Storefront public domain available.
 - Project documentation and migration ledger present in GitHub.
 
-## Phase W1 — Live catalog integration — IN PROGRESS
+## Phase W1 — Live catalog integration — COMPLETE
 
 Goal: make the storefront consume the central catalog instead of treating browser-local demo data as the source of truth.
 
@@ -45,6 +45,16 @@ Acceptance:
 - storefront can reach catalog-api;
 - no secrets exposed to the browser;
 - catalog page renders database-backed products when active products exist.
+
+Verified 2026-10-09:
+- Railway `storefront` is Online with one healthy replica and no recent failures;
+- Railway `catalog-api` is Online with one healthy replica and no recent failures;
+- `storefront` is repo-backed from `main`, root `web/storefront`;
+- `CATALOG_API_URL` is defined on the storefront service;
+- Railway healthcheck is `/ready`, which checks Catalog API `/health`;
+- storefront server proxies public `/api/*` requests and blocks `/v1/internal/*`;
+- browser catalog sync reads `/api/v1/products?status=active`;
+- catalog failure/empty behavior does not keep browser-local demo products as authoritative inventory.
 
 ## Phase W2 — Catalog domain v1
 
@@ -129,6 +139,8 @@ Deliverables:
 
 ## Phase W8 — Private label and owned products
 
+Implementation status (2026-10-09): core backend + CI complete; Catalog API deployment is SUCCESS at commit `4f1f6ce80652d2204fee7ac1efdab6dc9f809207`. Phase remains operationally open because the Railway `control-center` service is a Bun Function whose live deployment predates the W8 Production, Landed Cost and Traceability UI changes.
+
 Goal: support the evolution from reseller to brand owner.
 
 Deliverables:
@@ -148,4 +160,4 @@ The storefront is a client of the commerce core. It must never become the author
 
 ## Current next action
 
-Finish W1 and mark it green before starting W2 implementation.
+Synchronize/deploy the repo-backed Control Center implementation to Railway, verify its W8 Production / Costeo / Trazabilidad flows in production, then reconcile W2–W8 completion gates against the implementation already present in the repository.
