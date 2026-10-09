@@ -291,6 +291,15 @@ export async function handleInternalCatalog(
       return json({ error: "invalid_default_condition" }, 400);
     }
 
+    const classificationTouched =
+      body.commercialModel != null || body.defaultCondition != null;
+    if (classificationTouched && (!nextCommercialModel || !nextDefaultCondition)) {
+      return json({
+        error: "classification_required",
+        required: ["commercialModel","defaultCondition"]
+      }, 409);
+    }
+
     if (
       nextStatus === "active" &&
       before.status !== "active" &&
