@@ -1,0 +1,61 @@
+name: M01 Product Classification CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  product-classification:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+      PORT: 3011
+      API_BASE_URL: http://127.0.0.1:3011
+      INTERNAL_API_TOKEN: ci-internal-token
+      ORDER_RESERVATION_TTL_MINUTES: 30
+      ALLOW_DESTRUCTIVE_TEST_DB: "true"
+      AUTH_COOKIE_SECURE: "false"
+      ENFORCE_GOVERNED_INVENTORY_ADJUSTMENTS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Build product classification surfaces
+        run: |
+          bun build services/catalog-api/product-classification.ts --target=bun --outfile=/tmp/product-classification.js
+          bun build services/catalog-api/catalog-internal.ts --target=bun --outfile=/tmp/catalog-internal.js
+          bun build services/catalog-api/vendor-portal.ts --target=bun --outfile=/tmp/vendor-portal.js
+          bun build services/control-center/index.ts --target=bun --outfile=/tmp/control-center.js
+      - name: Run M01 product classification integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun run services/catalog-api/index.ts >/tmp/catalog-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill "$API_PID" 2>/dev/null || true' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3011/health >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3011/health >/dev/null || { cat /tmp/catalog-api.log; exit 1; }
+          bun run services/catalog-api/test/product-classification.integration.ts
+          bun run services/catalog-api/test/vendor-portal.integration.ts
