@@ -114,6 +114,16 @@ const supplierUSId=Number(supplierUS.body.supplier?.id);
 
 const beforePO=Number((await db`SELECT COUNT(*)::int count FROM purchase_orders`)[0]?.count||0);
 const beforeSources=Number((await db`SELECT COUNT(*)::int count FROM inventory_sources`)[0]?.count||0);
+const beforeInventory=(await db`
+  SELECT
+    COALESCE(SUM(quantity),0)::int AS quantity,
+    COALESCE(SUM(reserved),0)::int AS reserved
+  FROM inventory
+  WHERE variant_id=${variantId}`)[0];
+const beforeMovements=Number((await db`
+  SELECT COUNT(*)::int AS count
+  FROM inventory_movements
+  WHERE variant_id=${variantId}`)[0]?.count||0);
 
 const operatorList=await api("/v1/internal/sourcing/offers",{headers:{cookie:operator.cookie}});
 ok(operatorList.response.status===200,"supplier-read role puede consultar sourcing");
@@ -235,8 +245,24 @@ ok(update.body.history?.[1]?.snapshot?.quotedCostMinor===7500,"historial preserv
 
 const afterPO=Number((await db`SELECT COUNT(*)::int count FROM purchase_orders`)[0]?.count||0);
 const afterSources=Number((await db`SELECT COUNT(*)::int count FROM inventory_sources`)[0]?.count||0);
+const afterInventory=(await db`
+  SELECT
+    COALESCE(SUM(quantity),0)::int AS quantity,
+    COALESCE(SUM(reserved),0)::int AS reserved
+  FROM inventory
+  WHERE variant_id=${variantId}`)[0];
+const afterMovements=Number((await db`
+  SELECT COUNT(*)::int AS count
+  FROM inventory_movements
+  WHERE variant_id=${variantId}`)[0]?.count||0);
 ok(afterPO===beforePO,"sourcing offers no crea PurchaseOrder");
 ok(afterSources===beforeSources,"sourcing offers no crea InventorySource");
+ok(
+  Number(afterInventory.quantity)===Number(beforeInventory.quantity) &&
+  Number(afterInventory.reserved)===Number(beforeInventory.reserved),
+  "sourcing offers no cambia quantity/reserved"
+);
+ok(afterMovements===beforeMovements,"sourcing offers no crea movimientos de inventario");
 
 const legacyVariant=await db`
   SELECT supplier_id
