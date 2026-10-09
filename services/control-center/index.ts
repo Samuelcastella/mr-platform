@@ -1241,7 +1241,7 @@ async function catalogPage(url:URL,session:Session){
       <div class="item-head">
         <div style="display:flex;gap:12px;align-items:center">
           ${primaryImage?'<img src="'+esc(primaryImage)+'" alt="'+esc(p.name)+'" style="width:88px;height:88px;object-fit:cover;border-radius:14px;border:1px solid #ded5c8">':""}
-          <div><div class="eyebrow">${esc(p.category||"Sin categoría")}</div><h3>${esc(p.name)}</h3><p class="meta">${esc(p.brand||"Sin marca")} · ${p.status==="active"?"Publicado":"Borrador"} · ${images.length} imagen(es)</p></div>
+          <div><div class="eyebrow">${esc(p.category||"Sin categoría")}</div><h3>${esc(p.name)}</h3><p class="meta">${esc(p.brand||"Sin marca")} · ${p.status==="active"?"Publicado":"Borrador"} · ${images.length} imagen(es)</p><p class="meta">Modelo: ${esc(p.commercial_model||"Sin clasificar")} · Condición: ${esc(p.default_condition||"Sin clasificar")}</p></div>
         </div>
         <form method="post" action="/catalog/products/${Number(p.id)}/status">
           <input type="hidden" name="csrf" value="${esc(session.csrf)}">
@@ -1250,6 +1250,23 @@ async function catalogPage(url:URL,session:Session){
         </form>
       </div>
       ${vars}
+      <details style="margin-top:12px"><summary>Clasificación comercial</summary>
+        <form method="post" action="/catalog/products/${Number(p.id)}/classification" class="toolbar" style="margin-top:10px">
+          <input type="hidden" name="csrf" value="${esc(session.csrf)}">
+          <label>Modelo comercial<select name="commercialModel" required>
+            <option value="third_party" ${p.commercial_model==="third_party"?"selected":""}>Third party</option>
+            <option value="curated" ${p.commercial_model==="curated"?"selected":""}>Curated</option>
+            <option value="private_label" ${p.commercial_model==="private_label"?"selected":""}>Private label</option>
+            <option value="owned" ${p.commercial_model==="owned"?"selected":""}>Owned</option>
+          </select></label>
+          <label>Condición<select name="defaultCondition" required>
+            <option value="new" ${p.default_condition==="new"?"selected":""}>Nuevo</option>
+            <option value="second_hand" ${p.default_condition==="second_hand"?"selected":""}>Segunda mano</option>
+            <option value="refurbished" ${p.default_condition==="refurbished"?"selected":""}>Reacondicionado</option>
+          </select></label>
+          <button>Guardar clasificación</button>
+        </form>
+      </details>
       <details style="margin-top:12px"><summary>Agregar imagen</summary>
         <form method="post" action="/catalog/products/${Number(p.id)}/images" class="toolbar" style="margin-top:10px">
           <input type="hidden" name="csrf" value="${esc(session.csrf)}">
@@ -1283,6 +1300,8 @@ async function catalogPage(url:URL,session:Session){
         <label>Nombre<input name="name" required maxlength="180"></label>
         <label>Categoría<input name="category" maxlength="120"></label>
         <label>Marca<input name="brand" maxlength="120" value="MR עדולם"></label>
+        <label>Modelo comercial<select name="commercialModel" required><option value="third_party">Third party</option><option value="curated" selected>Curated</option><option value="private_label">Private label</option><option value="owned">Owned</option></select></label>
+        <label>Condición<select name="defaultCondition" required><option value="new" selected>Nuevo</option><option value="second_hand">Segunda mano</option><option value="refurbished">Reacondicionado</option></select></label>
         <label>Estado<select name="status"><option value="draft">Borrador</option><option value="active">Publicar ahora</option></select></label>
         <label>SKU<input name="sku" required maxlength="100"></label>
         <label>Precio HNL<input name="price" type="number" min="0" step="0.01" required></label>
@@ -1784,6 +1803,8 @@ Bun.serve({
           name:String(fd.get("name")||"").trim(),
           category:String(fd.get("category")||"").trim(),
           brand:String(fd.get("brand")||"").trim(),
+          commercialModel:String(fd.get("commercialModel")||"").trim(),
+          defaultCondition:String(fd.get("defaultCondition")||"").trim(),
           imageUrl:String(fd.get("imageUrl")||"").trim()||null,
           status:String(fd.get("status")||"draft"),
           variants:[{
@@ -1807,6 +1828,20 @@ Bun.serve({
       const result=await api("/v1/internal/catalog/products/"+Number(cps[1]),{
         method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
         body:{status:String(fd.get("status")||"draft")}
+      });
+      return redirect("/catalog?n="+catalogResult(result,"updated"));
+    }
+
+    const cpc=url.pathname.match(/^\/catalog\/products\/(\d+)\/classification$/);
+    if(cpc&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/catalog/products/"+Number(cpc[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          commercialModel:String(fd.get("commercialModel")||"").trim(),
+          defaultCondition:String(fd.get("defaultCondition")||"").trim()
+        }
       });
       return redirect("/catalog?n="+catalogResult(result,"updated"));
     }
