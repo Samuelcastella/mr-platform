@@ -16,6 +16,7 @@ import { handleProductIntelligence } from "./product-intelligence";
 import { ensureAssortmentDecisionSchema, handleAssortmentDecisions } from "./assortment-decisions";
 import { ensureSourcingOffersSchema, handleSourcingOffers } from "./sourcing-offers";
 import { ensureSupplierEvaluationSchema, handleSupplierEvaluations } from "./supplier-evaluations";
+import { ensureProductClassificationSchema } from "./product-classification";
 import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 import { handleInternalCatalog } from "./catalog-internal";
 import { ensureVendorPortalSchema, handleVendorPortal } from "./vendor-portal";
@@ -112,6 +113,8 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`;
+
+await ensureProductClassificationSchema(db);
 
 await db`
 CREATE TABLE IF NOT EXISTS public_inquiries (
@@ -243,7 +246,10 @@ Bun.serve({
       const status = url.searchParams.get("status");
       const rows = await db`
         SELECT
-          p.id, p.name, p.slug, p.category, p.brand, p.status, p.created_at,
+          p.id, p.name, p.slug, p.category, p.brand, p.status,
+          p.commercial_model AS "commercialModel",
+          p.default_condition AS "defaultCondition",
+          p.created_at,
           COALESCE(MIN(v.price), 0) AS price,
           COALESCE(MIN(v.currency), 'HNL') AS currency,
           COALESCE(SUM(v.available), 0)::int AS stock,
