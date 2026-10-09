@@ -98,6 +98,19 @@ const otherLocations=await db`
   RETURNING id`;
 const otherLocationId=Number(otherLocations[0].id);
 
+const scopedRoleRows=await db`
+  INSERT INTO roles(code,name,active)
+  VALUES('LANDED_COST_LOCATION_MANAGER','Landed Cost Location Manager CI',TRUE)
+  ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,active=TRUE
+  RETURNING id`;
+const scopedRoleId=Number(scopedRoleRows[0].id);
+for(const permission of ["landed_cost.read","landed_cost.manage","landed_cost.finalize"]){
+  await db`
+    INSERT INTO role_permissions(role_id,permission_code)
+    VALUES(${scopedRoleId},${permission})
+    ON CONFLICT DO NOTHING`;
+}
+
 const manager=await createStaff("MANAGER","Landed Cost Manager CI");
 const inventoryReader=await createStaff(
   "INVENTORY_OPERATOR",
@@ -112,11 +125,25 @@ const otherLocationReader=await createStaff(
   otherLocationId
 );
 const analyst=await createStaff("ANALYST","Landed Cost Analyst CI");
+const scopedCostManager=await createStaff(
+  "LANDED_COST_LOCATION_MANAGER",
+  "Scoped Landed Cost Manager CI",
+  "LOCATION",
+  locationId
+);
+const wrongScopedCostManager=await createStaff(
+  "LANDED_COST_LOCATION_MANAGER",
+  "Wrong Scoped Landed Cost Manager CI",
+  "LOCATION",
+  otherLocationId
+);
 
 ok(manager.login.response.status===200,"manager inicia sesión");
 ok(inventoryReader.login.response.status===200,"inventory operator scoped inicia sesión");
 ok(otherLocationReader.login.response.status===200,"segundo inventory operator scoped inicia sesión");
 ok(analyst.login.response.status===200,"analyst inicia sesión");
+ok(scopedCostManager.login.response.status===200,"scoped landed-cost manager inicia sesión");
+ok(wrongScopedCostManager.login.response.status===200,"wrong scoped landed-cost manager inicia sesión");
 
 const receiptProduct=await api("/v1/internal/catalog/products",{
   method:"POST",
