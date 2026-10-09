@@ -37,7 +37,11 @@ function cookieFrom(response: Response) {
 }
 
 async function createStaff(roleCode: string, prefix: string) {
-  const email = prefix + "-" + crypto.randomUUID().slice(0,8) + "@example.test";
+  const slug = prefix
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  const email = slug + "-" + crypto.randomUUID().slice(0,8) + "@example.test";
   const password = "ASSORT-" + crypto.randomUUID() + "-R9!";
   const hash = await Bun.password.hash(password, { algorithm:"argon2id" });
 
