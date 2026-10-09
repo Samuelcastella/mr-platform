@@ -1085,9 +1085,20 @@ async function finalizeCase(req:Request,db:DB,id:number){
 
     const allocations=await tx`
       SELECT
-        goods_receipt_item_id,production_lot_id,quantity_snapshot,currency
+        goods_receipt_item_id,production_lot_id,quantity_snapshot,
+        base_unit_cost_minor,base_cost_minor,currency
       FROM landed_cost_allocations
       WHERE case_id=${id}`;
+
+    if(allocations.length!==lines.length){
+      return {
+        error:"complete_allocation_coverage_required",
+        status:409,
+        eligibleLineCount:lines.length,
+        allocationCount:allocations.length
+      };
+    }
+
     for(const allocation of allocations){
       const targetId=c.source_type==="GOODS_RECEIPT"
         ?Number(allocation.goods_receipt_item_id)
@@ -1097,6 +1108,32 @@ async function finalizeCase(req:Request,db:DB,id:number){
       if(Number(allocation.quantity_snapshot)!==Number(currentLine.quantity)){
         return {error:"allocation_quantity_stale",status:409,targetId};
       }
+
+      const snapshotBaseUnit=allocation.base_unit_cost_minor==null
+        ?null
+        :Number(allocation.base_unit_cost_minor);
+      const currentBaseUnit=currentLine.baseUnitCostMinor==null
+        ?null
+        :Number(currentLine.baseUnitCostMinor);
+      const snapshotBaseCost=allocation.base_cost_minor==null
+        ?null
+        :Number(allocation.base_cost_minor);
+      const currentBaseCost=currentLine.baseCostMinor==null
+        ?null
+        :Number(currentLine.baseCostMinor);
+
+      if(snapshotBaseUnit!==currentBaseUnit||snapshotBaseCost!==currentBaseCost){
+        return {
+          error:"allocation_base_cost_stale",
+          status:409,
+          targetId,
+          snapshotBaseUnitCostMinor:snapshotBaseUnit,
+          currentBaseUnitCostMinor:currentBaseUnit,
+          snapshotBaseCostMinor:snapshotBaseCost,
+          currentBaseCostMinor:currentBaseCost
+        };
+      }
+
       if(String(allocation.currency)!==String(c.currency)){
         return {error:"allocation_currency_mismatch",status:409,targetId};
       }
