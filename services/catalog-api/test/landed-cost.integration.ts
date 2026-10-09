@@ -220,6 +220,29 @@ ok(
   "fuentes incluyen GoodsReceipt"
 );
 
+const scopedSources=await api("/v1/internal/landed-cost/sources",{
+  headers:{cookie:scopedReader.cookie}
+});
+ok(scopedSources.response.status===200,"Inventory Operator LOCATION puede listar fuentes");
+ok(
+  scopedSources.body.goodsReceipts?.some((x:any)=>Number(x.sourceId)===receiptId),
+  "LOCATION scope ve GoodsReceipt de su ubicación"
+);
+ok(
+  Array.isArray(scopedSources.body.productionRuns)&&scopedSources.body.productionRuns.length===0,
+  "LOCATION scope no ve ProductionRun sin ubicación autoritativa"
+);
+
+const wrongScopedSources=await api("/v1/internal/landed-cost/sources",{
+  headers:{cookie:wrongScopedReader.cookie}
+});
+ok(wrongScopedSources.response.status===200,"reader de otra ubicación obtiene lista filtrada");
+ok(
+  !wrongScopedSources.body.goodsReceipts?.some((x:any)=>Number(x.sourceId)===receiptId),
+  "LOCATION scope no filtra costos de otra ubicación"
+);
+
+
 const analystRead=await api("/v1/internal/landed-cost/cases",{
   headers:{cookie:analyst.cookie}
 });
