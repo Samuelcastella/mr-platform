@@ -815,16 +815,24 @@ async function traceView(req:Request,url:URL,db:DB){
       FROM inventory i
       JOIN product_variants pv ON pv.id=i.variant_id
       JOIN locations l ON l.id=i.location_id
-      WHERE i.variant_id=ANY(${variantIds}::bigint[])
+      WHERE pv.product_id=${resolved.productId}
+        AND (
+          ${resolved.variantId}::bigint IS NULL
+          OR i.variant_id=${resolved.variantId}::bigint
+        )
       ORDER BY i.variant_id,i.location_id`
     :[];
 
   const receiptRows=variantIds.length
     ?await db`
-      SELECT
-        gri.id
+      SELECT gri.id
       FROM goods_receipt_items gri
-      WHERE gri.variant_id=ANY(${variantIds}::bigint[])
+      JOIN product_variants pv ON pv.id=gri.variant_id
+      WHERE pv.product_id=${resolved.productId}
+        AND (
+          ${resolved.variantId}::bigint IS NULL
+          OR gri.variant_id=${resolved.variantId}::bigint
+        )
       ORDER BY gri.created_at DESC,gri.id DESC
       LIMIT 300`
     :[];
@@ -855,10 +863,15 @@ async function traceView(req:Request,url:URL,db:DB){
 
   const lotRows=variantIds.length
     ?await db`
-      SELECT id
-      FROM production_lots
-      WHERE variant_id=ANY(${variantIds}::bigint[])
-      ORDER BY created_at DESC,id DESC
+      SELECT l.id
+      FROM production_lots l
+      JOIN product_variants pv ON pv.id=l.variant_id
+      WHERE pv.product_id=${resolved.productId}
+        AND (
+          ${resolved.variantId}::bigint IS NULL
+          OR l.variant_id=${resolved.variantId}::bigint
+        )
+      ORDER BY l.created_at DESC,l.id DESC
       LIMIT 300`
     :[];
 
