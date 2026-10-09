@@ -434,9 +434,13 @@ async function vendorReviewPage(url:URL,session:Session){
   const rows:any[]=Array.isArray(result.body?.data)?result.body.data:[];
   const cards=rows.length?rows.map((r:any)=>{
     const actions=r.reviewStatus==="SUBMITTED"
-      ?'<div class="toolbar"><form method="post" action="/vendor-review/'+Number(r.id)+'/approve"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button> Aprobar y publicar </button></form><form method="post" action="/vendor-review/'+Number(r.id)+'/reject" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input name="note" maxlength="2000" placeholder="Motivo de rechazo" required><button class="ghost">Rechazar</button></form></div>'
+      ?'<div class="toolbar"><form method="post" action="/vendor-review/'+Number(r.id)+'/approve" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Modelo comercial<select name="commercialModel" required><option value="" selected disabled>Seleccionar</option><option value="third_party">Third party</option><option value="curated">Curated</option><option value="private_label">Private label</option><option value="owned">Owned</option></select></label>'+
+        '<label>Condición<select name="defaultCondition" required><option value="" selected disabled>Seleccionar</option><option value="new">Nuevo</option><option value="second_hand">Segunda mano</option><option value="refurbished">Reacondicionado</option></select></label>'+
+        '<label>Nota<input name="note" maxlength="2000" placeholder="Nota opcional"></label><button>Aprobar y publicar</button></form>'+
+        '<form method="post" action="/vendor-review/'+Number(r.id)+'/reject" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input name="note" maxlength="2000" placeholder="Motivo de rechazo" required><button class="ghost">Rechazar</button></form></div>'
       :"";
-    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(r.supplierName)+'</div><h3>'+esc(r.name)+'</h3><div class="meta">'+esc(r.category||"Sin categoría")+' · '+esc(r.brand||"Sin marca")+' · '+esc(r.variantCount)+' variantes · '+esc(r.imageCount)+' imágenes</div></div><span class="pill">'+esc(r.reviewStatus)+'</span></div>'+actions+'</article>';
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(r.supplierName)+'</div><h3>'+esc(r.name)+'</h3><div class="meta">'+esc(r.category||"Sin categoría")+' · '+esc(r.brand||"Sin marca")+' · '+esc(r.variantCount)+' variantes · '+esc(r.imageCount)+' imágenes</div><div class="meta">Modelo '+esc(r.commercialModel||"Sin clasificar")+' · condición '+esc(r.defaultCondition||"Sin clasificar")+'</div></div><span class="pill">'+esc(r.reviewStatus)+'</span></div>'+actions+'</article>';
   }).join(""):'<div class="panel empty">No hay productos de proveedores para revisar.</div>';
   return shell('<div class="eyebrow">Revisión</div><h1>Catálogos de terceros</h1>'+opsNotice(url)+'<p class="meta">Los productos externos permanecen en borrador hasta que el equipo los apruebe.</p><section class="queue">'+cards+'</section>',session);
 }
@@ -1950,7 +1954,12 @@ Bun.serve({
       const action=vendorReview[2]==="approve"?"APPROVE":"REJECT";
       const result=await api("/v1/internal/vendor-products/"+Number(vendorReview[1])+"/review",{
         method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
-        body:{decision:action,note:String(fd.get("note")||"").trim()||null}
+        body:{
+          decision:action,
+          note:String(fd.get("note")||"").trim()||null,
+          commercialModel:action==="APPROVE"?String(fd.get("commercialModel")||"").trim():null,
+          defaultCondition:action==="APPROVE"?String(fd.get("defaultCondition")||"").trim():null
+        }
       });
       return redirect("/vendor-review?n="+catalogResult(result,"action"));
     }
