@@ -1280,7 +1280,8 @@ Bun.serve({
     if(url.pathname==="/inventory-adjustments"&&req.method==="GET")return html(await inventoryAdjustmentsPage(url,session));
     if(url.pathname==="/health-desk"&&req.method==="GET")return html(await healthDeskPage(url,session));
     if(url.pathname==="/economic-readiness"&&req.method==="GET")return html(await economicReadinessPage(session));
-    if(url.pathname==="/product-intelligence"&&req.method==="GET")return html(await productIntelligencePage(url,session));\n    if(url.pathname==="/assortment-decisions"&&req.method==="GET")return html(await assortmentDecisionsPage(url,session));
+    if(url.pathname==="/product-intelligence"&&req.method==="GET")return html(await productIntelligencePage(url,session));
+    if(url.pathname==="/assortment-decisions"&&req.method==="GET")return html(await assortmentDecisionsPage(url,session));
 
 
 
