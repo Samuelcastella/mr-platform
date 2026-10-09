@@ -1,4 +1,5 @@
 import { auditActor, authorizeInternal, writeAuditEvent } from "./auth";
+import { validCommercialModel, validProductCondition } from "./product-classification";
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, {
@@ -67,7 +68,8 @@ export async function handleInternalCatalog(
     const rows = await db`
       SELECT
         p.id, p.name, p.slug, p.description, p.category, p.brand,
-        p.status, p.created_at, p.updated_at,
+        p.status, p.commercial_model, p.default_condition,
+        p.created_at, p.updated_at,
         COALESCE(
           (
             SELECT json_agg(
@@ -122,11 +124,23 @@ export async function handleInternalCatalog(
     const brand = clean(body.brand, 120) || null;
     const imageUrl = clean(body.imageUrl, 1000) || null;
     const status = clean(body.status, 24) || "draft";
+    const commercialModel = validCommercialModel(body.commercialModel);
+    const defaultCondition = validProductCondition(body.defaultCondition);
     const rawVariants = Array.isArray(body.variants) ? body.variants.slice(0, 20) : [];
 
     if (name.length < 2) return json({ error: "name_required" }, 400);
     if (!slug) return json({ error: "slug_required" }, 400);
     if (!["draft","active"].includes(status)) return json({ error: "invalid_status" }, 400);
+    if (!commercialModel) {
+      return json({
+        error: body.commercialModel == null ? "commercial_model_required" : "invalid_commercial_model"
+      }, 400);
+    }
+    if (!defaultCondition) {
+      return json({
+        error: body.defaultCondition == null ? "default_condition_required" : "invalid_default_condition"
+      }, 400);
+    }
     if (!validImageUrl(imageUrl || "")) return json({ error: "invalid_image_url" }, 400);
     if (!rawVariants.length) return json({ error: "variant_required" }, 400);
 
@@ -175,9 +189,15 @@ export async function handleInternalCatalog(
 
     const result = await db.begin(async (tx: any) => {
       const productRows = await tx`
-        INSERT INTO products(name,slug,description,category,brand,status)
-        VALUES(${name},${slug},${description},${category},${brand},${status})
-        RETURNING id,name,slug,status,created_at,updated_at`;
+        INSERT INTO products(
+          name,slug,description,category,brand,status,commercial_model,default_condition
+        )
+        VALUES(
+          ${name},${slug},${description},${category},${brand},${status},
+          ${commercialModel},${defaultCondition}
+        )
+        RETURNING
+          id,name,slug,status,commercial_model,default_condition,created_at,updated_at`;
       const product = productRows[0];
       const location = variants.some(v => v.stock > 0) ? await defaultLocation(tx) : null;
       const created: any[] = [];
@@ -222,7 +242,14 @@ export async function handleInternalCatalog(
         resourceType: "Product",
         resourceId: product.id,
         outcome: "SUCCESS",
-        metadata: { status, variantCount: created.length, locationId: location?.id ?? null }
+        metadata: {
+          status,
+          commercialModel,
+          defaultCondition,
+          variantCount: created.length,
+          locationId: location?.id ?? null,
+          economicOwnershipChanged: false
+        }
       });
 
       return { product, variants: created, location };
@@ -241,13 +268,39 @@ export async function handleInternalCatalog(
 
     const id = Number(productMatch[1]);
     const prior = await db`
-      SELECT id,name,description,category,brand,status
+      SELECT
+        id,name,description,category,brand,status,commercial_model,default_condition
       FROM products WHERE id=${id} LIMIT 1`;
     if (!prior.length) return json({ error: "not_found" }, 404);
 
     const before = prior[0];
     const nextStatus = body.status == null ? before.status : clean(body.status, 24);
     if (!["draft","active"].includes(nextStatus)) return json({ error: "invalid_status" }, 400);
+
+    const nextCommercialModel = body.commercialModel == null
+      ? before.commercial_model
+      : validCommercialModel(body.commercialModel);
+    const nextDefaultCondition = body.defaultCondition == null
+      ? before.default_condition
+      : validProductCondition(body.defaultCondition);
+
+    if (body.commercialModel != null && !nextCommercialModel) {
+      return json({ error: "invalid_commercial_model" }, 400);
+    }
+    if (body.defaultCondition != null && !nextDefaultCondition) {
+      return json({ error: "invalid_default_condition" }, 400);
+    }
+
+    if (
+      nextStatus === "active" &&
+      before.status !== "active" &&
+      (!nextCommercialModel || !nextDefaultCondition)
+    ) {
+      return json({
+        error: "classification_required",
+        required: ["commercialModel","defaultCondition"]
+      }, 409);
+    }
 
     if (nextStatus === "active" && before.status !== "active") {
       const publish = await authorizeInternal(req, db, "catalog.publish", { mutation: true });
@@ -264,9 +317,13 @@ export async function handleInternalCatalog(
         category=${body.category == null ? before.category : clean(body.category,120) || null},
         brand=${body.brand == null ? before.brand : clean(body.brand,120) || null},
         status=${nextStatus},
+        commercial_model=${nextCommercialModel},
+        default_condition=${nextDefaultCondition},
         updated_at=NOW()
       WHERE id=${id}
-      RETURNING id,name,slug,description,category,brand,status,updated_at`;
+      RETURNING
+        id,name,slug,description,category,brand,status,
+        commercial_model,default_condition,updated_at`;
 
     await writeAuditEvent(db, {
       ...auditActor(auth.actor),
@@ -274,7 +331,15 @@ export async function handleInternalCatalog(
       resourceType: "Product",
       resourceId: id,
       outcome: "SUCCESS",
-      metadata: { fromStatus: before.status, toStatus: nextStatus }
+      metadata: {
+        fromStatus: before.status,
+        toStatus: nextStatus,
+        fromCommercialModel: before.commercial_model || null,
+        toCommercialModel: nextCommercialModel || null,
+        fromDefaultCondition: before.default_condition || null,
+        toDefaultCondition: nextDefaultCondition || null,
+        economicOwnershipChanged: false
+      }
     });
 
     return json({ product: rows[0] });
