@@ -728,7 +728,7 @@ async function updateLink(req:Request,db:DB,id:number){
   const active=body?.active==null?Boolean(existing.active):body.active===true;
   const changeNote=clean(body?.changeNote,1000)||null;
 
-  if(active && !existing.manufacturer_active){
+  if(active && !existing.active && !existing.manufacturer_active){
     return json({error:"manufacturer_inactive"},409);
   }
 
