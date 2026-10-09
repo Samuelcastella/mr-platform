@@ -424,7 +424,8 @@ async function createCommissionRule(req: Request, db: DB) {
   if (!RULE_SCOPES.has(scopeType)) return json({ error: "invalid_scope_type" }, 400);
   if (scopeType !== "GLOBAL" && !scopeReference) return json({ error: "scope_reference_required" }, 400);
 
-  const effectiveFrom = body?.effectiveFrom ? new Date(body.effectiveFrom) : new Date();
+  if (!body?.effectiveFrom) return json({ error: "effective_from_required" }, 400);
+  const effectiveFrom = new Date(body.effectiveFrom);
   const effectiveTo = body?.effectiveTo ? new Date(body.effectiveTo) : null;
   if (Number.isNaN(effectiveFrom.getTime()) || (effectiveTo && Number.isNaN(effectiveTo.getTime()))) {
     return json({ error: "invalid_effective_window" }, 400);
