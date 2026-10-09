@@ -264,3 +264,27 @@ Before implementation:
 - verify storefront availability remains backward compatible.
 
 This amendment authorizes design direction only. It does not itself approve a production migration.
+
+
+## 14. Implementation checkpoint — 2026-10-08
+
+Since the verified baseline in Section 2:
+
+- `InventorySource` has been implemented as part of M11 Phase A;
+- OrderItem now preserves commercial/economic source snapshots;
+- Product Intelligence v1 has been implemented through PR #76 and consumes those historical facts read-only.
+
+The following remains intentionally **not implemented**:
+
+- `Product.commercial_model` / merchandising relationship (`third_party`, `curated`, `private_label`, `owned`).
+
+Product Intelligence does not backfill or infer this field from:
+
+- `economic_owner_type`;
+- Seller/SellerAgreement;
+- Supplier;
+- current inventory source;
+- sales volume;
+- brand name.
+
+Reason: those facts answer different questions and an inference would corrupt product history. A future commercial-model migration must be explicit, audited and backward-compatible, and remains behind this amendment's approval/migration gate.
