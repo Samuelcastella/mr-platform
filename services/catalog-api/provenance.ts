@@ -439,6 +439,15 @@ async function variantTrace(req:Request,db:DB,variantId:number){
       updatedAt:r.updated_at
     }));
 
+  if(
+    !scope.global &&
+    procurement.length===0 &&
+    inventorySources.length===0 &&
+    inventoryLevels.length===0
+  ){
+    return json({error:"forbidden"},403);
+  }
+
   const production=scope.global
     ?(await productionRows(db,variantId)).map(mapProduction)
     :[];
