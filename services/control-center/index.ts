@@ -2038,6 +2038,7 @@ Bun.serve({
     if(url.pathname==="/suppliers"&&req.method==="GET")return html(await suppliersPage(url,session));
     if(url.pathname==="/manufacturers"&&req.method==="GET")return html(await manufacturersPage(url,session));
     if(url.pathname==="/product-specifications"&&req.method==="GET")return html(await productSpecificationsPage(url,session));
+    if(url.pathname==="/quality-control"&&req.method==="GET")return html(await qualityControlPage(url,session));
     if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
     if(url.pathname==="/fulfillment"&&req.method==="GET")return html(await fulfillmentPage(url,session));
@@ -2051,6 +2052,104 @@ Bun.serve({
     if(url.pathname==="/supplier-evaluations"&&req.method==="GET")return html(await supplierEvaluationsPage(url,session));
 
 
+
+    if(url.pathname==="/quality-control"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const target=String(fd.get("target")||"");
+      const match=target.match(/^(PRODUCT|VARIANT):(\d+)$/);
+      if(!match)return redirect("/quality-control?n=error");
+      const specRaw=String(fd.get("specificationVersionId")||"").trim();
+      const result=await api("/v1/internal/quality-inspections",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          inspectionType:String(fd.get("inspectionType")||"").trim(),
+          targetType:match[1],
+          targetId:Number(match[2]),
+          specificationVersionId:specRaw?Number(specRaw):null,
+          sampleReference:String(fd.get("sampleReference")||"").trim()||null,
+          inspectedQuantity:Number(fd.get("inspectedQuantity")||1),
+          aqlReference:String(fd.get("aqlReference")||"").trim()||null,
+          evidenceReference:String(fd.get("evidenceReference")||"").trim()||null,
+          rationale:String(fd.get("rationale")||"").trim()||null
+        }
+      });
+      const id=Number(result.body?.inspection?.id||0);
+      return redirect("/quality-control?n="+catalogResult(result,"created")+(id?"&inspectionId="+id:""));
+    }
+
+    const qualityUpdate=url.pathname.match(/^\/quality-control\/(\d+)\/update$/);
+    if(qualityUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(qualityUpdate[1]);
+      const result=await api("/v1/internal/quality-inspections/"+id,{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          sampleReference:String(fd.get("sampleReference")||"").trim()||null,
+          inspectedQuantity:Number(fd.get("inspectedQuantity")||1),
+          aqlReference:String(fd.get("aqlReference")||"").trim()||null,
+          evidenceReference:String(fd.get("evidenceReference")||"").trim()||null,
+          rationale:String(fd.get("rationale")||"").trim()||null,
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/quality-control?inspectionId="+id+"&n="+catalogResult(result,"updated"));
+    }
+
+    const qualityDefects=url.pathname.match(/^\/quality-control\/(\d+)\/defects$/);
+    if(qualityDefects&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const inspectionId=Number(qualityDefects[1]);
+      const result=await api("/v1/internal/quality-inspections/"+inspectionId+"/defects",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          severity:String(fd.get("severity")||"").trim(),
+          defectCode:String(fd.get("defectCode")||"").trim(),
+          description:String(fd.get("description")||"").trim(),
+          quantity:Number(fd.get("quantity")||1),
+          evidenceReference:String(fd.get("evidenceReference")||"").trim()||null
+        }
+      });
+      return redirect("/quality-control?inspectionId="+inspectionId+"&n="+catalogResult(result,"defect_created"));
+    }
+
+    const qualityDefectUpdate=url.pathname.match(/^\/quality-defects\/(\d+)\/update$/);
+    if(qualityDefectUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const inspectionId=Number(fd.get("inspectionId")||0);
+      const result=await api("/v1/internal/quality-defects/"+Number(qualityDefectUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          severity:String(fd.get("severity")||"").trim(),
+          defectCode:String(fd.get("defectCode")||"").trim(),
+          description:String(fd.get("description")||"").trim(),
+          quantity:Number(fd.get("quantity")||1),
+          evidenceReference:String(fd.get("evidenceReference")||"").trim()||null,
+          active:fd.get("active")==="on",
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/quality-control"+(inspectionId?"?inspectionId="+inspectionId+"&":"?")+"n="+catalogResult(result,"defect_updated"));
+    }
+
+    const qualityFinalize=url.pathname.match(/^\/quality-control\/(\d+)\/finalize$/);
+    if(qualityFinalize&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(qualityFinalize[1]);
+      const result=await api("/v1/internal/quality-inspections/"+id+"/finalize",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          result:String(fd.get("result")||"").trim(),
+          rationale:String(fd.get("rationale")||"").trim(),
+          note:String(fd.get("note")||"").trim()||null
+        }
+      });
+      return redirect("/quality-control?inspectionId="+id+"&n="+catalogResult(result,"finalized"));
+    }
 
     if(url.pathname==="/product-specifications"&&req.method==="POST"){
       const fd=await req.formData();
