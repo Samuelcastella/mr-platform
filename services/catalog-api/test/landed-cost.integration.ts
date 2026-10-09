@@ -299,6 +299,30 @@ ok(
 );
 ok(receiptCase.body.fxConversionApplied===false,"caso declara cero FX");
 
+const scopedCases=await api("/v1/internal/landed-cost/cases",{
+  headers:{cookie:scopedReader.cookie}
+});
+ok(
+  scopedCases.response.status===200 &&
+  scopedCases.body.data?.some((x:any)=>Number(x.id)===receiptCaseId),
+  "LOCATION scope ve landed cost case de su recepción"
+);
+
+const wrongScopedCase=await api("/v1/internal/landed-cost/cases/"+receiptCaseId,{
+  headers:{cookie:wrongScopedReader.cookie}
+});
+ok(
+  wrongScopedCase.response.status===403 &&
+  wrongScopedCase.body.error==="forbidden",
+  "detalle de landed cost respeta location scope"
+);
+
+const scopedCase=await api("/v1/internal/landed-cost/cases/"+receiptCaseId,{
+  headers:{cookie:scopedReader.cookie}
+});
+ok(scopedCase.response.status===200,"reader LOCATION correcto lee detalle del case");
+
+
 const duplicateReceiptCase=await api("/v1/internal/landed-cost/cases",{
   method:"POST",
   headers:staffHeaders(manager),
