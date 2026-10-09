@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -414,6 +414,173 @@ async function customersPage(url:URL,session:Session){
   }).join(""):'<div class="panel empty">Todavía no hay clientes.</div>';
   return shell('<div class="eyebrow">Clientes</div><h1>Directorio de clientes</h1>'+opsNotice(url)+'<section class="panel" style="margin-bottom:14px"><h3>Nuevo cliente</h3><form method="post" action="/customers" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="displayName" required maxlength="160"></label><label>Tipo<select name="customerType"><option value="PERSON">Persona</option><option value="BUSINESS">Empresa</option></select></label><button>Crear cliente</button></form></section><section class="queue">'+cards+'</section>',session);
 }
+
+async function qualityControlPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canManage=permissions.has("quality.manage");
+  const canFinalize=permissions.has("quality.finalize");
+  const inspectionId=Number(url.searchParams.get("inspectionId")||0);
+
+  const [listResult,catalogResultApi,specResult]=await Promise.all([
+    api("/v1/internal/quality-inspections",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/product-specifications",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(listResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso quality.read.</p></div>',session);
+  }
+  if(!listResult.response?.ok||!catalogResultApi.response?.ok||!specResult.response?.ok){
+    return shell('<div class="panel empty"><h2>Control de calidad no disponible</h2></div>',session);
+  }
+
+  const inspections:any[]=Array.isArray(listResult.body?.data)?listResult.body.data:[];
+  const products:any[]=Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+  const specs:any[]=Array.isArray(specResult.body?.data)?specResult.body.data:[];
+
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Inspección creada.",
+    updated:"Inspección actualizada.",
+    defect_created:"Defecto registrado.",
+    defect_updated:"Defecto actualizado.",
+    finalized:"Inspección finalizada.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const targetOptions=products.map((p:any)=>{
+    const productOption='<option value="PRODUCT:'+Number(p.id)+'">Producto · '+esc(p.name)+'</option>';
+    const variants=(Array.isArray(p.variants)?p.variants:[]).map((v:any)=>
+      '<option value="VARIANT:'+Number(v.id)+'">Variante · '+esc(p.name)+' · '+esc(v.sku)+' · '+esc(v.size||"sin talla")+' · '+esc(v.color||"sin color")+'</option>'
+    ).join("");
+    return productOption+variants;
+  }).join("");
+
+  const approvedSpecOptions=specs.filter((s:any)=>s.approvedVersion).map((s:any)=>
+    '<option value="'+Number(s.approvedVersion.id)+'">'+esc(s.code)+' · v'+Number(s.approvedVersion.versionNo)+' · '+esc(s.productName||"Producto")+(s.sku?' · '+esc(s.sku):'')+'</option>'
+  ).join("");
+
+  const createForm=canManage&&targetOptions
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Nueva inspección</h3>'+
+      '<p class="meta">El resultado se decide al finalizar. Registrar defectos no calcula PASS/FAIL automáticamente.</p>'+
+      '<form method="post" action="/quality-control" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Tipo<select name="inspectionType" required><option value="SAMPLE">Sample</option><option value="PRE_PRODUCTION">Pre-production</option><option value="IN_PROCESS">In-process</option><option value="FINAL">Final</option><option value="RECEIVING">Receiving</option></select></label>'+
+        '<label>Producto / variante<select name="target" required><option value="" selected disabled>Seleccionar</option>'+targetOptions+'</select></label>'+
+        '<label>Specification aprobada<select name="specificationVersionId"><option value="">Sin specification</option>'+approvedSpecOptions+'</select></label>'+
+        '<label>Referencia de muestra<input name="sampleReference" maxlength="240"></label>'+
+        '<label>Cantidad inspeccionada<input name="inspectedQuantity" type="number" min="1" step="1" value="1" required></label>'+
+        '<label>Referencia AQL<input name="aqlReference" maxlength="240" placeholder="Ej. AQL 2.5 / plan interno"></label>'+
+        '<label>Evidencia<input name="evidenceReference" maxlength="1000"></label>'+
+        '<label>Notas iniciales<textarea name="rationale" maxlength="4000"></textarea></label>'+
+        '<button>Crear inspección</button>'+
+      '</form></section>'
+    :'';
+
+  const cards=inspections.length?inspections.map((q:any)=>{
+    const target=q.targetType==="VARIANT"
+      ?esc(q.productName||"Producto")+' · '+esc(q.sku||"Variante")
+      :esc(q.productName||"Producto");
+    const spec=q.specificationVersion
+      ?' · '+esc(q.specificationVersion.code)+' v'+Number(q.specificationVersion.versionNo)
+      :' · sin specification';
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(q.inspectionType)+' · '+esc(q.targetType)+'</div>'+
+      '<h3>'+target+'</h3><div class="meta">Cantidad '+Number(q.inspectedQuantity)+' · resultado '+esc(q.result)+spec+'</div></div>'+
+      '<span class="pill">'+esc(q.status)+'</span></div>'+
+      '<div style="margin-top:10px"><a class="ghost" href="/quality-control?inspectionId='+Number(q.id)+'" style="display:inline-flex;text-decoration:none;border-radius:999px;padding:10px 14px;font-weight:900">Abrir inspección</a></div></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay inspecciones.</div>';
+
+  let detail="";
+  if(Number.isSafeInteger(inspectionId)&&inspectionId>0){
+    const detailResult=await api("/v1/internal/quality-inspections/"+inspectionId,{cookieHeader:session.cookieHeader});
+    if(detailResult.response?.ok){
+      const q=detailResult.body?.inspection||{};
+      const defects:any[]=Array.isArray(detailResult.body?.defects)?detailResult.body.defects:[];
+
+      const edit=q.status==="DRAFT"&&canManage
+        ?'<details style="margin-top:12px"><summary>Editar inspección</summary>'+
+          '<form method="post" action="/quality-control/'+Number(q.id)+'/update" class="actions" style="margin-top:10px">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+            '<label>Referencia muestra<input name="sampleReference" maxlength="240" value="'+esc(q.sampleReference||"")+'"></label>'+
+            '<label>Cantidad<input name="inspectedQuantity" type="number" min="1" step="1" required value="'+Number(q.inspectedQuantity||1)+'"></label>'+
+            '<label>Referencia AQL<input name="aqlReference" maxlength="240" value="'+esc(q.aqlReference||"")+'"></label>'+
+            '<label>Evidencia<input name="evidenceReference" maxlength="1000" value="'+esc(q.evidenceReference||"")+'"></label>'+
+            '<label>Notas<textarea name="rationale" maxlength="4000">'+esc(q.rationale||"")+'</textarea></label>'+
+            '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label>'+
+            '<button>Guardar borrador</button>'+
+          '</form></details>'
+        :'';
+
+      const addDefect=q.status==="DRAFT"&&canManage
+        ?'<section class="panel" style="margin-top:18px"><h3>Registrar defecto</h3>'+
+          '<form method="post" action="/quality-control/'+Number(q.id)+'/defects" class="actions">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+            '<label>Severidad<select name="severity"><option value="MINOR">Minor</option><option value="MAJOR">Major</option><option value="CRITICAL">Critical</option></select></label>'+
+            '<label>Código<input name="defectCode" required maxlength="80"></label>'+
+            '<label>Descripción<input name="description" required maxlength="1000"></label>'+
+            '<label>Cantidad<input name="quantity" type="number" min="1" step="1" value="1" required></label>'+
+            '<label>Evidencia<input name="evidenceReference" maxlength="1000"></label>'+
+            '<button>Agregar defecto</button>'+
+          '</form></section>'
+        :'';
+
+      const defectCards=defects.length?defects.map((d:any)=>{
+        const editDefect=q.status==="DRAFT"&&canManage
+          ?'<details style="margin-top:10px"><summary>Editar defecto</summary>'+
+            '<form method="post" action="/quality-defects/'+Number(d.id)+'/update" class="actions" style="margin-top:10px">'+
+              '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+              '<input type="hidden" name="inspectionId" value="'+Number(q.id)+'">'+
+              '<label>Severidad<select name="severity"><option value="MINOR" '+(d.severity==="MINOR"?'selected':'')+'>Minor</option><option value="MAJOR" '+(d.severity==="MAJOR"?'selected':'')+'>Major</option><option value="CRITICAL" '+(d.severity==="CRITICAL"?'selected':'')+'>Critical</option></select></label>'+
+              '<label>Código<input name="defectCode" required maxlength="80" value="'+esc(d.defectCode||"")+'"></label>'+
+              '<label>Descripción<input name="description" required maxlength="1000" value="'+esc(d.description||"")+'"></label>'+
+              '<label>Cantidad<input name="quantity" type="number" min="1" step="1" required value="'+Number(d.quantity||1)+'"></label>'+
+              '<label>Evidencia<input name="evidenceReference" maxlength="1000" value="'+esc(d.evidenceReference||"")+'"></label>'+
+              '<label style="display:flex;align-items:center;gap:8px"><input name="active" type="checkbox" style="width:auto" '+(d.active?'checked':'')+'> Activo</label>'+
+              '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label>'+
+              '<button>Guardar defecto</button>'+
+            '</form></details>'
+          :'';
+        return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(d.severity)+' · '+esc(d.defectCode)+'</div>'+
+          '<h3>'+esc(d.description)+'</h3><div class="meta">Cantidad '+Number(d.quantity)+' · '+(d.active?'activo':'inactivo')+'</div></div>'+
+          '<span class="pill">'+esc(d.severity)+'</span></div>'+editDefect+'</article>';
+      }).join(""):'<div class="panel empty">No hay defectos registrados.</div>';
+
+      const finalize=q.status==="DRAFT"&&canFinalize
+        ?'<section class="panel" style="margin-top:18px"><h3>Finalizar inspección</h3>'+
+          '<p class="meta">La decisión es humana. Los defectos observados son evidencia, no una regla automática de PASS/FAIL.</p>'+
+          '<form method="post" action="/quality-control/'+Number(q.id)+'/finalize" class="actions">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+            '<label>Resultado<select name="result" required><option value="" selected disabled>Seleccionar</option><option value="PASS">PASS</option><option value="CONDITIONAL">CONDITIONAL</option><option value="FAIL">FAIL</option></select></label>'+
+            '<label>Razonamiento<textarea name="rationale" required minlength="8" maxlength="4000"></textarea></label>'+
+            '<label>Nota de cierre<input name="note" maxlength="1000"></label>'+
+            '<button>Finalizar inspección</button>'+
+          '</form></section>'
+        :'';
+
+      const specText=q.specificationVersion
+        ?esc(q.specificationVersion.code)+' v'+Number(q.specificationVersion.versionNo)+' · '+esc(q.specificationVersion.status)
+        :'Sin specification vinculada';
+
+      detail='<section style="margin-top:28px"><div class="eyebrow">'+esc(q.inspectionType)+' · '+esc(q.targetType)+'</div>'+
+        '<h2>'+esc(q.productName||"Producto")+(q.sku?' · '+esc(q.sku):'')+'</h2>'+
+        '<p class="meta">Estado '+esc(q.status)+' · resultado '+esc(q.result)+' · '+specText+'</p>'+
+        '<p class="meta">Cantidad '+Number(q.inspectedQuantity)+' · AQL/ref '+esc(q.aqlReference||"—")+' · evidencia '+esc(q.evidenceReference||"—")+'</p>'+
+        (q.rationale?'<div class="message">'+esc(q.rationale)+'</div>':'')+
+        edit+addDefect+'<div class="queue" style="margin-top:18px">'+defectCards+'</div>'+finalize+'</section>';
+    }else{
+      detail='<div class="panel empty" style="margin-top:18px">No se pudo cargar la inspección.</div>';
+    }
+  }
+
+  return shell(
+    '<div class="eyebrow">W8 · Quality Control</div><h1>Inspecciones de calidad</h1>'+
+    '<p class="meta">Registro humano contra evidencia y, cuando aplica, una specification inmutable. No mueve inventario ni ejecuta producción.</p>'+
+    notice+createForm+'<section class="queue">'+cards+'</section>'+detail,
+    session
+  );
+}
+
 
 async function productSpecificationsPage(url:URL,session:Session){
   const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
