@@ -601,6 +601,37 @@ const lotRows=await db`
   RETURNING id,lot_code`;
 const productionLotId=Number(lotRows[0].id);
 
+const openRunRows=await db`
+  INSERT INTO production_runs(
+    run_code,product_specification_version_id,manufacturer_link_id,status,
+    actual_start_at,created_by_user_id,updated_by_user_id,released_by_user_id,released_at
+  )
+  VALUES(
+    ${"LC-RUN-OPEN-"+crypto.randomUUID().slice(0,8)},
+    ${specVersionId},${manufacturerLinkId},'IN_PRODUCTION',
+    NOW()-INTERVAL '1 hour',
+    ${manager.userId},${manager.userId},${manager.userId},NOW()-INTERVAL '2 hours'
+  )
+  RETURNING id`;
+const openProductionRunId=Number(openRunRows[0].id);
+
+const openProductionCase=await api("/v1/internal/landed-cost/cases",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    caseCode:"LC-PROD-OPEN-"+crypto.randomUUID().slice(0,5),
+    sourceType:"PRODUCTION_RUN",
+    sourceId:openProductionRunId,
+    currency:"HNL"
+  })
+});
+ok(
+  openProductionCase.response.status===409 &&
+  openProductionCase.body.error==="production_run_not_completed",
+  "production landed cost exige run COMPLETED"
+);
+
+
 const productionInventoryBefore=await db`
   SELECT COALESCE(SUM(quantity),0)::int quantity,COALESCE(SUM(reserved),0)::int reserved
   FROM inventory WHERE variant_id=${productionVariantId}`;
@@ -649,6 +680,16 @@ ok(productionCase.response.status===201,"crea caso de ProductionRun");
 const productionCaseId=Number(productionCase.body.landedCostCase?.id);
 ok(productionCase.body.landedCostCase?.totals?.sourceBaseCostMinor==null,"producción no inventa costo base");
 ok(Number(productionCase.body.landedCostCase?.source?.quantityTotal)===5,"source conserva produced quantity");
+
+const scopedProductionDetail=await api("/v1/internal/landed-cost/cases/"+productionCaseId,{
+  headers:{cookie:scopedReader.cookie}
+});
+ok(
+  scopedProductionDetail.response.status===403 &&
+  scopedProductionDetail.body.error==="forbidden",
+  "costeo de producción exige landed_cost.read GLOBAL"
+);
+
 
 const manufacturing=await api("/v1/internal/landed-cost/cases/"+productionCaseId+"/components",{
   method:"POST",
