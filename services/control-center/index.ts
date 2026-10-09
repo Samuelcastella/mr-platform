@@ -2211,6 +2211,7 @@ Bun.serve({
     if(url.pathname==="/manufacturers"&&req.method==="GET")return html(await manufacturersPage(url,session));
     if(url.pathname==="/product-specifications"&&req.method==="GET")return html(await productSpecificationsPage(url,session));
     if(url.pathname==="/quality-control"&&req.method==="GET")return html(await qualityControlPage(url,session));
+    if(url.pathname==="/production-runs"&&req.method==="GET")return html(await productionRunsPage(url,session));
     if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
     if(url.pathname==="/fulfillment"&&req.method==="GET")return html(await fulfillmentPage(url,session));
@@ -2224,6 +2225,105 @@ Bun.serve({
     if(url.pathname==="/supplier-evaluations"&&req.method==="GET")return html(await supplierEvaluationsPage(url,session));
 
 
+
+    if(url.pathname==="/production-runs"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/production-runs",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          runCode:String(fd.get("runCode")||"").trim(),
+          productSpecificationVersionId:Number(fd.get("productSpecificationVersionId")||0),
+          manufacturerLinkId:Number(fd.get("manufacturerLinkId")||0),
+          externalReference:String(fd.get("externalReference")||"").trim()||null,
+          plannedStartAt:String(fd.get("plannedStartAt")||"").trim()||null,
+          plannedEndAt:String(fd.get("plannedEndAt")||"").trim()||null,
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      const id=Number(result.body?.productionRun?.id||0);
+      return redirect("/production-runs?n="+catalogResult(result,"created")+(id?"&runId="+id:""));
+    }
+
+    const productionRunUpdate=url.pathname.match(/^\/production-runs\/(\d+)\/update$/);
+    if(productionRunUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(productionRunUpdate[1]);
+      const result=await api("/v1/internal/production-runs/"+id,{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          externalReference:String(fd.get("externalReference")||"").trim()||null,
+          plannedStartAt:String(fd.get("plannedStartAt")||"").trim()||null,
+          plannedEndAt:String(fd.get("plannedEndAt")||"").trim()||null,
+          notes:String(fd.get("notes")||"").trim()||null,
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/production-runs?runId="+id+"&n="+catalogResult(result,"updated"));
+    }
+
+    const productionRunLots=url.pathname.match(/^\/production-runs\/(\d+)\/lots$/);
+    if(productionRunLots&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const runId=Number(productionRunLots[1]);
+      const result=await api("/v1/internal/production-runs/"+runId+"/lots",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          lotCode:String(fd.get("lotCode")||"").trim(),
+          variantId:Number(fd.get("variantId")||0),
+          plannedQuantity:Number(fd.get("plannedQuantity")||0),
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      return redirect("/production-runs?runId="+runId+"&n="+catalogResult(result,"lot_created"));
+    }
+
+    const productionLotUpdate=url.pathname.match(/^\/production-lots\/(\d+)\/update$/);
+    if(productionLotUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const runId=Number(fd.get("runId")||0);
+      const result=await api("/v1/internal/production-lots/"+Number(productionLotUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          plannedQuantity:Number(fd.get("plannedQuantity")||0),
+          notes:String(fd.get("notes")||"").trim()||null,
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/production-runs"+(runId?"?runId="+runId+"&":"?")+"n="+catalogResult(result,"lot_updated"));
+    }
+
+    const productionRunAction=url.pathname.match(/^\/production-runs\/(\d+)\/(release|start|complete|cancel)$/);
+    if(productionRunAction&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const runId=Number(productionRunAction[1]);
+      const action=productionRunAction[2];
+      const result=await api("/v1/internal/production-runs/"+runId+"/"+action,{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{note:String(fd.get("note")||"").trim()||null}
+      });
+      const noticeKey=action==="release"?"released":action==="start"?"started":action==="complete"?"completed":"cancelled";
+      return redirect("/production-runs?runId="+runId+"&n="+catalogResult(result,noticeKey));
+    }
+
+    const productionLotAction=url.pathname.match(/^\/production-lots\/(\d+)\/(start|complete|cancel)$/);
+    if(productionLotAction&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const runId=Number(fd.get("runId")||0);
+      const action=productionLotAction[2];
+      const body:any={note:String(fd.get("note")||"").trim()||null};
+      if(action==="complete")body.producedQuantity=Number(fd.get("producedQuantity")||0);
+      const result=await api("/v1/internal/production-lots/"+Number(productionLotAction[1])+"/"+action,{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,body
+      });
+      const noticeKey=action==="start"?"lot_started":action==="complete"?"lot_completed":"lot_cancelled";
+      return redirect("/production-runs"+(runId?"?runId="+runId+"&":"?")+"n="+catalogResult(result,noticeKey));
+    }
 
     if(url.pathname==="/quality-control"&&req.method==="POST"){
       const fd=await req.formData();
