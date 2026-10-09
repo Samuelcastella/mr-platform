@@ -559,21 +559,22 @@ async function productionLotTrace(req:Request,db:DB,id:number){
   const variant=await variantBase(db,variantId);
   if(!variant)return json({error:"variant_not_found"},404);
 
-  const production=(await productionRows(db,variantId))
+  const productionRow=(await productionRows(db,variantId))
     .find((x:any)=>Number(x.production_lot_id)===id);
-  if(!production)return json({error:"production_lot_not_found"},404);
+  if(!productionRow)return json({error:"production_lot_not_found"},404);
+  const production=mapProduction(productionRow);
 
   const qRows=await qualityContextRows(db,variantId,variant.product.id);
   const qualityContext=qRows
     .filter((q:any)=>
       q.specification_version_id==null ||
-      Number(q.specification_version_id)===Number(production.product_specification_version_id)
+      Number(q.specification_version_id)===Number(production.specificationVersion.id)
     )
     .map(mapQualityContext);
 
   return json({
     variant,
-    lineage:mapProduction(production),
+    lineage:production,
     qualityContext,
     limitations:{
       qualityInspectionExplicitProductionLotLink:false,
