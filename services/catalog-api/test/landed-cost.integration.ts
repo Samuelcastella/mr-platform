@@ -670,6 +670,204 @@ ok(
 );
 ok(qcAfter===qcBefore,"landed cost no crea ni modifica QualityInspection");
 
+const coveragePo=await api("/v1/internal/procurement/purchase-orders",{
+  method:"POST",
+  headers:staffHeaders(manager,"land-cover-po-"+crypto.randomUUID()),
+  body:JSON.stringify({
+    supplierId,
+    destinationLocationId:locationId,
+    currency:"HNL",
+    shippingEstimateMinor:0,
+    taxEstimateMinor:0,
+    otherCostsMinor:0,
+    items:[
+      {
+        variantId:receiptVariantId,
+        quantityOrdered:1,
+        unitCostMinor:10000,
+        originCountryCode:"HN"
+      },
+      {
+        variantId:productionVariantId,
+        quantityOrdered:1,
+        unitCostMinor:20000,
+        originCountryCode:"HN"
+      }
+    ]
+  })
+});
+ok(coveragePo.response.status===201,"crea PO multi-línea para hardening de cobertura");
+const coveragePoId=Number(coveragePo.body.purchaseOrder?.id);
+
+const coverageApproved=await api("/v1/internal/procurement/purchase-orders/"+coveragePoId+"/approve",{
+  method:"POST",headers:staffHeaders(manager),body:"{}"
+});
+ok(coverageApproved.response.status===200,"aprueba PO de cobertura");
+
+const coverageOrdered=await api("/v1/internal/procurement/purchase-orders/"+coveragePoId+"/order",{
+  method:"POST",headers:staffHeaders(manager),body:"{}"
+});
+ok(coverageOrdered.response.status===200,"ordena PO de cobertura");
+const coverageItemA=Number(
+  coverageOrdered.body.purchaseOrder?.items?.find(
+    (x:any)=>Number(x.variantId)===receiptVariantId
+  )?.id
+);
+const coverageItemB=Number(
+  coverageOrdered.body.purchaseOrder?.items?.find(
+    (x:any)=>Number(x.variantId)===productionVariantId
+  )?.id
+);
+ok(coverageItemA>0&&coverageItemB>0,"resuelve ambas líneas de PO para cobertura");
+
+const coverageReceipt=await api(
+  "/v1/internal/procurement/purchase-orders/"+coveragePoId+"/receipts",
+  {
+    method:"POST",
+    headers:staffHeaders(inventoryReader,"land-cover-gr-"+crypto.randomUUID()),
+    body:JSON.stringify({
+      supplierDeliveryReference:"LAND-COVERAGE-CI",
+      items:[
+        {purchaseOrderItemId:coverageItemA,quantityReceived:1},
+        {purchaseOrderItemId:coverageItemB,quantityReceived:1}
+      ]
+    })
+  }
+);
+ok(coverageReceipt.response.status===201,"posta receipt multi-línea para cobertura");
+const coverageReceiptId=Number(coverageReceipt.body.goodsReceipt?.id);
+const coverageReceiptItems:any[]=Array.isArray(coverageReceipt.body.goodsReceipt?.items)
+  ?coverageReceipt.body.goodsReceipt.items
+  :[];
+const coverageReceiptItemA=Number(
+  coverageReceiptItems.find((x:any)=>Number(x.variantId)===receiptVariantId)?.id
+);
+const coverageReceiptItemB=Number(
+  coverageReceiptItems.find((x:any)=>Number(x.variantId)===productionVariantId)?.id
+);
+ok(
+  coverageReceiptItemA>0&&coverageReceiptItemB>0,
+  "receipt multi-línea expone ambos targets de landed cost"
+);
+
+const coverageCase=await api("/v1/internal/landed-cost/cases",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    caseCode:"LC-COVER-"+crypto.randomUUID().slice(0,6),
+    sourceType:"GOODS_RECEIPT",
+    sourceId:coverageReceiptId
+  })
+});
+ok(coverageCase.response.status===201,"crea caso multi-línea de hardening");
+const coverageCaseId=Number(coverageCase.body.landedCostCase?.id);
+
+const coverageComponent=await api(
+  "/v1/internal/landed-cost/cases/"+coverageCaseId+"/components",
+  {
+    method:"POST",
+    headers:staffHeaders(manager),
+    body:JSON.stringify({
+      componentType:"FREIGHT",
+      amountMinor:1000,
+      description:"Componente para validar cobertura"
+    })
+  }
+);
+ok(coverageComponent.response.status===201,"crea componente para caso multi-línea");
+
+const coverageAllocationA=await api(
+  "/v1/internal/landed-cost/cases/"+coverageCaseId+"/allocations",
+  {
+    method:"POST",
+    headers:staffHeaders(manager),
+    body:JSON.stringify({
+      targetId:coverageReceiptItemA,
+      allocatedCostMinor:1000,
+      notes:"Balance total, pero falta segunda línea"
+    })
+  }
+);
+ok(coverageAllocationA.response.status===201,"crea primera allocation del caso multi-línea");
+
+const coverageFinalize=await api(
+  "/v1/internal/landed-cost/cases/"+coverageCaseId+"/finalize",
+  {
+    method:"POST",
+    headers:staffHeaders(manager),
+    body:JSON.stringify({note:"Debe fallar por línea sin asignación"})
+  }
+);
+ok(
+  coverageFinalize.response.status===409 &&
+  coverageFinalize.body.error==="complete_allocation_coverage_required" &&
+  Number(coverageFinalize.body.eligibleLineCount)===2 &&
+  Number(coverageFinalize.body.allocationCount)===1,
+  "FINAL exige allocation explícita para cada línea elegible aunque el total ya balancee"
+);
+
+const coverageAllocationB=await api(
+  "/v1/internal/landed-cost/cases/"+coverageCaseId+"/allocations",
+  {
+    method:"POST",
+    headers:staffHeaders(manager),
+    body:JSON.stringify({
+      targetId:coverageReceiptItemB,
+      allocatedCostMinor:0,
+      notes:"Allocation explícita de cero mantiene cobertura completa"
+    })
+  }
+);
+ok(coverageAllocationB.response.status===201,"allocation cero completa cobertura explícita");
+
+await db.unsafe(
+  "UPDATE goods_receipt_items SET unit_cost_minor=$1 WHERE id=$2",
+  [11000,coverageReceiptItemA]
+);
+
+const staleBaseFinalize=await api(
+  "/v1/internal/landed-cost/cases/"+coverageCaseId+"/finalize",
+  {
+    method:"POST",
+    headers:staffHeaders(manager),
+    body:JSON.stringify({note:"Debe fallar por costo base cambiado"})
+  }
+);
+ok(
+  staleBaseFinalize.response.status===409 &&
+  staleBaseFinalize.body.error==="allocation_base_cost_stale" &&
+  Number(staleBaseFinalize.body.targetId)===coverageReceiptItemA &&
+  Number(staleBaseFinalize.body.snapshotBaseUnitCostMinor)===10000 &&
+  Number(staleBaseFinalize.body.currentBaseUnitCostMinor)===11000,
+  "FINAL revalida snapshot de costo base de GoodsReceiptItem"
+);
+
+await db.unsafe(
+  "UPDATE goods_receipt_items SET unit_cost_minor=$1 WHERE id=$2",
+  [10000,coverageReceiptItemA]
+);
+
+const coverageFinal=await api(
+  "/v1/internal/landed-cost/cases/"+coverageCaseId+"/finalize",
+  {
+    method:"POST",
+    headers:staffHeaders(manager),
+    body:JSON.stringify({note:"Cobertura y costos base revalidados"})
+  }
+);
+ok(
+  coverageFinal.response.status===200 &&
+  coverageFinal.body.landedCostCase?.status==="FINAL",
+  "caso multi-línea finaliza después de restaurar invariantes"
+);
+ok(
+  Number(coverageFinal.body.landedCostCase?.totals?.sourceBaseCostMinor)===30000 &&
+  Number(coverageFinal.body.landedCostCase?.totals?.landedComponentsMinor)===1000 &&
+  Number(coverageFinal.body.landedCostCase?.totals?.totalCostMinor)===31000,
+  "hardening preserva base receipt + landed cost tras cobertura completa"
+);
+
+
 const receiptDetail=await api("/v1/internal/landed-cost/cases/"+receiptCaseId,{
   headers:{cookie:inventoryReader.cookie}
 });
