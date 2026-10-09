@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -737,6 +737,186 @@ async function productSpecificationsPage(url:URL,session:Session){
     '<div class="eyebrow">W8 · Producto propio</div><h1>Especificaciones técnicas</h1>'+
     '<p class="meta">Series versionadas con aprobación humana. Aprobar una versión no modifica catálogo, inventario ni producción.</p>'+
     notice+createForm+'<section class="queue">'+cards+'</section>'+detail,
+    session
+  );
+}
+
+
+async function productionRunsPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canManage=permissions.has("production_runs.manage");
+  const canRelease=permissions.has("production_runs.release");
+
+  const [runsResult,specsResult,linksResult,catalogResultApi]=await Promise.all([
+    api("/v1/internal/production-runs",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/product-specifications?active=true",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/manufacturer-links?active=true",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(runsResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso production_runs.read.</p></div>',session);
+  }
+  if(!runsResult.response?.ok||!specsResult.response?.ok||!linksResult.response?.ok||!catalogResultApi.response?.ok){
+    return shell('<div class="panel empty"><h2>Producción no disponible</h2><p>No se pudo cargar runs, specifications, fabricantes o catálogo.</p></div>',session);
+  }
+
+  const runs:any[]=Array.isArray(runsResult.body?.data)?runsResult.body.data:[];
+  const specs:any[]=Array.isArray(specsResult.body?.data)?specsResult.body.data:[];
+  const links:any[]=Array.isArray(linksResult.body?.data)?linksResult.body.data:[];
+  const products:any[]=Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Production run creado.",
+    updated:"Production run actualizado.",
+    lot_created:"Lote creado.",
+    lot_updated:"Lote actualizado.",
+    released:"Run liberado a producción.",
+    started:"Producción iniciada.",
+    completed:"Run completado.",
+    cancelled:"Run cancelado.",
+    lot_started:"Lote iniciado.",
+    lot_completed:"Lote completado.",
+    lot_cancelled:"Lote cancelado.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const approvedSpecOptions=specs
+    .filter((s:any)=>s.approvedVersion)
+    .map((s:any)=>
+      '<option value="'+Number(s.approvedVersion.id)+'">'+esc(s.code)+' · v'+Number(s.approvedVersion.versionNo)+' · '+esc(s.productName||"Producto")+(s.sku?' · '+esc(s.sku):'')+'</option>'
+    ).join("");
+
+  const manufacturerLinkOptions=links.map((l:any)=>{
+    const target=l.targetType==="VARIANT"
+      ?esc(l.productName||"Producto")+' · '+esc(l.sku||"Variante")
+      :esc(l.productName||"Producto");
+    return '<option value="'+Number(l.id)+'">'+esc(l.manufacturer?.name||"Fabricante")+' · '+esc(l.targetType)+' · '+target+'</option>';
+  }).join("");
+
+  const createForm=canManage&&approvedSpecOptions&&manufacturerLinkOptions
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Nuevo production run</h3>'+
+      '<p class="meta">Solo usa specification APPROVED y ManufacturerLink activo. Crear o completar un run no recibe inventario.</p>'+
+      '<form method="post" action="/production" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Código run<input name="runCode" required maxlength="100" placeholder="RUN-2026-001"></label>'+
+        '<label>Specification aprobada<select name="productSpecificationVersionId" required><option value="" selected disabled>Seleccionar</option>'+approvedSpecOptions+'</select></label>'+
+        '<label>Fabricante / vínculo<select name="manufacturerLinkId" required><option value="" selected disabled>Seleccionar</option>'+manufacturerLinkOptions+'</select></label>'+
+        '<label>Referencia externa<input name="externalReference" maxlength="240"></label>'+
+        '<label>Inicio planificado<input name="plannedStartAt" type="datetime-local"></label>'+
+        '<label>Fin planificado<input name="plannedEndAt" type="datetime-local"></label>'+
+        '<label>Notas<textarea name="notes" maxlength="4000"></textarea></label>'+
+        '<button>Crear run</button>'+
+      '</form></section>'
+    :'';
+
+  const cards=runs.length?runs.map((r:any)=>{
+    const lots:any[]=Array.isArray(r.lots)?r.lots:[];
+    const productId=Number(r.specificationVersion?.productId||0);
+    const product=products.find((p:any)=>Number(p.id)===productId);
+    const variants:any[]=Array.isArray(product?.variants)?product.variants:[];
+
+    const lotOptions=variants
+      .filter((v:any)=>{
+        const specVariant=Number(r.specificationVersion?.variantId||0);
+        const mfgVariant=Number(r.manufacturerLink?.variantId||0);
+        if(specVariant&&Number(v.id)!==specVariant)return false;
+        if(r.manufacturerLink?.targetType==="VARIANT"&&mfgVariant&&Number(v.id)!==mfgVariant)return false;
+        return true;
+      })
+      .map((v:any)=>'<option value="'+Number(v.id)+'">'+esc(v.sku)+' · '+esc(v.size||"sin talla")+' · '+esc(v.color||"sin color")+'</option>')
+      .join("");
+
+    const plannedEdit=canManage&&r.status==="PLANNED"
+      ?'<details style="margin-top:12px"><summary>Editar planificación</summary>'+
+        '<form method="post" action="/production/'+Number(r.id)+'/update" class="actions" style="margin-top:10px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<label>Referencia externa<input name="externalReference" maxlength="240" value="'+esc(r.externalReference||"")+'"></label>'+
+          '<label>Inicio planificado<input name="plannedStartAt" type="datetime-local" value="'+esc(String(r.plannedStartAt||"").slice(0,16))+'"></label>'+
+          '<label>Fin planificado<input name="plannedEndAt" type="datetime-local" value="'+esc(String(r.plannedEndAt||"").slice(0,16))+'"></label>'+
+          '<label>Notas<textarea name="notes" maxlength="4000">'+esc(r.notes||"")+'</textarea></label>'+
+          '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label>'+
+          '<button>Guardar planificación</button>'+
+        '</form></details>'
+      :'';
+
+    const addLot=canManage&&r.status==="PLANNED"&&lotOptions
+      ?'<details style="margin-top:12px"><summary>Agregar lote</summary>'+
+        '<form method="post" action="/production/'+Number(r.id)+'/lots" class="actions" style="margin-top:10px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<label>Código lote<input name="lotCode" required maxlength="120" placeholder="LOT-2026-001-A"></label>'+
+          '<label>Variante<select name="variantId" required>'+lotOptions+'</select></label>'+
+          '<label>Cantidad planificada<input name="plannedQuantity" type="number" min="1" step="1" required></label>'+
+          '<label>Notas<textarea name="notes" maxlength="2000"></textarea></label>'+
+          '<button>Crear lote</button>'+
+        '</form></details>'
+      :'';
+
+    const release=canRelease&&r.status==="PLANNED"
+      ?'<form method="post" action="/production/'+Number(r.id)+'/release" class="toolbar" style="margin-top:12px">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nota<input name="note" maxlength="1000"></label><button>Liberar a producción</button></form>'
+      :'';
+
+    const start=canManage&&r.status==="RELEASED"
+      ?'<form method="post" action="/production/'+Number(r.id)+'/start" class="toolbar" style="margin-top:12px">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nota<input name="note" maxlength="1000"></label><button>Iniciar producción</button></form>'
+      :'';
+
+    const cancel=canManage&&["PLANNED","RELEASED"].includes(String(r.status))
+      ?'<form method="post" action="/production/'+Number(r.id)+'/cancel" class="toolbar" style="margin-top:12px">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Motivo<input name="note" required minlength="5" maxlength="1000"></label><button class="ghost">Cancelar run</button></form>'
+      :'';
+
+    const allClosed=lots.length>0&&lots.every((l:any)=>["COMPLETED","CANCELLED"].includes(String(l.status)));
+    const hasCompleted=lots.some((l:any)=>l.status==="COMPLETED");
+    const completeRun=canManage&&r.status==="IN_PRODUCTION"&&allClosed&&hasCompleted
+      ?'<form method="post" action="/production/'+Number(r.id)+'/complete" class="toolbar" style="margin-top:12px">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nota<input name="note" maxlength="1000"></label><button>Completar run</button></form>'
+      :'';
+
+    const lotCards=lots.length?lots.map((l:any)=>{
+      const edit=canManage&&r.status==="PLANNED"&&l.status==="PLANNED"
+        ?'<details style="margin-top:10px"><summary>Editar lote</summary><form method="post" action="/production-lots/'+Number(l.id)+'/update" class="actions" style="margin-top:8px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<input type="hidden" name="runId" value="'+Number(r.id)+'">'+
+          '<label>Cantidad planificada<input name="plannedQuantity" type="number" min="1" step="1" required value="'+Number(l.plannedQuantity)+'"></label>'+
+          '<label>Notas<textarea name="notes" maxlength="2000">'+esc(l.notes||"")+'</textarea></label>'+
+          '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label><button>Guardar lote</button></form></details>'
+        :'';
+
+      const startLot=canManage&&r.status==="IN_PRODUCTION"&&l.status==="PLANNED"
+        ?'<form method="post" action="/production-lots/'+Number(l.id)+'/start" class="toolbar" style="margin-top:8px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="runId" value="'+Number(r.id)+'"><label>Nota<input name="note" maxlength="1000"></label><button>Iniciar lote</button></form>'
+        :'';
+
+      const completeLot=canManage&&r.status==="IN_PRODUCTION"&&l.status==="IN_PRODUCTION"
+        ?'<form method="post" action="/production-lots/'+Number(l.id)+'/complete" class="toolbar" style="margin-top:8px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="runId" value="'+Number(r.id)+'"><label>Producidas<input name="producedQuantity" type="number" min="0" step="1" required value="'+Number(l.plannedQuantity)+'"></label><label>Nota<input name="note" maxlength="1000"></label><button>Completar lote</button></form>'
+        :'';
+
+      const cancelLot=canManage&&["PLANNED","IN_PRODUCTION"].includes(String(l.status))&&["PLANNED","RELEASED","IN_PRODUCTION"].includes(String(r.status))
+        ?'<form method="post" action="/production-lots/'+Number(l.id)+'/cancel" class="toolbar" style="margin-top:8px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="runId" value="'+Number(r.id)+'"><label>Motivo<input name="note" required minlength="5" maxlength="1000"></label><button class="ghost">Cancelar lote</button></form>'
+        :'';
+
+      return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(l.lotCode)+' · '+esc(l.status)+'</div>'+
+        '<h3>'+esc(l.variant?.sku||"Variante")+'</h3><div class="meta">Plan '+Number(l.plannedQuantity)+' · producidas '+Number(l.producedQuantity||0)+' · '+esc(l.variant?.size||"sin talla")+' · '+esc(l.variant?.color||"sin color")+'</div></div>'+
+        '<span class="pill">'+esc(l.status)+'</span></div>'+edit+startLot+completeLot+cancelLot+'</article>';
+    }).join(""):'<div class="empty">Sin lotes.</div>';
+
+    return '<section class="panel" style="margin-bottom:18px"><div class="item-head"><div><div class="eyebrow">'+esc(r.runCode)+' · '+esc(r.status)+'</div>'+
+      '<h2>'+esc(r.specificationVersion?.productName||"Producto")+'</h2>'+
+      '<div class="meta">Spec '+esc(r.specificationVersion?.specificationCode||"")+' v'+Number(r.specificationVersion?.versionNo||0)+' · fabricante '+esc(r.manufacturerLink?.manufacturer?.name||"—")+'</div></div>'+
+      '<span class="pill">'+esc(r.status)+'</span></div>'+
+      '<div class="meta">Referencia '+esc(r.externalReference||"—")+' · inicio '+esc(String(r.plannedStartAt||"—"))+' · fin '+esc(String(r.plannedEndAt||"—"))+'</div>'+
+      '<div class="notice" style="margin-top:12px">Fabricación registrada ≠ inventario recibido. QC, landed cost y recepción siguen separados.</div>'+
+      plannedEdit+addLot+release+start+cancel+completeRun+
+      '<h3 style="margin-top:18px">Lotes</h3><div class="queue">'+lotCards+'</div></section>';
+  }).join(""):'<div class="panel empty">Todavía no hay production runs.</div>';
+
+  return shell(
+    '<div class="eyebrow">W8 · Fabricación</div><h1>Production runs y lotes</h1>'+
+    '<p class="meta">Planificación y trazabilidad de fabricación contra specification aprobada y fabricante validado. No recibe stock automáticamente.</p>'+
+    notice+createForm+'<section>'+cards+'</section>',
     session
   );
 }
@@ -2038,6 +2218,7 @@ Bun.serve({
     if(url.pathname==="/suppliers"&&req.method==="GET")return html(await suppliersPage(url,session));
     if(url.pathname==="/manufacturers"&&req.method==="GET")return html(await manufacturersPage(url,session));
     if(url.pathname==="/product-specifications"&&req.method==="GET")return html(await productSpecificationsPage(url,session));
+    if(url.pathname==="/production"&&req.method==="GET")return html(await productionRunsPage(url,session));
     if(url.pathname==="/quality-control"&&req.method==="GET")return html(await qualityControlPage(url,session));
     if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
@@ -2149,6 +2330,101 @@ Bun.serve({
         }
       });
       return redirect("/quality-control?inspectionId="+id+"&n="+catalogResult(result,"finalized"));
+    }
+
+    if(url.pathname==="/production"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/production-runs",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          runCode:String(fd.get("runCode")||"").trim(),
+          productSpecificationVersionId:Number(fd.get("productSpecificationVersionId")||0),
+          manufacturerLinkId:Number(fd.get("manufacturerLinkId")||0),
+          externalReference:String(fd.get("externalReference")||"").trim()||null,
+          plannedStartAt:String(fd.get("plannedStartAt")||"").trim()||null,
+          plannedEndAt:String(fd.get("plannedEndAt")||"").trim()||null,
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      return redirect("/production?n="+catalogResult(result,"created"));
+    }
+
+    const productionUpdate=url.pathname.match(/^\/production\/(\d+)\/update$/);
+    if(productionUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/production-runs/"+Number(productionUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          externalReference:String(fd.get("externalReference")||"").trim()||null,
+          plannedStartAt:String(fd.get("plannedStartAt")||"").trim()||null,
+          plannedEndAt:String(fd.get("plannedEndAt")||"").trim()||null,
+          notes:String(fd.get("notes")||"").trim()||null,
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/production?n="+catalogResult(result,"updated"));
+    }
+
+    const productionLotCreate=url.pathname.match(/^\/production\/(\d+)\/lots$/);
+    if(productionLotCreate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/production-runs/"+Number(productionLotCreate[1])+"/lots",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          lotCode:String(fd.get("lotCode")||"").trim(),
+          variantId:Number(fd.get("variantId")||0),
+          plannedQuantity:Number(fd.get("plannedQuantity")||0),
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      return redirect("/production?n="+catalogResult(result,"lot_created"));
+    }
+
+    const productionRunAction=url.pathname.match(/^\/production\/(\d+)\/(release|start|complete|cancel)$/);
+    if(productionRunAction&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const runId=Number(productionRunAction[1]);
+      const action=productionRunAction[2];
+      const result=await api("/v1/internal/production-runs/"+runId+"/"+action,{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{note:String(fd.get("note")||"").trim()||null}
+      });
+      const success:any={release:"released",start:"started",complete:"completed",cancel:"cancelled"};
+      return redirect("/production?n="+catalogResult(result,success[action]||"updated"));
+    }
+
+    const productionLotUpdate=url.pathname.match(/^\/production-lots\/(\d+)\/update$/);
+    if(productionLotUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/production-lots/"+Number(productionLotUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          plannedQuantity:Number(fd.get("plannedQuantity")||0),
+          notes:String(fd.get("notes")||"").trim()||null,
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/production?n="+catalogResult(result,"lot_updated"));
+    }
+
+    const productionLotAction=url.pathname.match(/^\/production-lots\/(\d+)\/(start|complete|cancel)$/);
+    if(productionLotAction&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const lotId=Number(productionLotAction[1]);
+      const action=productionLotAction[2];
+      const body:any={note:String(fd.get("note")||"").trim()||null};
+      if(action==="complete")body.producedQuantity=Number(fd.get("producedQuantity")||0);
+      const result=await api("/v1/internal/production-lots/"+lotId+"/"+action,{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,body
+      });
+      const success:any={start:"lot_started",complete:"lot_completed",cancel:"lot_cancelled"};
+      return redirect("/production?n="+catalogResult(result,success[action]||"lot_updated"));
     }
 
     if(url.pathname==="/product-specifications"&&req.method==="POST"){
