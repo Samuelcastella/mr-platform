@@ -325,11 +325,11 @@ Landed Cost v1 must not automatically:
 7. Finalization revalidates GoodsReceipt base unit/line cost snapshots and fails closed if they changed.
 8. Manual allocations must equal active component total before finalization.
 9. Service actor cannot finalize.
-8. Inventory Operator can read but cannot manage/finalize.
-9. Analyst cannot read solely through reports.read.
-10. FINAL case, components and allocations are immutable.
-11. Source costs remain unchanged.
-12. Inventory quantity/reserved/movements remain unchanged.
-13. InventorySource, PO, receipt, production and QC state remain unchanged.
-14. No FX is applied.
-15. History/audit are complete.
+10. Inventory Operator can read but cannot manage/finalize.
+11. Analyst cannot read solely through reports.read.
+12. FINAL case, components and allocations are immutable.
+13. Source costs remain unchanged.
+14. Inventory quantity/reserved/movements remain unchanged.
+15. InventorySource, PO, receipt, production and QC state remain unchanged.
+16. No FX is applied.
+17. History/audit are complete.
