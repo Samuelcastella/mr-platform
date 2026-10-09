@@ -742,9 +742,6 @@ async function updateCase(req:Request,db:DB,id:number){
 async function createComponent(req:Request,db:DB,caseId:number){
   const auth=await authorizeInternal(req,db,"landed_cost.manage",{mutation:true});
   if(!auth.ok)return auth.response;
-  const c=await caseRow(db,caseId);
-  if(!c)return json({error:"case_not_found"},404);
-  if(c.status!=="DRAFT")return json({error:"final_case_immutable"},409);
 
   let body:any;
   try{body=await req.json();}catch{return json({error:"invalid_json"},400);}
@@ -754,28 +751,44 @@ async function createComponent(req:Request,db:DB,caseId:number){
   if(!COMPONENT_TYPES.has(componentType))return json({error:"invalid_component_type"},400);
   if(amountMinor==null)return json({error:"invalid_amount"},400);
 
-  const rows=await db`
-    INSERT INTO landed_cost_components(
-      case_id,component_type,amount_minor,description,active,
-      created_by_user_id,updated_by_user_id
-    )
-    VALUES(
-      ${caseId},${componentType},${amountMinor},${description},TRUE,
-      ${auth.actor.type==="USER"?auth.actor.userId:null},
-      ${auth.actor.type==="USER"?auth.actor.userId:null}
-    )
-    RETURNING id`;
-  const id=Number(rows[0].id);
-  await appendHistory(db,caseId,auth.actor,"COMPONENT_CREATED",description);
-  await writeAuditEvent(db,{
-    ...auditActor(auth.actor),
-    action:"landed_cost_component.created",
-    resourceType:"LandedCostComponent",
-    resourceId:id,
-    outcome:"SUCCESS",
-    metadata:{caseId,componentType,amountMinor,currency:c.currency,fxConversionApplied:false}
+  const result:any=await db.begin(async(tx:DB)=>{
+    const cases=await tx`
+      SELECT id,status,currency
+      FROM landed_cost_cases
+      WHERE id=${caseId}
+      FOR UPDATE`;
+    if(!cases.length)return {error:"case_not_found",status:404};
+    if(cases[0].status!=="DRAFT")return {error:"final_case_immutable",status:409};
+
+    const rows=await tx`
+      INSERT INTO landed_cost_components(
+        case_id,component_type,amount_minor,description,active,
+        created_by_user_id,updated_by_user_id
+      )
+      VALUES(
+        ${caseId},${componentType},${amountMinor},${description},TRUE,
+        ${auth.actor.type==="USER"?auth.actor.userId:null},
+        ${auth.actor.type==="USER"?auth.actor.userId:null}
+      )
+      RETURNING id`;
+    const id=Number(rows[0].id);
+    await appendHistory(tx,caseId,auth.actor,"COMPONENT_CREATED",description);
+    await writeAuditEvent(tx,{
+      ...auditActor(auth.actor),
+      action:"landed_cost_component.created",
+      resourceType:"LandedCostComponent",
+      resourceId:id,
+      outcome:"SUCCESS",
+      metadata:{
+        caseId,componentType,amountMinor,currency:cases[0].currency,
+        fxConversionApplied:false
+      }
+    });
+    return {id};
   });
-  const row=(await componentRows(db,caseId)).find((x:any)=>Number(x.id)===id);
+
+  if(result.error)return json({error:result.error},result.status||409);
+  const row=(await componentRows(db,caseId)).find((x:any)=>Number(x.id)===result.id);
   return json({component:mapComponent(row)},201);
 }
 
@@ -783,51 +796,57 @@ async function updateComponent(req:Request,db:DB,id:number){
   const auth=await authorizeInternal(req,db,"landed_cost.manage",{mutation:true});
   if(!auth.ok)return auth.response;
 
-  const rows=await db`
-    SELECT cc.*,c.status AS case_status
-    FROM landed_cost_components cc
-    JOIN landed_cost_cases c ON c.id=cc.case_id
-    WHERE cc.id=${id}
-    LIMIT 1`;
-  if(!rows.length)return json({error:"not_found"},404);
-  const current=rows[0];
-  if(current.case_status!=="DRAFT")return json({error:"final_case_immutable"},409);
-
   let body:any;
   try{body=await req.json();}catch{return json({error:"invalid_json"},400);}
-  const componentType=body?.componentType==null
-    ?current.component_type
-    :clean(body.componentType,40).toUpperCase();
-  const amountMinor=body?.amountMinor==null
-    ?Number(current.amount_minor)
-    :moneyInt(body.amountMinor);
-  const description=body?.description==null
-    ?current.description
-    :(clean(body.description,1000)||null);
-  const active=body?.active==null?Boolean(current.active):body.active===true;
   const note=clean(body?.changeNote,1000)||null;
 
-  if(!COMPONENT_TYPES.has(componentType))return json({error:"invalid_component_type"},400);
-  if(amountMinor==null)return json({error:"invalid_amount"},400);
+  const result:any=await db.begin(async(tx:DB)=>{
+    const rows=await tx`
+      SELECT cc.*,c.status AS case_status
+      FROM landed_cost_components cc
+      JOIN landed_cost_cases c ON c.id=cc.case_id
+      WHERE cc.id=${id}
+      FOR UPDATE OF cc,c`;
+    if(!rows.length)return {error:"not_found",status:404};
+    const current=rows[0];
+    if(current.case_status!=="DRAFT")return {error:"final_case_immutable",status:409};
 
-  await db`
-    UPDATE landed_cost_components
-    SET component_type=${componentType},amount_minor=${amountMinor},
-        description=${description},active=${active},
-        updated_by_user_id=${auth.actor.type==="USER"?auth.actor.userId:null},
-        updated_at=NOW()
-    WHERE id=${id}`;
-  await appendHistory(db,Number(current.case_id),auth.actor,"COMPONENT_UPDATED",note);
-  await writeAuditEvent(db,{
-    ...auditActor(auth.actor),
-    action:"landed_cost_component.updated",
-    resourceType:"LandedCostComponent",
-    resourceId:id,
-    outcome:"SUCCESS",
-    reason:note,
-    metadata:{caseId:Number(current.case_id),componentType,amountMinor,active}
+    const componentType=body?.componentType==null
+      ?current.component_type
+      :clean(body.componentType,40).toUpperCase();
+    const amountMinor=body?.amountMinor==null
+      ?Number(current.amount_minor)
+      :moneyInt(body.amountMinor);
+    const description=body?.description==null
+      ?current.description
+      :(clean(body.description,1000)||null);
+    const active=body?.active==null?Boolean(current.active):body.active===true;
+
+    if(!COMPONENT_TYPES.has(componentType))return {error:"invalid_component_type",status:400};
+    if(amountMinor==null)return {error:"invalid_amount",status:400};
+
+    await tx`
+      UPDATE landed_cost_components
+      SET component_type=${componentType},amount_minor=${amountMinor},
+          description=${description},active=${active},
+          updated_by_user_id=${auth.actor.type==="USER"?auth.actor.userId:null},
+          updated_at=NOW()
+      WHERE id=${id}`;
+    await appendHistory(tx,Number(current.case_id),auth.actor,"COMPONENT_UPDATED",note);
+    await writeAuditEvent(tx,{
+      ...auditActor(auth.actor),
+      action:"landed_cost_component.updated",
+      resourceType:"LandedCostComponent",
+      resourceId:id,
+      outcome:"SUCCESS",
+      reason:note,
+      metadata:{caseId:Number(current.case_id),componentType,amountMinor,active}
+    });
+    return {caseId:Number(current.case_id)};
   });
-  const row=(await componentRows(db,Number(current.case_id))).find((x:any)=>Number(x.id)===id);
+
+  if(result.error)return json({error:result.error},result.status||409);
+  const row=(await componentRows(db,result.caseId)).find((x:any)=>Number(x.id)===id);
   return json({component:mapComponent(row)});
 }
 
@@ -889,9 +908,6 @@ async function resolveAllocationTarget(db:DB,c:any,targetId:number){
 async function createAllocation(req:Request,db:DB,caseId:number){
   const auth=await authorizeInternal(req,db,"landed_cost.manage",{mutation:true});
   if(!auth.ok)return auth.response;
-  const c=await caseRow(db,caseId);
-  if(!c)return json({error:"case_not_found"},404);
-  if(c.status!=="DRAFT")return json({error:"final_case_immutable"},409);
 
   let body:any;
   try{body=await req.json();}catch{return json({error:"invalid_json"},400);}
@@ -901,39 +917,53 @@ async function createAllocation(req:Request,db:DB,caseId:number){
   if(!Number.isSafeInteger(targetId)||targetId<1)return json({error:"invalid_target"},400);
   if(allocatedCostMinor==null)return json({error:"invalid_amount"},400);
 
-  const target:any=await resolveAllocationTarget(db,c,targetId);
-  if(target.error)return json({error:target.error},target.status||400);
-
   try{
-    const rows=await db`
-      INSERT INTO landed_cost_allocations(
-        case_id,target_type,goods_receipt_item_id,production_lot_id,
-        allocated_cost_minor,quantity_snapshot,base_unit_cost_minor,base_cost_minor,
-        currency,notes,created_by_user_id,updated_by_user_id
-      )
-      VALUES(
-        ${caseId},${target.targetType},${target.goodsReceiptItemId},${target.productionLotId},
-        ${allocatedCostMinor},${target.quantity},${target.baseUnitCostMinor},${target.baseCostMinor},
-        ${target.currency},${notes},
-        ${auth.actor.type==="USER"?auth.actor.userId:null},
-        ${auth.actor.type==="USER"?auth.actor.userId:null}
-      )
-      RETURNING id`;
-    const id=Number(rows[0].id);
-    await appendHistory(db,caseId,auth.actor,"ALLOCATION_CREATED",notes);
-    await writeAuditEvent(db,{
-      ...auditActor(auth.actor),
-      action:"landed_cost_allocation.created",
-      resourceType:"LandedCostAllocation",
-      resourceId:id,
-      outcome:"SUCCESS",
-      metadata:{
-        caseId,targetType:target.targetType,targetId,allocatedCostMinor,
-        quantitySnapshot:target.quantity,currency:target.currency,
-        inventoryChanged:false,sourceCostRewritten:false
-      }
+    const result:any=await db.begin(async(tx:DB)=>{
+      const cases=await tx`
+        SELECT *
+        FROM landed_cost_cases
+        WHERE id=${caseId}
+        FOR UPDATE`;
+      if(!cases.length)return {error:"case_not_found",status:404};
+      const c=cases[0];
+      if(c.status!=="DRAFT")return {error:"final_case_immutable",status:409};
+
+      const target:any=await resolveAllocationTarget(tx,c,targetId);
+      if(target.error)return {error:target.error,status:target.status||400};
+
+      const rows=await tx`
+        INSERT INTO landed_cost_allocations(
+          case_id,target_type,goods_receipt_item_id,production_lot_id,
+          allocated_cost_minor,quantity_snapshot,base_unit_cost_minor,base_cost_minor,
+          currency,notes,created_by_user_id,updated_by_user_id
+        )
+        VALUES(
+          ${caseId},${target.targetType},${target.goodsReceiptItemId},${target.productionLotId},
+          ${allocatedCostMinor},${target.quantity},${target.baseUnitCostMinor},${target.baseCostMinor},
+          ${target.currency},${notes},
+          ${auth.actor.type==="USER"?auth.actor.userId:null},
+          ${auth.actor.type==="USER"?auth.actor.userId:null}
+        )
+        RETURNING id`;
+      const id=Number(rows[0].id);
+      await appendHistory(tx,caseId,auth.actor,"ALLOCATION_CREATED",notes);
+      await writeAuditEvent(tx,{
+        ...auditActor(auth.actor),
+        action:"landed_cost_allocation.created",
+        resourceType:"LandedCostAllocation",
+        resourceId:id,
+        outcome:"SUCCESS",
+        metadata:{
+          caseId,targetType:target.targetType,targetId,allocatedCostMinor,
+          quantitySnapshot:target.quantity,currency:target.currency,
+          inventoryChanged:false,sourceCostRewritten:false
+        }
+      });
+      return {id};
     });
-    const row=(await allocationRows(db,caseId)).find((x:any)=>Number(x.id)===id);
+
+    if(result.error)return json({error:result.error},result.status||409);
+    const row=(await allocationRows(db,caseId)).find((x:any)=>Number(x.id)===result.id);
     return json({allocation:mapAllocation(row)},201);
   }catch(error:any){
     if(error?.code==="23505"||String(error?.message||"").includes("duplicate key")){
@@ -946,45 +976,52 @@ async function createAllocation(req:Request,db:DB,caseId:number){
 async function updateAllocation(req:Request,db:DB,id:number){
   const auth=await authorizeInternal(req,db,"landed_cost.manage",{mutation:true});
   if(!auth.ok)return auth.response;
-  const rows=await db`
-    SELECT a.*,c.status AS case_status
-    FROM landed_cost_allocations a
-    JOIN landed_cost_cases c ON c.id=a.case_id
-    WHERE a.id=${id}
-    LIMIT 1`;
-  if(!rows.length)return json({error:"not_found"},404);
-  const current=rows[0];
-  if(current.case_status!=="DRAFT")return json({error:"final_case_immutable"},409);
 
   let body:any;
   try{body=await req.json();}catch{return json({error:"invalid_json"},400);}
-  const allocatedCostMinor=body?.allocatedCostMinor==null
-    ?Number(current.allocated_cost_minor)
-    :moneyInt(body.allocatedCostMinor);
-  const notes=body?.notes==null?current.notes:(clean(body.notes,1000)||null);
   const note=clean(body?.changeNote,1000)||null;
-  if(allocatedCostMinor==null)return json({error:"invalid_amount"},400);
 
-  await db`
-    UPDATE landed_cost_allocations
-    SET allocated_cost_minor=${allocatedCostMinor},notes=${notes},
-        updated_by_user_id=${auth.actor.type==="USER"?auth.actor.userId:null},
-        updated_at=NOW()
-    WHERE id=${id}`;
-  await appendHistory(db,Number(current.case_id),auth.actor,"ALLOCATION_UPDATED",note);
-  await writeAuditEvent(db,{
-    ...auditActor(auth.actor),
-    action:"landed_cost_allocation.updated",
-    resourceType:"LandedCostAllocation",
-    resourceId:id,
-    outcome:"SUCCESS",
-    reason:note,
-    metadata:{
-      caseId:Number(current.case_id),allocatedCostMinor,
-      inventoryChanged:false,sourceCostRewritten:false
-    }
+  const result:any=await db.begin(async(tx:DB)=>{
+    const rows=await tx`
+      SELECT a.*,c.status AS case_status
+      FROM landed_cost_allocations a
+      JOIN landed_cost_cases c ON c.id=a.case_id
+      WHERE a.id=${id}
+      FOR UPDATE OF a,c`;
+    if(!rows.length)return {error:"not_found",status:404};
+    const current=rows[0];
+    if(current.case_status!=="DRAFT")return {error:"final_case_immutable",status:409};
+
+    const allocatedCostMinor=body?.allocatedCostMinor==null
+      ?Number(current.allocated_cost_minor)
+      :moneyInt(body.allocatedCostMinor);
+    const notes=body?.notes==null?current.notes:(clean(body.notes,1000)||null);
+    if(allocatedCostMinor==null)return {error:"invalid_amount",status:400};
+
+    await tx`
+      UPDATE landed_cost_allocations
+      SET allocated_cost_minor=${allocatedCostMinor},notes=${notes},
+          updated_by_user_id=${auth.actor.type==="USER"?auth.actor.userId:null},
+          updated_at=NOW()
+      WHERE id=${id}`;
+    await appendHistory(tx,Number(current.case_id),auth.actor,"ALLOCATION_UPDATED",note);
+    await writeAuditEvent(tx,{
+      ...auditActor(auth.actor),
+      action:"landed_cost_allocation.updated",
+      resourceType:"LandedCostAllocation",
+      resourceId:id,
+      outcome:"SUCCESS",
+      reason:note,
+      metadata:{
+        caseId:Number(current.case_id),allocatedCostMinor,
+        inventoryChanged:false,sourceCostRewritten:false
+      }
+    });
+    return {caseId:Number(current.case_id)};
   });
-  const row=(await allocationRows(db,Number(current.case_id))).find((x:any)=>Number(x.id)===id);
+
+  if(result.error)return json({error:result.error},result.status||409);
+  const row=(await allocationRows(db,result.caseId)).find((x:any)=>Number(x.id)===id);
   return json({allocation:mapAllocation(row)});
 }
 
