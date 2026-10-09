@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/landed-cost" style="color:#e7cf89;text-decoration:none;font-weight:800">Landed Cost</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -414,6 +414,173 @@ async function customersPage(url:URL,session:Session){
   }).join(""):'<div class="panel empty">Todavía no hay clientes.</div>';
   return shell('<div class="eyebrow">Clientes</div><h1>Directorio de clientes</h1>'+opsNotice(url)+'<section class="panel" style="margin-bottom:14px"><h3>Nuevo cliente</h3><form method="post" action="/customers" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="displayName" required maxlength="160"></label><label>Tipo<select name="customerType"><option value="PERSON">Persona</option><option value="BUSINESS">Empresa</option></select></label><button>Crear cliente</button></form></section><section class="queue">'+cards+'</section>',session);
 }
+
+async function landedCostPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canManage=permissions.has("landed_cost.manage");
+  const canFinalize=permissions.has("landed_cost.finalize");
+  const caseId=Number(url.searchParams.get("caseId")||0);
+
+  const [casesResult,targetsResult]=await Promise.all([
+    api("/v1/internal/landed-cost/cases",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/landed-cost/targets",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(casesResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso landed_cost.read.</p></div>',session);
+  }
+  if(!casesResult.response?.ok||!targetsResult.response?.ok){
+    return shell('<div class="panel empty"><h2>Landed Cost no disponible</h2></div>',session);
+  }
+
+  const cases:any[]=Array.isArray(casesResult.body?.data)?casesResult.body.data:[];
+  const targets:any[]=Array.isArray(targetsResult.body?.data)?targetsResult.body.data:[];
+  const money=(minor:any,currency:string)=>currency+' '+(Number(minor||0)/100).toFixed(2);
+
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Caso de landed cost creado.",
+    updated:"Caso actualizado.",
+    component_created:"Componente registrado.",
+    component_updated:"Componente actualizado.",
+    allocation_created:"Asignación registrada.",
+    allocation_updated:"Asignación actualizada.",
+    finalized:"Landed cost finalizado.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const targetOptions=targets.map((t:any)=>{
+    const s=t.source||{};
+    if(t.sourceType==="GOODS_RECEIPT"){
+      const value="GOODS_RECEIPT:"+Number(s.id)+":"+String(s.currency||"");
+      return '<option value="'+esc(value)+'">Recepción · '+esc(s.receiptNumber||("#"+s.id))+' · '+esc(s.poNumber||"PO")+' · '+esc(s.supplierName||"Proveedor")+' · '+esc(s.currency||"")+'</option>';
+    }
+    const value="PRODUCTION_RUN:"+Number(s.id)+":";
+    return '<option value="'+esc(value)+'">Producción · '+esc(s.runCode||("#"+s.id))+' · '+esc(s.status||"")+' · '+esc(s.manufacturerName||"Fabricante")+'</option>';
+  }).join("");
+
+  const createForm=canManage&&targetOptions
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Nuevo caso de landed cost</h3>'+
+      '<p class="meta">La moneda es única por caso. Recepciones usan su moneda autoritativa; producción requiere declararla. No se aplica FX.</p>'+
+      '<form method="post" action="/landed-cost" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Código<input name="caseCode" required maxlength="100" placeholder="LC-2026-001"></label>'+
+        '<label>Fuente<select name="target" required><option value="" selected disabled>Seleccionar</option>'+targetOptions+'</select></label>'+
+        '<label>Moneda para producción<input name="currency" maxlength="3" value="HNL"></label>'+
+        '<label>Notas<textarea name="notes" maxlength="4000"></textarea></label>'+
+        '<button>Crear caso</button>'+
+      '</form></section>'
+    :'';
+
+  const cards=cases.length?cases.map((x:any)=>{
+    const s=x.summary||{};
+    const source=x.sourceType==="GOODS_RECEIPT"
+      ?'Recepción '+esc(x.source?.receiptNumber||"")
+      :'Run '+esc(x.source?.runCode||"");
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(x.sourceType)+' · '+source+'</div>'+
+      '<h3>'+esc(x.caseCode)+'</h3>'+
+      '<div class="meta">Componentes '+money(s.componentTotalMinor,x.currency)+' · asignado '+money(s.allocatedTotalMinor,x.currency)+' · diferencia '+money(s.unallocatedMinor,x.currency)+'</div></div>'+
+      '<span class="pill">'+esc(x.status)+'</span></div>'+
+      '<div style="margin-top:10px"><a class="ghost" href="/landed-cost?caseId='+Number(x.id)+'" style="display:inline-flex;text-decoration:none;border-radius:999px;padding:10px 14px;font-weight:900">Abrir caso</a></div></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay casos de landed cost.</div>';
+
+  let detail="";
+  if(caseId){
+    const detailResult=await api("/v1/internal/landed-cost/cases/"+caseId,{cookieHeader:session.cookieHeader});
+    if(detailResult.response?.ok){
+      const d=detailResult.body||{};
+      const lc=d.case||{};
+      const components:any[]=Array.isArray(d.components)?d.components:[];
+      const allocations:any[]=Array.isArray(d.allocations)?d.allocations:[];
+      const lines:any[]=Array.isArray(d.source?.lines)?d.source.lines:[];
+      const s=d.summary||{};
+      const draft=lc.status==="DRAFT";
+
+      const caseEdit=canManage&&draft
+        ?'<form method="post" action="/landed-cost/'+caseId+'/update" class="toolbar" style="margin-top:12px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<label>Notas<input name="notes" maxlength="4000" value="'+esc(lc.notes||"")+'"></label>'+
+          '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label>'+
+          '<button>Guardar</button></form>'
+        :'';
+
+      const componentCreate=canManage&&draft
+        ?'<details style="margin-top:14px"><summary>Agregar componente</summary><form method="post" action="/landed-cost/'+caseId+'/components" class="actions" style="margin-top:10px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<label>Tipo<select name="componentType"><option>FREIGHT</option><option>DUTY</option><option>BROKERAGE</option><option>INSURANCE</option><option>LOCAL_TRANSPORT</option><option>PACKAGING</option><option>MANUFACTURING</option><option>OTHER</option></select></label>'+
+          '<label>Monto '+esc(lc.currency)+'<input name="amount" type="number" min="0" step="0.01" required></label>'+
+          '<label>Descripción<input name="description" maxlength="1000"></label>'+
+          '<button>Agregar</button></form></details>'
+        :'';
+
+      const componentCards=components.length?components.map((x:any)=>{
+        const edit=canManage&&draft
+          ?'<form method="post" action="/landed-cost-components/'+Number(x.id)+'/update" class="toolbar" style="margin-top:8px">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="caseId" value="'+caseId+'">'+
+            '<label>Tipo<select name="componentType">'+["FREIGHT","DUTY","BROKERAGE","INSURANCE","LOCAL_TRANSPORT","PACKAGING","MANUFACTURING","OTHER"].map(v=>'<option '+(v===x.componentType?'selected':'')+'>'+v+'</option>').join("")+'</select></label>'+
+            '<label>Monto<input name="amount" type="number" min="0" step="0.01" value="'+(Number(x.amountMinor)/100).toFixed(2)+'"></label>'+
+            '<label>Descripción<input name="description" maxlength="1000" value="'+esc(x.description||"")+'"></label>'+
+            '<label style="display:flex;align-items:center;gap:8px"><input name="active" type="checkbox" style="width:auto" '+(x.active?'checked':'')+'> Activo</label>'+
+            '<label>Nota<input name="changeNote" maxlength="1000"></label><button>Guardar</button></form>'
+          :'';
+        return '<article class="item"><div class="item-head"><div><b>'+esc(x.componentType)+'</b><div class="meta">'+money(x.amountMinor,lc.currency)+' · '+esc(x.description||"Sin descripción")+'</div></div><span class="pill">'+(x.active?'ACTIVO':'INACTIVO')+'</span></div>'+edit+'</article>';
+      }).join(""):'<div class="empty">Sin componentes.</div>';
+
+      const allocByTarget=new Map<number,any>();
+      for(const a of allocations){
+        const tid=Number(a.goodsReceiptItemId||a.productionLotId||0);
+        if(tid)allocByTarget.set(tid,a);
+      }
+
+      const lineCards=lines.filter((l:any)=>l.eligibleForAllocation).map((l:any)=>{
+        const targetId=Number(l.targetId);
+        const existing=allocByTarget.get(targetId);
+        const context=lc.sourceType==="GOODS_RECEIPT"
+          ?'Cantidad '+Number(l.quantity)+' · base '+money(l.baseCostMinor,lc.currency)
+          :'Cantidad producida '+Number(l.quantity)+' · lote '+esc(l.lotCode||"");
+        const form=canManage&&draft
+          ?existing
+            ?'<form method="post" action="/landed-cost-allocations/'+Number(existing.id)+'/update" class="toolbar" style="margin-top:8px">'+
+              '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="caseId" value="'+caseId+'">'+
+              '<label>Asignación '+esc(lc.currency)+'<input name="amount" type="number" min="0" step="0.01" value="'+(Number(existing.allocatedCostMinor)/100).toFixed(2)+'"></label>'+
+              '<label>Nota<input name="changeNote" maxlength="1000"></label><button>Actualizar</button></form>'
+            :'<form method="post" action="/landed-cost/'+caseId+'/allocations" class="toolbar" style="margin-top:8px">'+
+              '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="targetId" value="'+targetId+'">'+
+              '<label>Asignación '+esc(lc.currency)+'<input name="amount" type="number" min="0" step="0.01" value="0.00"></label><button>Asignar</button></form>'
+          :'';
+        return '<article class="item"><div><b>'+esc(l.productName||"Producto")+' · '+esc(l.sku||"")+'</b><div class="meta">'+context+' · asignado '+money(existing?.allocatedCostMinor||0,lc.currency)+'</div></div>'+form+'</article>';
+      }).join("")||'<div class="empty">No hay líneas elegibles para asignación.</div>';
+
+      const finalize=canFinalize&&draft
+        ?'<form method="post" action="/landed-cost/'+caseId+'/finalize" class="toolbar" style="margin-top:16px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<label>Nota final<input name="note" maxlength="1000"></label>'+
+          '<button '+(s.balanced?'':'disabled')+'>Finalizar landed cost</button></form>'
+        :'';
+
+      detail='<section class="panel" style="margin-top:24px"><div class="eyebrow">'+esc(lc.sourceType)+' · '+esc(lc.currency)+'</div>'+
+        '<h2>'+esc(lc.caseCode)+'</h2>'+
+        '<p class="meta">Método '+esc(lc.allocationMethod)+' · FX aplicado: no · inventario modificado: no.</p>'+
+        '<div class="metrics"><div class="metric"><span>Componentes</span><b>'+money(s.componentTotalMinor,lc.currency)+'</b></div>'+
+        '<div class="metric"><span>Asignado</span><b>'+money(s.allocatedTotalMinor,lc.currency)+'</b></div>'+
+        '<div class="metric"><span>Diferencia</span><b>'+money(s.unallocatedMinor,lc.currency)+'</b></div>'+
+        (s.baseCostTotalMinor==null?'':'<div class="metric"><span>Base recibida</span><b>'+money(s.baseCostTotalMinor,lc.currency)+'</b></div>')+
+        '</div>'+caseEdit+componentCreate+'<h3 style="margin-top:22px">Componentes</h3><div class="queue">'+componentCards+'</div>'+
+        '<h3 style="margin-top:22px">Asignación manual</h3><div class="queue">'+lineCards+'</div>'+finalize+'</section>';
+    }else{
+      detail='<div class="panel empty" style="margin-top:18px">No se pudo cargar el caso.</div>';
+    }
+  }
+
+  return shell(
+    '<div class="eyebrow">W8 · Costeo</div><h1>Landed Cost</h1>'+
+    '<p class="meta">Ledger de costos aterrizados. Finalizar congela componentes y asignaciones; no altera InventorySource, stock ni costos históricos de origen.</p>'+
+    notice+createForm+'<section class="queue">'+cards+'</section>'+detail,
+    session
+  );
+}
+
 
 async function qualityControlPage(url:URL,session:Session){
   const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
@@ -2220,6 +2387,7 @@ Bun.serve({
     if(url.pathname==="/product-specifications"&&req.method==="GET")return html(await productSpecificationsPage(url,session));
     if(url.pathname==="/production"&&req.method==="GET")return html(await productionRunsPage(url,session));
     if(url.pathname==="/quality-control"&&req.method==="GET")return html(await qualityControlPage(url,session));
+    if(url.pathname==="/landed-cost"&&req.method==="GET")return html(await landedCostPage(url,session));
     if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
     if(url.pathname==="/fulfillment"&&req.method==="GET")return html(await fulfillmentPage(url,session));
@@ -2233,6 +2401,114 @@ Bun.serve({
     if(url.pathname==="/supplier-evaluations"&&req.method==="GET")return html(await supplierEvaluationsPage(url,session));
 
 
+
+    if(url.pathname==="/landed-cost"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const target=String(fd.get("target")||"");
+      const match=target.match(/^(GOODS_RECEIPT|PRODUCTION_RUN):(\d+):([A-Z]{3})?$/);
+      if(!match)return redirect("/landed-cost?n=error");
+      const result=await api("/v1/internal/landed-cost/cases",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          caseCode:String(fd.get("caseCode")||"").trim(),
+          sourceType:match[1],
+          sourceId:Number(match[2]),
+          currency:match[1]==="GOODS_RECEIPT"?(match[3]||null):String(fd.get("currency")||"").trim().toUpperCase(),
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      const id=Number(result.body?.case?.id||0);
+      return redirect("/landed-cost?n="+catalogResult(result,"created")+(id?"&caseId="+id:""));
+    }
+
+    const landedUpdate=url.pathname.match(/^\/landed-cost\/(\d+)\/update$/);
+    if(landedUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(landedUpdate[1]);
+      const result=await api("/v1/internal/landed-cost/cases/"+id,{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{notes:String(fd.get("notes")||"").trim()||null,changeNote:String(fd.get("changeNote")||"").trim()||null}
+      });
+      return redirect("/landed-cost?caseId="+id+"&n="+catalogResult(result,"updated"));
+    }
+
+    const landedComponents=url.pathname.match(/^\/landed-cost\/(\d+)\/components$/);
+    if(landedComponents&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(landedComponents[1]);
+      const result=await api("/v1/internal/landed-cost/cases/"+id+"/components",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          componentType:String(fd.get("componentType")||"").trim(),
+          amountMinor:Math.max(0,Math.round(Number(fd.get("amount")||0)*100)),
+          description:String(fd.get("description")||"").trim()||null
+        }
+      });
+      return redirect("/landed-cost?caseId="+id+"&n="+catalogResult(result,"component_created"));
+    }
+
+    const landedComponentUpdate=url.pathname.match(/^\/landed-cost-components\/(\d+)\/update$/);
+    if(landedComponentUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const caseId=Number(fd.get("caseId")||0);
+      const result=await api("/v1/internal/landed-cost/components/"+Number(landedComponentUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          componentType:String(fd.get("componentType")||"").trim(),
+          amountMinor:Math.max(0,Math.round(Number(fd.get("amount")||0)*100)),
+          description:String(fd.get("description")||"").trim()||null,
+          active:fd.get("active")==="on",
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/landed-cost?caseId="+caseId+"&n="+catalogResult(result,"component_updated"));
+    }
+
+    const landedAllocations=url.pathname.match(/^\/landed-cost\/(\d+)\/allocations$/);
+    if(landedAllocations&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(landedAllocations[1]);
+      const result=await api("/v1/internal/landed-cost/cases/"+id+"/allocations",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          targetId:Number(fd.get("targetId")||0),
+          allocatedCostMinor:Math.max(0,Math.round(Number(fd.get("amount")||0)*100))
+        }
+      });
+      return redirect("/landed-cost?caseId="+id+"&n="+catalogResult(result,"allocation_created"));
+    }
+
+    const landedAllocationUpdate=url.pathname.match(/^\/landed-cost-allocations\/(\d+)\/update$/);
+    if(landedAllocationUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const caseId=Number(fd.get("caseId")||0);
+      const result=await api("/v1/internal/landed-cost/allocations/"+Number(landedAllocationUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          allocatedCostMinor:Math.max(0,Math.round(Number(fd.get("amount")||0)*100)),
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/landed-cost?caseId="+caseId+"&n="+catalogResult(result,"allocation_updated"));
+    }
+
+    const landedFinalize=url.pathname.match(/^\/landed-cost\/(\d+)\/finalize$/);
+    if(landedFinalize&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(landedFinalize[1]);
+      const result=await api("/v1/internal/landed-cost/cases/"+id+"/finalize",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{note:String(fd.get("note")||"").trim()||null}
+      });
+      return redirect("/landed-cost?caseId="+id+"&n="+catalogResult(result,"finalized"));
+    }
 
     if(url.pathname==="/quality-control"&&req.method==="POST"){
       const fd=await req.formData();
