@@ -429,10 +429,10 @@ function mapAllocation(row:any){
     baseCostMinor:base,
     allocatedCostMinor:allocated,
     currency:row.currency,
-    totalLandedCostMinor:base==null?null:base+allocated,
+    totalLandedCostMinor:base==null?allocated:base+allocated,
     unitLandedCostExact:
-      base!=null&&quantity>0&&(base+allocated)%quantity===0
-        ? (base+allocated)/quantity
+      quantity>0&&((base==null?allocated:base+allocated)%quantity===0)
+        ? (base==null?allocated:base+allocated)/quantity
         : null,
     createdAt:row.created_at,
     updatedAt:row.updated_at
@@ -716,7 +716,7 @@ function summary(components:any[],allocations:any[]){
     allocatedTotalMinor:allocatedTotal,
     unallocatedMinor:componentTotal-allocatedTotal,
     baseCostTotalMinor:baseCostTotal,
-    totalLandedCostMinor:baseCostTotal==null?null:baseCostTotal+allocatedTotal,
+    totalLandedCostMinor:baseCostTotal==null?allocatedTotal:baseCostTotal+allocatedTotal,
     balanced:componentTotal===allocatedTotal
   };
 }
