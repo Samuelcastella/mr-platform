@@ -1622,6 +1622,18 @@ function catalogResult(result:any,ok:string){
   return result.response?.ok?ok:"error";
 }
 
+function formJsonObject(fd:FormData,name:string){
+  const raw=String(fd.get(name)||"").trim();
+  if(!raw)return {ok:true as const,value:undefined};
+  try{
+    const value=JSON.parse(raw);
+    if(value&&typeof value==="object"&&!Array.isArray(value)){
+      return {ok:true as const,value};
+    }
+  }catch{}
+  return {ok:false as const,value:null};
+}
+
 Bun.serve({
   port:Number(Bun.env.PORT||3000),
   async fetch(req){
@@ -1858,6 +1870,7 @@ Bun.serve({
     if(url.pathname==="/customers"&&req.method==="GET")return html(await customersPage(url,session));
     if(url.pathname==="/suppliers"&&req.method==="GET")return html(await suppliersPage(url,session));
     if(url.pathname==="/manufacturers"&&req.method==="GET")return html(await manufacturersPage(url,session));
+    if(url.pathname==="/product-specifications"&&req.method==="GET")return html(await productSpecificationsPage(url,session));
     if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
     if(url.pathname==="/fulfillment"&&req.method==="GET")return html(await fulfillmentPage(url,session));
@@ -1871,6 +1884,118 @@ Bun.serve({
     if(url.pathname==="/supplier-evaluations"&&req.method==="GET")return html(await supplierEvaluationsPage(url,session));
 
 
+
+    if(url.pathname==="/product-specifications"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const target=String(fd.get("target")||"");
+      const match=target.match(/^(PRODUCT|VARIANT):(\d+)$/);
+      if(!match)return redirect("/product-specifications?n=error");
+      const result=await api("/v1/internal/product-specifications",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          code:String(fd.get("code")||"").trim(),
+          title:String(fd.get("title")||"").trim(),
+          targetType:match[1],
+          targetId:Number(match[2])
+        }
+      });
+      const id=Number(result.body?.specification?.id||0);
+      return redirect("/product-specifications?n="+catalogResult(result,"created")+(id?"&specId="+id:""));
+    }
+
+    const productSpecUpdate=url.pathname.match(/^\/product-specifications\/(\d+)\/update$/);
+    if(productSpecUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(productSpecUpdate[1]);
+      const result=await api("/v1/internal/product-specifications/"+id,{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          title:String(fd.get("title")||"").trim(),
+          active:fd.get("active")==="on",
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/product-specifications?specId="+id+"&n="+catalogResult(result,"updated"));
+    }
+
+    const productSpecVersions=url.pathname.match(/^\/product-specifications\/(\d+)\/versions$/);
+    if(productSpecVersions&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(productSpecVersions[1]);
+      const sections:any={};
+      for(const field of ["materials","measurements","construction","packaging","labeling","qualityRequirements"]){
+        const parsed=formJsonObject(fd,field);
+        if(!parsed.ok)return redirect("/product-specifications?specId="+id+"&n=error");
+        if(parsed.value!==undefined)sections[field]=parsed.value;
+      }
+      const cloneRaw=String(fd.get("cloneVersionId")||"").trim();
+      const result=await api("/v1/internal/product-specifications/"+id+"/versions",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          cloneVersionId:cloneRaw?Number(cloneRaw):null,
+          changeSummary:String(fd.get("changeSummary")||"").trim(),
+          sections,
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      return redirect("/product-specifications?specId="+id+"&n="+catalogResult(result,"version_created"));
+    }
+
+    const productSpecVersionUpdate=url.pathname.match(/^\/product-specification-versions\/(\d+)\/update$/);
+    if(productSpecVersionUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const versionId=Number(productSpecVersionUpdate[1]);
+      const sections:any={};
+      for(const field of ["materials","measurements","construction","packaging","labeling","qualityRequirements"]){
+        const parsed=formJsonObject(fd,field);
+        if(!parsed.ok)return redirect("/product-specifications?n=error");
+        if(parsed.value!==undefined)sections[field]=parsed.value;
+      }
+      const detail=await api("/v1/internal/product-specification-versions/"+versionId,{cookieHeader:session.cookieHeader});
+      const specId=Number(detail.body?.version?.specificationId||0);
+      const result=await api("/v1/internal/product-specification-versions/"+versionId,{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          changeSummary:String(fd.get("changeSummary")||"").trim(),
+          sections,
+          notes:String(fd.get("notes")||"").trim()||null,
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/product-specifications"+(specId?"?specId="+specId+"&":"?")+"n="+catalogResult(result,"version_updated"));
+    }
+
+    const productSpecApprove=url.pathname.match(/^\/product-specification-versions\/(\d+)\/approve$/);
+    if(productSpecApprove&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const versionId=Number(productSpecApprove[1]);
+      const detail=await api("/v1/internal/product-specification-versions/"+versionId,{cookieHeader:session.cookieHeader});
+      const specId=Number(detail.body?.version?.specificationId||0);
+      const result=await api("/v1/internal/product-specification-versions/"+versionId+"/approve",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{note:String(fd.get("note")||"").trim()||null}
+      });
+      return redirect("/product-specifications"+(specId?"?specId="+specId+"&":"?")+"n="+catalogResult(result,"approved"));
+    }
+
+    const productSpecWithdraw=url.pathname.match(/^\/product-specification-versions\/(\d+)\/withdraw$/);
+    if(productSpecWithdraw&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const versionId=Number(productSpecWithdraw[1]);
+      const detail=await api("/v1/internal/product-specification-versions/"+versionId,{cookieHeader:session.cookieHeader});
+      const specId=Number(detail.body?.version?.specificationId||0);
+      const result=await api("/v1/internal/product-specification-versions/"+versionId+"/withdraw",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{note:String(fd.get("note")||"").trim()}
+      });
+      return redirect("/product-specifications"+(specId?"?specId="+specId+"&":"?")+"n="+catalogResult(result,"withdrawn"));
+    }
 
     if(url.pathname==="/supplier-evaluations"&&req.method==="POST"){
       const fd=await req.formData();
