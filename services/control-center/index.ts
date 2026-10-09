@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/landed-cost" style="color:#e7cf89;text-decoration:none;font-weight:800">Costeo</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/landed-cost" style="color:#e7cf89;text-decoration:none;font-weight:800">Costeo</a><a href="/traceability" style="color:#e7cf89;text-decoration:none;font-weight:800">Trazabilidad</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -737,6 +737,146 @@ async function productSpecificationsPage(url:URL,session:Session){
     '<div class="eyebrow">W8 · Producto propio</div><h1>Especificaciones técnicas</h1>'+
     '<p class="meta">Series versionadas con aprobación humana. Aprobar una versión no modifica catálogo, inventario ni producción.</p>'+
     notice+createForm+'<section class="queue">'+cards+'</section>'+detail,
+    session
+  );
+}
+
+
+async function traceabilityPage(url:URL,session:Session){
+  const q=String(url.searchParams.get("q")||"").trim();
+  const variantId=Number(url.searchParams.get("variantId")||0);
+
+  const listResult=await api(
+    "/v1/internal/provenance/variants"+(q?"?q="+encodeURIComponent(q):""),
+    {cookieHeader:session.cookieHeader}
+  );
+
+  if(listResult.response?.status===403){
+    return shell(
+      '<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso provenance.read.</p></div>',
+      session
+    );
+  }
+  if(!listResult.response?.ok){
+    return shell(
+      '<div class="panel empty"><h2>Trazabilidad no disponible</h2><p>No se pudo cargar el índice de variantes.</p></div>',
+      session
+    );
+  }
+
+  const variants:any[]=Array.isArray(listResult.body?.data)?listResult.body.data:[];
+  const search=
+    '<section class="panel" style="margin-bottom:18px"><form method="get" action="/traceability" class="toolbar">'+
+      '<label>SKU o producto<input name="q" value="'+esc(q)+'" maxlength="120" placeholder="Buscar SKU o nombre"></label>'+
+      '<button>Buscar</button>'+
+    '</form></section>';
+
+  const cards=variants.length?variants.map((v:any)=>
+    '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(v.sku||"SKU")+'</div>'+
+    '<h3>'+esc(v.productName||"Producto")+'</h3>'+
+    '<div class="meta">'+esc(v.category||"Sin categoría")+' · '+esc(v.size||"sin talla")+' · '+esc(v.color||"sin color")+' · '+esc(v.commercialModel||"sin clasificar")+'</div></div>'+
+    '<a class="ghost" href="/traceability?variantId='+Number(v.id)+(q?'&q='+encodeURIComponent(q):'')+'" style="display:inline-flex;text-decoration:none;border-radius:999px;padding:10px 13px;font-weight:900">Abrir</a></div></article>'
+  ).join(""):'<div class="panel empty">No hay variantes visibles para este scope.</div>';
+
+  let detail="";
+  if(variantId){
+    const r=await api("/v1/internal/provenance/variants/"+variantId,{cookieHeader:session.cookieHeader});
+    if(r.response?.ok){
+      const body:any=r.body||{};
+      const v:any=body.variant||{};
+      const procurement:any[]=Array.isArray(body.authoritativeLineage?.procurement)
+        ?body.authoritativeLineage.procurement:[];
+      const production:any[]=Array.isArray(body.authoritativeLineage?.production)
+        ?body.authoritativeLineage.production:[];
+      const sources:any[]=Array.isArray(body.currentContext?.inventorySources)
+        ?body.currentContext.inventorySources:[];
+      const levels:any[]=Array.isArray(body.currentContext?.inventoryLevels)
+        ?body.currentContext.inventoryLevels:[];
+      const capabilities:any[]=Array.isArray(body.currentContext?.manufacturerCapabilities)
+        ?body.currentContext.manufacturerCapabilities:[];
+      const quality:any[]=Array.isArray(body.currentContext?.qualityContext)
+        ?body.currentContext.qualityContext:[];
+
+      const money=(minor:any,currency:string)=>
+        esc(currency||"")+' '+(Number(minor||0)/100).toFixed(2);
+
+      const procurementCards=procurement.length?procurement.map((x:any)=>{
+        const lc=x.landedCost;
+        const movement=x.inventoryMovement;
+        return '<article class="item"><div class="eyebrow">GoodsReceipt '+esc(x.goodsReceipt?.receiptNumber||"")+'</div>'+
+          '<h3>'+esc(x.purchaseOrder?.poNumber||"PO")+' · '+esc(x.purchaseOrder?.supplierName||"Proveedor")+'</h3>'+
+          '<div class="meta">Origen '+esc(x.purchaseOrder?.originCountryCode||"—")+' · ubicación '+esc(x.goodsReceipt?.locationName||"—")+
+          ' · '+Number(x.receiptEconomics?.quantityReceived||0)+' unidades · base '+money(x.receiptEconomics?.baseCostMinor,x.receiptEconomics?.currency)+'</div>'+
+          '<div class="meta">Movimiento: '+(movement?esc(movement.reference)+' · '+Number(movement.quantity)+' unidades':'sin movimiento exacto encontrado')+'</div>'+
+          '<div class="meta">Landed cost: '+(lc?esc(lc.caseCode)+' · '+esc(lc.status)+' · '+money(lc.allocatedCostMinor,lc.currency):'sin asignación explícita')+'</div>'+
+          '</article>';
+      }).join(""):'<div class="empty">Sin evidencia de procurement visible.</div>';
+
+      const productionCards=production.length?production.map((x:any)=>{
+        const lc=x.landedCost;
+        return '<article class="item"><div class="eyebrow">ProductionLot '+esc(x.productionLot?.lotCode||"")+'</div>'+
+          '<h3>'+esc(x.productionRun?.runCode||"Run")+' · '+esc(x.manufacturer?.name||"Fabricante")+'</h3>'+
+          '<div class="meta">Spec '+esc(x.specificationVersion?.specificationCode||"")+' v'+Number(x.specificationVersion?.versionNo||0)+
+          ' · estado lote '+esc(x.productionLot?.status||"")+' · producidas '+Number(x.productionLot?.producedQuantity||0)+'</div>'+
+          '<div class="meta">Landed cost: '+(lc?esc(lc.caseCode)+' · '+esc(lc.status)+' · '+money(lc.allocatedCostMinor,lc.currency):'sin asignación explícita')+'</div>'+
+          '</article>';
+      }).join(""):'<div class="empty">Sin evidencia de producción visible.</div>';
+
+      const sourceCards=sources.length?sources.map((x:any)=>
+        '<article class="item"><b>'+esc(x.locationName||"Ubicación")+' · '+esc(x.sourceType||"")+'</b>'+
+        '<div class="meta">Owner '+esc(x.economicOwnerType||"")+' · modo '+esc(x.commercialMode||"")+
+        ' · proveedor '+esc(x.supplierName||"—")+' · estado '+esc(x.status||"")+'</div>'+
+        '<div class="meta">Sin vínculo explícito a GoodsReceipt en v1.</div></article>'
+      ).join(""):'<div class="empty">Sin InventorySource visible.</div>';
+
+      const qualityCards=quality.length?quality.map((x:any)=>
+        '<article class="item"><b>'+esc(x.inspectionType||"QC")+' · '+esc(x.result||"")+'</b>'+
+        '<div class="meta">Inspection #'+Number(x.inspectionId||0)+' · '+esc(x.specificationVersion?.specificationCode||"sin spec")+
+        ' · '+esc(String(x.finalizedAt||""))+'</div>'+
+        '<div class="meta">Contexto compatible; no existe vínculo explícito a ProductionLot en v1.</div></article>'
+      ).join(""):'<div class="empty">Sin QC final compatible.</div>';
+
+      const capabilityCards=capabilities.length?capabilities.map((x:any)=>
+        '<article class="item"><b>'+esc(x.manufacturer?.name||"Fabricante")+'</b>'+
+        '<div class="meta">'+esc(x.targetType||"")+' · '+esc(x.manufacturerReference||"sin referencia")+
+        ' · vínculo '+(x.linkActive?'activo':'inactivo')+'</div>'+
+        '<div class="meta">Capacidad/provenance contextual; no prueba una corrida de producción.</div></article>'
+      ).join(""):'<div class="empty">Sin ManufacturerLink contextual.</div>';
+
+      const levelCards=levels.length?levels.map((x:any)=>
+        '<article class="item"><b>'+esc(x.locationName||"Ubicación")+'</b>'+
+        '<div class="meta">On hand '+Number(x.quantity||0)+' · reservado '+Number(x.reserved||0)+' · disponible '+Number(x.available||0)+'</div></article>'
+      ).join(""):'<div class="empty">Sin inventario visible.</div>';
+
+      detail='<section class="panel" style="margin-top:24px"><div class="eyebrow">W8 · Provenance</div>'+
+        '<h2>'+esc(v.product?.name||"Producto")+' · '+esc(v.sku||"SKU")+'</h2>'+
+        '<p class="meta">Trazabilidad derivada únicamente de claves autoritativas. Read-only; no se crean vínculos por texto, fecha o proximidad.</p>'+
+        (!body.visibility?.productionVisible?'<div class="notice">Tu scope es por ubicación: se muestra procurement local; producción global permanece oculta porque ProductionRun no tiene location autoritativa.</div>':'')+
+        '<div class="grid" style="margin-bottom:18px">'+
+          '<div class="metric"><span>Recepciones</span><b>'+procurement.length+'</b></div>'+
+          '<div class="metric"><span>Lotes producción</span><b>'+production.length+'</b></div>'+
+          '<div class="metric"><span>Landed cost explícito</span><b>'+Number(body.authoritativeLineage?.landedCostAllocationCount||0)+'</b></div>'+
+          '<div class="metric"><span>QC contexto</span><b>'+quality.length+'</b></div>'+
+        '</div>'+
+        '<h3>Lineage · Procurement</h3><div class="queue">'+procurementCards+'</div>'+
+        '<h3 style="margin-top:20px">Lineage · Producción</h3><div class="queue">'+productionCards+'</div>'+
+        '<h3 style="margin-top:20px">Inventario actual</h3><div class="queue">'+levelCards+'</div>'+
+        '<h3 style="margin-top:20px">InventorySource · contexto</h3><div class="queue">'+sourceCards+'</div>'+
+        '<h3 style="margin-top:20px">ManufacturerLink · contexto</h3><div class="queue">'+capabilityCards+'</div>'+
+        '<h3 style="margin-top:20px">Quality Control · contexto</h3><div class="queue">'+qualityCards+'</div>'+
+        '<div class="notice" style="margin-top:18px">Límites explícitos: QC no está enlazado a ProductionLot; InventorySource no está enlazado autoritativamente a GoodsReceipt. Esta vista no infiere esos edges.</div>'+
+        '</section>';
+    }else if(r.response?.status===403){
+      detail='<div class="panel empty" style="margin-top:18px">La variante existe, pero su trazabilidad está fuera de tu scope.</div>';
+    }else{
+      detail='<div class="panel empty" style="margin-top:18px">No se pudo cargar la trazabilidad solicitada.</div>';
+    }
+  }
+
+  return shell(
+    '<div class="eyebrow">W8 · Provenance</div><h1>Trazabilidad</h1>'+
+    '<p class="meta">Vista derivada de procurement, fabricación, costeo e inventario. No es un ledger independiente.</p>'+
+    search+'<section class="queue">'+cards+'</section>'+detail,
     session
   );
 }
@@ -2384,6 +2524,7 @@ Bun.serve({
     if(url.pathname==="/product-specifications"&&req.method==="GET")return html(await productSpecificationsPage(url,session));
     if(url.pathname==="/production"&&req.method==="GET")return html(await productionRunsPage(url,session));
     if(url.pathname==="/landed-cost"&&req.method==="GET")return html(await landedCostPage(url,session));
+    if(url.pathname==="/traceability"&&req.method==="GET")return html(await traceabilityPage(url,session));
     if(url.pathname==="/quality-control"&&req.method==="GET")return html(await qualityControlPage(url,session));
     if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
