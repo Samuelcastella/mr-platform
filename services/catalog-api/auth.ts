@@ -83,6 +83,8 @@ const PERMISSIONS: Record<string, string> = {
   "inquiries.read": "Read inquiries",
   "inquiries.write": "Update inquiries",
   "reports.read": "Read reports",
+  "assortment.decisions.read": "Read assortment decision log",
+  "assortment.decisions.manage": "Create/update assortment decisions",
   "users.manage": "Manage staff users",
   "roles.manage": "Manage roles and permissions",
   "audit.read": "Read audit events",
@@ -178,7 +180,8 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "commissions.attribution.read",
       "commissions.rules.read",
       "economics.policy.read",
-      "reports.read"
+      "reports.read",
+      "assortment.decisions.read"
     ]
   }
 };
