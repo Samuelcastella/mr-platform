@@ -1,4 +1,5 @@
 import { auditActor, authorizeInternal, writeAuditEvent } from "./auth";
+import { sellerAgreementActivationBlockers, sellerAgreementConfigurationBlockers } from "./economic-readiness";
 
 type DB = any;
 
@@ -397,15 +398,18 @@ async function transitionAgreement(req:Request,db:DB,id:number,target:"APPROVED"
 
   const result:any=await db.begin(async(tx:DB)=>{
     const rows=await tx`
-      SELECT id,seller_id,status,created_by_user_id
-      FROM seller_agreements
-      WHERE id=${id}
-      FOR UPDATE`;
+      SELECT a.*,s.status AS seller_status
+      FROM seller_agreements a
+      JOIN seller_accounts s ON s.id=a.seller_id
+      WHERE a.id=${id}
+      FOR UPDATE OF a`;
     if(!rows.length)return {error:"not_found",status:404};
 
     const current=String(rows[0].status);
     if(target==="APPROVED"){
       if(current!=="DRAFT")return {error:"invalid_transition",status:409,current,target};
+      const blockers=sellerAgreementConfigurationBlockers(rows[0]);
+      if(blockers.length)return {error:"agreement_policy_incomplete",status:409,blockers};
       if(rows[0].created_by_user_id!=null&&Number(rows[0].created_by_user_id)===auth.actor.userId)
         return {error:"self_approval_forbidden",status:409};
       await tx`
@@ -415,6 +419,8 @@ async function transitionAgreement(req:Request,db:DB,id:number,target:"APPROVED"
         WHERE id=${id}`;
     }else if(target==="ACTIVE"){
       if(current!=="APPROVED")return {error:"invalid_transition",status:409,current,target};
+      const blockers=sellerAgreementActivationBlockers(rows[0]);
+      if(blockers.length)return {error:"agreement_not_activation_ready",status:409,blockers};
       await tx`
         UPDATE seller_agreements
         SET status='ACTIVE',updated_at=NOW()
