@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -414,6 +414,143 @@ async function customersPage(url:URL,session:Session){
   }).join(""):'<div class="panel empty">Todavía no hay clientes.</div>';
   return shell('<div class="eyebrow">Clientes</div><h1>Directorio de clientes</h1>'+opsNotice(url)+'<section class="panel" style="margin-bottom:14px"><h3>Nuevo cliente</h3><form method="post" action="/customers" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nombre<input name="displayName" required maxlength="160"></label><label>Tipo<select name="customerType"><option value="PERSON">Persona</option><option value="BUSINESS">Empresa</option></select></label><button>Crear cliente</button></form></section><section class="queue">'+cards+'</section>',session);
 }
+
+async function manufacturersPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canManage=permissions.has("manufacturers.manage");
+
+  const [manufacturersResult,linksResult,catalogResultApi]=await Promise.all([
+    api("/v1/internal/manufacturers",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/manufacturer-links",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(manufacturersResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso manufacturers.read.</p></div>',session);
+  }
+  if(!manufacturersResult.response?.ok||!linksResult.response?.ok||!catalogResultApi.response?.ok){
+    return shell('<div class="panel empty"><h2>Fabricantes no disponibles</h2><p>No se pudo cargar el registro o el catálogo.</p></div>',session);
+  }
+
+  const manufacturers:any[]=Array.isArray(manufacturersResult.body?.data)?manufacturersResult.body.data:[];
+  const links:any[]=Array.isArray(linksResult.body?.data)?linksResult.body.data:[];
+  const products:any[]=Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Fabricante registrado.",
+    updated:"Fabricante actualizado.",
+    linked:"Vínculo de fabricante registrado.",
+    link_updated:"Vínculo actualizado.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const manufacturerOptions=manufacturers.filter((m:any)=>m.active).map((m:any)=>
+    '<option value="'+Number(m.id)+'">'+esc(m.name)+' · '+esc(m.countryCode||"sin país")+'</option>'
+  ).join("");
+
+  const targetOptions=products.map((p:any)=>{
+    const productOption='<option value="PRODUCT:'+Number(p.id)+'">Producto · '+esc(p.name)+' · '+esc(p.commercial_model||"sin clasificar")+'</option>';
+    const variantOptions=(Array.isArray(p.variants)?p.variants:[]).map((v:any)=>
+      '<option value="VARIANT:'+Number(v.id)+'">Variante · '+esc(p.name)+' · '+esc(v.sku)+' · '+esc(v.size||"sin talla")+' · '+esc(v.color||"sin color")+'</option>'
+    ).join("");
+    return productOption+variantOptions;
+  }).join("");
+
+  const createManufacturer=canManage
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Nuevo fabricante</h3>'+
+      '<p class="meta">Fabricante es una entidad distinta de proveedor. Registrarlo no crea Supplier ni habilita compras.</p>'+
+      '<form method="post" action="/manufacturers" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Nombre<input name="name" required maxlength="180"></label>'+
+        '<label>Razón legal<input name="legalName" maxlength="240"></label>'+
+        '<label>País<input name="countryCode" maxlength="2" value="HN"></label>'+
+        '<label>Ciudad<input name="city" maxlength="160"></label>'+
+        '<label>Contacto<input name="contactName" maxlength="160"></label>'+
+        '<label>Correo<input name="email" type="email" maxlength="254"></label>'+
+        '<label>Teléfono<input name="phone" maxlength="80"></label>'+
+        '<label>Sitio web<input name="website" type="url" maxlength="1000"></label>'+
+        '<label>Notas<textarea name="notes" maxlength="4000"></textarea></label>'+
+        '<button>Registrar fabricante</button>'+
+      '</form></section>'
+    :'';
+
+  const createLink=canManage&&manufacturerOptions&&targetOptions
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Vincular fabricante</h3>'+
+      '<p class="meta">El vínculo documenta una relación posible o vigente. No selecciona fabricante automáticamente ni declara un lote producido.</p>'+
+      '<form method="post" action="/manufacturer-links" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Fabricante<select name="manufacturerId" required>'+manufacturerOptions+'</select></label>'+
+        '<label>Producto / variante<select name="target" required><option value="" selected disabled>Seleccionar</option>'+targetOptions+'</select></label>'+
+        '<label>Referencia fabricante<input name="manufacturerReference" maxlength="240" placeholder="Código o referencia opcional"></label>'+
+        '<label>Notas<textarea name="notes" maxlength="2000"></textarea></label>'+
+        '<button>Crear vínculo</button>'+
+      '</form></section>'
+    :'';
+
+  const manufacturerCards=manufacturers.length?manufacturers.map((m:any)=>{
+    const edit=canManage
+      ?'<details style="margin-top:12px"><summary>Editar fabricante</summary>'+
+        '<form method="post" action="/manufacturers/'+Number(m.id)+'/update" class="actions" style="margin-top:10px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<label>Nombre<input name="name" required maxlength="180" value="'+esc(m.name)+'"></label>'+
+          '<label>Razón legal<input name="legalName" maxlength="240" value="'+esc(m.legalName||"")+'"></label>'+
+          '<label>País<input name="countryCode" maxlength="2" value="'+esc(m.countryCode||"")+'"></label>'+
+          '<label>Ciudad<input name="city" maxlength="160" value="'+esc(m.city||"")+'"></label>'+
+          '<label>Contacto<input name="contactName" maxlength="160" value="'+esc(m.contactName||"")+'"></label>'+
+          '<label>Correo<input name="email" type="email" maxlength="254" value="'+esc(m.email||"")+'"></label>'+
+          '<label>Teléfono<input name="phone" maxlength="80" value="'+esc(m.phone||"")+'"></label>'+
+          '<label>Sitio web<input name="website" type="url" maxlength="1000" value="'+esc(m.website||"")+'"></label>'+
+          '<label>Notas<textarea name="notes" maxlength="4000">'+esc(m.notes||"")+'</textarea></label>'+
+          '<label style="display:flex;align-items:center;gap:8px"><input name="active" type="checkbox" style="width:auto" '+(m.active?'checked':'')+'> Activo</label>'+
+          '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label>'+
+          '<button>Guardar</button>'+
+        '</form></details>'
+      :'';
+
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(m.countryCode||"País no definido")+(m.city?' · '+esc(m.city):'')+'</div>'+
+      '<h3>'+esc(m.name)+'</h3>'+
+      '<div class="meta">'+esc(m.legalName||"Sin razón legal")+' · '+esc(m.contactName||"Sin contacto")+' · '+esc(m.email||m.phone||"Sin datos de contacto")+'</div></div>'+
+      '<span class="pill">'+(m.active?'ACTIVO':'INACTIVO')+'</span></div>'+
+      (m.website?'<div class="meta">'+esc(m.website)+'</div>':'')+
+      (m.notes?'<div class="message">'+esc(m.notes)+'</div>':'')+
+      edit+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay fabricantes registrados.</div>';
+
+  const linkCards=links.length?links.map((l:any)=>{
+    const target=l.targetType==="VARIANT"
+      ?esc(l.productName||"Producto")+' · '+esc(l.sku||"Variante")
+      :esc(l.productName||"Producto");
+    const edit=canManage
+      ?'<details style="margin-top:12px"><summary>Editar vínculo</summary>'+
+        '<form method="post" action="/manufacturer-links/'+Number(l.id)+'/update" class="actions" style="margin-top:10px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<label>Referencia<input name="manufacturerReference" maxlength="240" value="'+esc(l.manufacturerReference||"")+'"></label>'+
+          '<label>Notas<textarea name="notes" maxlength="2000">'+esc(l.notes||"")+'</textarea></label>'+
+          '<label style="display:flex;align-items:center;gap:8px"><input name="active" type="checkbox" style="width:auto" '+(l.active?'checked':'')+'> Activo</label>'+
+          '<label>Nota de cambio<input name="changeNote" maxlength="1000"></label>'+
+          '<button>Guardar vínculo</button>'+
+        '</form></details>'
+      :'';
+
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(l.targetType)+'</div>'+
+      '<h3>'+esc(l.manufacturer?.name||"Fabricante")+' → '+target+'</h3>'+
+      '<div class="meta">Referencia '+esc(l.manufacturerReference||"—")+' · categoría '+esc(l.category||"—")+'</div></div>'+
+      '<span class="pill">'+(l.active?'ACTIVO':'INACTIVO')+'</span></div>'+
+      (l.notes?'<div class="message">'+esc(l.notes)+'</div>':'')+edit+'</article>';
+  }).join(""):'<div class="panel empty">Todavía no hay vínculos fabricante-producto.</div>';
+
+  return shell(
+    '<div class="eyebrow">W8 · Proveniencia</div><h1>Registro de fabricantes</h1>'+
+    '<p class="meta">Manufacturer es independiente de Supplier, Seller e InventorySource. Un vínculo no equivale a una orden, un proveedor preferido ni un lote producido.</p>'+
+    notice+createManufacturer+createLink+
+    '<section style="margin-bottom:28px"><h2>Fabricantes</h2><div class="queue">'+manufacturerCards+'</div></section>'+
+    '<section><h2>Vínculos a catálogo</h2><div class="queue">'+linkCards+'</div></section>',
+    session
+  );
+}
+
 
 async function suppliersPage(url:URL,session:Session){
   const result=await api("/v1/internal/suppliers",{cookieHeader:session.cookieHeader});
@@ -1560,6 +1697,7 @@ Bun.serve({
     if(url.pathname==="/orders"&&req.method==="GET")return html(await ordersPage(url,session));
     if(url.pathname==="/customers"&&req.method==="GET")return html(await customersPage(url,session));
     if(url.pathname==="/suppliers"&&req.method==="GET")return html(await suppliersPage(url,session));
+    if(url.pathname==="/manufacturers"&&req.method==="GET")return html(await manufacturersPage(url,session));
     if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
     if(url.pathname==="/fulfillment"&&req.method==="GET")return html(await fulfillmentPage(url,session));
@@ -1914,6 +2052,84 @@ Bun.serve({
         body:{displayName:String(fd.get("displayName")||"").trim(),customerType:String(fd.get("customerType")||"PERSON")}
       });
       return redirect("/customers?n="+catalogResult(result,"created"));
+    }
+
+    if(url.pathname==="/manufacturers"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/manufacturers",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          name:String(fd.get("name")||"").trim(),
+          legalName:String(fd.get("legalName")||"").trim()||null,
+          countryCode:String(fd.get("countryCode")||"").trim().toUpperCase()||null,
+          city:String(fd.get("city")||"").trim()||null,
+          contactName:String(fd.get("contactName")||"").trim()||null,
+          email:String(fd.get("email")||"").trim()||null,
+          phone:String(fd.get("phone")||"").trim()||null,
+          website:String(fd.get("website")||"").trim()||null,
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      return redirect("/manufacturers?n="+catalogResult(result,"created"));
+    }
+
+    const manufacturerUpdate=url.pathname.match(/^\/manufacturers\/(\d+)\/update$/);
+    if(manufacturerUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/manufacturers/"+Number(manufacturerUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          name:String(fd.get("name")||"").trim(),
+          legalName:String(fd.get("legalName")||"").trim()||null,
+          countryCode:String(fd.get("countryCode")||"").trim().toUpperCase()||null,
+          city:String(fd.get("city")||"").trim()||null,
+          contactName:String(fd.get("contactName")||"").trim()||null,
+          email:String(fd.get("email")||"").trim()||null,
+          phone:String(fd.get("phone")||"").trim()||null,
+          website:String(fd.get("website")||"").trim()||null,
+          notes:String(fd.get("notes")||"").trim()||null,
+          active:fd.get("active")==="on",
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/manufacturers?n="+catalogResult(result,"updated"));
+    }
+
+    if(url.pathname==="/manufacturer-links"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const target=String(fd.get("target")||"");
+      const match=target.match(/^(PRODUCT|VARIANT):(\d+)$/);
+      if(!match)return redirect("/manufacturers?n=error");
+      const result=await api("/v1/internal/manufacturer-links",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          manufacturerId:Number(fd.get("manufacturerId")||0),
+          targetType:match[1],
+          targetId:Number(match[2]),
+          manufacturerReference:String(fd.get("manufacturerReference")||"").trim()||null,
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      return redirect("/manufacturers?n="+catalogResult(result,"linked"));
+    }
+
+    const manufacturerLinkUpdate=url.pathname.match(/^\/manufacturer-links\/(\d+)\/update$/);
+    if(manufacturerLinkUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const result=await api("/v1/internal/manufacturer-links/"+Number(manufacturerLinkUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          manufacturerReference:String(fd.get("manufacturerReference")||"").trim()||null,
+          notes:String(fd.get("notes")||"").trim()||null,
+          active:fd.get("active")==="on",
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/manufacturers?n="+catalogResult(result,"link_updated"));
     }
 
     if(url.pathname==="/suppliers"&&req.method==="POST"){

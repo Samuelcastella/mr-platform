@@ -17,6 +17,7 @@ import { ensureAssortmentDecisionSchema, handleAssortmentDecisions } from "./ass
 import { ensureSourcingOffersSchema, handleSourcingOffers } from "./sourcing-offers";
 import { ensureSupplierEvaluationSchema, handleSupplierEvaluations } from "./supplier-evaluations";
 import { ensureProductClassificationSchema } from "./product-classification";
+import { ensureManufacturerRegistrySchema, handleManufacturerRegistry } from "./manufacturer-registry";
 import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 import { handleInternalCatalog } from "./catalog-internal";
 import { ensureVendorPortalSchema, handleVendorPortal } from "./vendor-portal";
@@ -170,6 +171,7 @@ await ensureEconomicReadinessSchema(db);
 await ensureAssortmentDecisionSchema(db);
 await ensureSourcingOffersSchema(db);
 await ensureSupplierEvaluationSchema(db);
+await ensureManufacturerRegistrySchema(db);
 await ensureInternalOpsSchema(db);
 await ensureVendorPortalSchema(db);
 
@@ -229,6 +231,9 @@ Bun.serve({
 
     const supplierEvaluationResponse = await handleSupplierEvaluations(req, url, db);
     if (supplierEvaluationResponse) return supplierEvaluationResponse;
+
+    const manufacturerRegistryResponse = await handleManufacturerRegistry(req, url, db);
+    if (manufacturerRegistryResponse) return manufacturerRegistryResponse;
 
     const sourcingOffersResponse = await handleSourcingOffers(req, url, db);
     if (sourcingOffersResponse) return sourcingOffersResponse;
@@ -426,7 +431,7 @@ Bun.serve({
     return json({
       service: "MR עדולם Catalog API",
       version: "0.10.0",
-      endpoints: ["/health", "/v1/auth/login", "/v1/auth/logout", "/v1/auth/me", "/v1/security/bootstrap", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/checkouts", "/v1/checkouts/:id", "/v1/fulfillment/options", "/v1/fulfillments", "/v1/fulfillments/:id", "/v1/internal/catalog", "/v1/internal/catalog/products", "/v1/internal/catalog/products/:id", "/v1/internal/catalog/products/:id/variants", "/v1/internal/catalog/variants/:id/stock", "/v1/internal/customers", "/v1/internal/suppliers", "/v1/internal/procurement/purchase-orders", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
+      endpoints: ["/health", "/v1/auth/login", "/v1/auth/logout", "/v1/auth/me", "/v1/security/bootstrap", "/v1/products", "/v1/orders", "/v1/orders/:id", "/v1/checkouts", "/v1/checkouts/:id", "/v1/fulfillment/options", "/v1/fulfillments", "/v1/fulfillments/:id", "/v1/internal/catalog", "/v1/internal/catalog/products", "/v1/internal/catalog/products/:id", "/v1/internal/catalog/products/:id/variants", "/v1/internal/catalog/variants/:id/stock", "/v1/internal/customers", "/v1/internal/suppliers", "/v1/internal/manufacturers", "/v1/internal/manufacturer-links", "/v1/internal/procurement/purchase-orders", "/v1/inquiries", "/v1/inquiries/:id", "/v1/events"]
     });
   }
 });
