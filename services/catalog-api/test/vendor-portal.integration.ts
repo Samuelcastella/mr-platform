@@ -179,17 +179,53 @@ ok(
   reviewQueue.body?.data?.some((p: any) => Number(p.id) === productId),
   "Control Center recibe producto enviado"
 );
+const queuedProduct = reviewQueue.body?.data?.find((p: any) => Number(p.id) === productId);
+ok(queuedProduct?.commercialModel == null, "producto proveedor llega sin commercialModel inferido");
+ok(queuedProduct?.defaultCondition == null, "producto proveedor llega sin condición inferida");
+
+const approvalWithoutClassification = await api("/v1/internal/vendor-products/" + productId + "/review", {
+  method: "POST",
+  headers: internalHeaders,
+  body: JSON.stringify({ decision: "APPROVE", note: "Intento sin clasificación" })
+});
+ok(
+  approvalWithoutClassification.response.status === 409 &&
+  approvalWithoutClassification.body?.error === "classification_required",
+  "aprobación exige clasificación explícita del staff"
+);
+
+const stillSubmitted = await db`
+  SELECT review_status,status,commercial_model,default_condition
+  FROM products
+  WHERE id=${productId}`;
+ok(
+  stillSubmitted[0]?.review_status === "SUBMITTED" &&
+  stillSubmitted[0]?.status === "draft" &&
+  stillSubmitted[0]?.commercial_model == null &&
+  stillSubmitted[0]?.default_condition == null,
+  "fallo de clasificación no publica ni infiere campos"
+);
 
 const approved = await api("/v1/internal/vendor-products/" + productId + "/review", {
   method: "POST",
   headers: internalHeaders,
-  body: JSON.stringify({ decision: "APPROVE", note: "Aprobado por CI" })
+  body: JSON.stringify({
+    decision: "APPROVE",
+    note: "Aprobado por CI",
+    commercialModel: "curated",
+    defaultCondition: "new"
+  })
 });
-ok(approved.response.status === 200, "administrador aprueba producto externo");
+ok(approved.response.status === 200, "administrador clasifica y aprueba producto externo");
 ok(
   approved.body?.product?.review_status === "APPROVED" &&
   approved.body?.product?.status === "active",
   "aprobación publica producto"
+);
+ok(
+  approved.body?.product?.commercial_model === "curated" &&
+  approved.body?.product?.default_condition === "new",
+  "aprobación persiste clasificación del revisor"
 );
 
 const visible = await api("/v1/products?status=active");
@@ -198,6 +234,8 @@ const publicProduct = Array.isArray(visible.body?.data)
   : null;
 ok(Boolean(publicProduct), "producto aprobado llega al catálogo público");
 ok(Number(publicProduct?.stock) === 4, "stock del proveedor llega al catálogo");
+ok(publicProduct?.commercialModel === "curated", "catálogo público expone clasificación revisada");
+ok(publicProduct?.defaultCondition === "new", "catálogo público expone condición revisada");
 
 const vendorLocation = await db`
   SELECT supplier_id, type
