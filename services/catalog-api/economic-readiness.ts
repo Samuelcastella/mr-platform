@@ -45,6 +45,19 @@ function uniqueUpperList(value: unknown, allowed: Set<string>) {
   return normalized;
 }
 
+function jsonStringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(v => String(v));
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(v => String(v)) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function ensureEconomicReadinessSchema(db: DB) {
   await db`ALTER TABLE seller_agreements ADD COLUMN IF NOT EXISTS settlement_trigger TEXT`;
   await db`ALTER TABLE seller_agreements ADD COLUMN IF NOT EXISTS payment_eligibility_policy TEXT`;
@@ -154,10 +167,10 @@ function commissionRuleConfigurationBlockers(row: any): string[] {
 
   if (scope !== "GLOBAL" && !row?.scope_reference) blockers.push("scope_reference_missing");
 
-  const roles = Array.isArray(row?.eligible_attribution_roles) ? row.eligible_attribution_roles : [];
+  const roles = jsonStringList(row?.eligible_attribution_roles);
   if (!roles.length) blockers.push("eligible_attribution_roles_missing");
 
-  const modes = Array.isArray(row?.eligible_commercial_modes) ? row.eligible_commercial_modes : [];
+  const modes = jsonStringList(row?.eligible_commercial_modes);
   if (!modes.length) blockers.push("eligible_commercial_modes_missing");
 
   if (!row?.discount_treatment) blockers.push("discount_treatment_missing");
