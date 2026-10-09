@@ -49,6 +49,8 @@ const created = await api("/v1/internal/catalog/products", {
     name: "Vestido Prueba CI",
     category: "Ropa",
     brand: "MR",
+    commercialModel: "curated",
+    defaultCondition: "new",
     status: "draft",
     imageUrl: "https://example.com/vestido-prueba-ci.jpg",
     variants: [{
@@ -92,6 +94,8 @@ const publicProduct = Array.isArray(visible.body?.data)
 ok(Boolean(publicProduct), "producto publicado aparece en storefront API");
 ok(Number(publicProduct?.stock) === 5, "storefront API expone stock autoritativo");
 ok(publicProduct?.variants?.[0]?.sku === "MR-CI-VEST-001", "storefront API expone SKU");
+ok(publicProduct?.commercialModel === "curated", "storefront API expone commercialModel");
+ok(publicProduct?.defaultCondition === "new", "storefront API expone defaultCondition");
 ok(
   publicProduct?.images?.[0]?.url === "https://example.com/vestido-prueba-ci.jpg",
   "storefront API expone imagen principal"
