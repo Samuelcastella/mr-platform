@@ -1304,8 +1304,8 @@ async function catalogPage(url:URL,session:Session){
         <label>Nombre<input name="name" required maxlength="180"></label>
         <label>Categoría<input name="category" maxlength="120"></label>
         <label>Marca<input name="brand" maxlength="120" value="MR עדולם"></label>
-        <label>Modelo comercial<select name="commercialModel" required><option value="third_party">Third party</option><option value="curated" selected>Curated</option><option value="private_label">Private label</option><option value="owned">Owned</option></select></label>
-        <label>Condición<select name="defaultCondition" required><option value="new" selected>Nuevo</option><option value="second_hand">Segunda mano</option><option value="refurbished">Reacondicionado</option></select></label>
+        <label>Modelo comercial<select name="commercialModel" required><option value="" selected disabled>Seleccionar</option><option value="third_party">Third party</option><option value="curated">Curated</option><option value="private_label">Private label</option><option value="owned">Owned</option></select></label>
+        <label>Condición<select name="defaultCondition" required><option value="" selected disabled>Seleccionar</option><option value="new">Nuevo</option><option value="second_hand">Segunda mano</option><option value="refurbished">Reacondicionado</option></select></label>
         <label>Estado<select name="status"><option value="draft">Borrador</option><option value="active">Publicar ahora</option></select></label>
         <label>SKU<input name="sku" required maxlength="100"></label>
         <label>Precio HNL<input name="price" type="number" min="0" step="0.01" required></label>
