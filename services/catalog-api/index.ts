@@ -20,6 +20,7 @@ import { ensureProductClassificationSchema } from "./product-classification";
 import { ensureManufacturerRegistrySchema, handleManufacturerRegistry } from "./manufacturer-registry";
 import { ensureProductSpecificationSchema, handleProductSpecifications } from "./product-specifications";
 import { ensureProductionRunsSchema, handleProductionRuns } from "./production-runs";
+import { ensureLandedCostSchema, handleLandedCost } from "./landed-cost";
 import { ensureQualityControlSchema, handleQualityControl } from "./quality-control";
 import { ensureInternalOpsSchema, handleInternal } from "./internal-routes";
 import { handleInternalCatalog } from "./catalog-internal";
@@ -177,6 +178,7 @@ await ensureSupplierEvaluationSchema(db);
 await ensureManufacturerRegistrySchema(db);
 await ensureProductSpecificationSchema(db);
 await ensureProductionRunsSchema(db);
+await ensureLandedCostSchema(db);
 await ensureQualityControlSchema(db);
 await ensureInternalOpsSchema(db);
 await ensureVendorPortalSchema(db);
@@ -246,6 +248,9 @@ Bun.serve({
 
     const productionRunResponse = await handleProductionRuns(req, url, db);
     if (productionRunResponse) return productionRunResponse;
+
+    const landedCostResponse = await handleLandedCost(req, url, db);
+    if (landedCostResponse) return landedCostResponse;
 
     const qualityControlResponse = await handleQualityControl(req, url, db);
     if (qualityControlResponse) return qualityControlResponse;

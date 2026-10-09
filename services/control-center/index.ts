@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/landed-cost" style="color:#e7cf89;text-decoration:none;font-weight:800">Costeo</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -737,6 +737,170 @@ async function productSpecificationsPage(url:URL,session:Session){
     '<div class="eyebrow">W8 · Producto propio</div><h1>Especificaciones técnicas</h1>'+
     '<p class="meta">Series versionadas con aprobación humana. Aprobar una versión no modifica catálogo, inventario ni producción.</p>'+
     notice+createForm+'<section class="queue">'+cards+'</section>'+detail,
+    session
+  );
+}
+
+
+async function landedCostPage(url:URL,session:Session){
+  const permissions=new Set(Array.isArray(session.user?.permissions)?session.user.permissions:[]);
+  const canManage=permissions.has("landed_cost.manage");
+  const canFinalize=permissions.has("landed_cost.finalize");
+
+  const [casesResult,sourcesResult]=await Promise.all([
+    api("/v1/internal/landed-cost/cases",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/landed-cost/sources",{cookieHeader:session.cookieHeader})
+  ]);
+
+  if(casesResult.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso landed_cost.read.</p></div>',session);
+  }
+  if(!casesResult.response?.ok||!sourcesResult.response?.ok){
+    return shell('<div class="panel empty"><h2>Costeo no disponible</h2><p>No se pudieron cargar casos o fuentes de landed cost.</p></div>',session);
+  }
+
+  const cases:any[]=Array.isArray(casesResult.body?.data)?casesResult.body.data:[];
+  const receipts:any[]=Array.isArray(sourcesResult.body?.goodsReceipts)?sourcesResult.body.goodsReceipts:[];
+  const runs:any[]=Array.isArray(sourcesResult.body?.productionRuns)?sourcesResult.body.productionRuns:[];
+  const caseId=Number(url.searchParams.get("caseId")||0);
+
+  const n=url.searchParams.get("n")||"";
+  const messages:any={
+    created:"Caso de landed cost creado.",
+    updated:"Caso actualizado.",
+    component_created:"Componente agregado.",
+    component_updated:"Componente actualizado.",
+    allocation_created:"Asignación registrada.",
+    allocation_updated:"Asignación actualizada.",
+    finalized:"Costeo finalizado e inmutable.",
+    error:"No se pudo completar la acción."
+  };
+  const notice=messages[n]?'<div class="notice">'+esc(messages[n])+'</div>':"";
+
+  const money=(minor:any,currency:string)=>
+    esc(currency||"")+' '+(Number(minor||0)/100).toFixed(2);
+
+  const sourceOptions=[
+    ...receipts.filter((x:any)=>!x.landedCostCaseId).map((x:any)=>
+      '<option value="GOODS_RECEIPT:'+Number(x.sourceId)+'">Recepción '+esc(x.label)+' · '+esc(x.supplierName||"Proveedor")+' · '+money(x.baseCostMinor,x.currency)+'</option>'
+    ),
+    ...runs.filter((x:any)=>!x.landedCostCaseId).map((x:any)=>
+      '<option value="PRODUCTION_RUN:'+Number(x.sourceId)+'">Producción '+esc(x.label)+' · '+esc(x.productName||"Producto")+' · '+Number(x.quantityTotal||0)+' unidades</option>'
+    )
+  ].join("");
+
+  const createForm=canManage&&sourceOptions
+    ?'<section class="panel" style="margin-bottom:18px"><h3>Nuevo caso de landed cost</h3>'+
+      '<p class="meta">Recepciones usan su moneda real. Production runs requieren declarar moneda. No se aplica FX.</p>'+
+      '<form method="post" action="/landed-cost" class="actions">'+
+        '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+        '<label>Código<input name="caseCode" required maxlength="100" placeholder="LC-2026-001"></label>'+
+        '<label>Fuente<select name="source" required><option value="" selected disabled>Seleccionar</option>'+sourceOptions+'</select></label>'+
+        '<label>Moneda para producción<input name="currency" maxlength="3" placeholder="HNL"></label>'+
+        '<label>Notas<textarea name="notes" maxlength="4000"></textarea></label>'+
+        '<button>Crear caso</button>'+
+      '</form></section>'
+    :'';
+
+  const caseCards=cases.length?cases.map((x:any)=>{
+    const t=x.totals||{};
+    const source=x.source||{};
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(x.sourceType)+' · '+esc(x.status)+'</div>'+
+      '<h3>'+esc(x.caseCode)+'</h3>'+
+      '<div class="meta">'+esc(source.sourceLabel||"Fuente")+' · '+esc(x.currency)+' · componentes '+money(t.landedComponentsMinor,x.currency)+' · asignado '+money(t.allocatedMinor,x.currency)+'</div></div>'+
+      '<span class="pill">'+esc(x.status)+'</span></div>'+
+      '<div class="meta">Delta pendiente: '+money(t.allocationDeltaMinor,x.currency)+(t.sourceBaseCostMinor==null?'':' · costo base '+money(t.sourceBaseCostMinor,x.currency))+'</div>'+
+      '<div style="margin-top:10px"><a class="ghost" href="/landed-cost?caseId='+Number(x.id)+'" style="display:inline-flex;text-decoration:none;border-radius:999px;padding:10px 13px;font-weight:900">Abrir costeo</a></div></article>';
+  }).join(""):'<div class="panel empty">Todavía no hay casos de landed cost.</div>';
+
+  let detail="";
+  if(caseId){
+    const r=await api("/v1/internal/landed-cost/cases/"+caseId,{cookieHeader:session.cookieHeader});
+    if(r.response?.ok){
+      const x:any=r.body?.landedCostCase||{};
+      const lines:any[]=Array.isArray(r.body?.sourceLines)?r.body.sourceLines:[];
+      const components:any[]=Array.isArray(x.components)?x.components:[];
+      const allocations:any[]=Array.isArray(x.allocations)?x.allocations:[];
+      const allocationByTarget=new Map(allocations.map((a:any)=>[Number(a.targetId),a]));
+      const draft=x.status==="DRAFT";
+      const totals=x.totals||{};
+
+      const componentTypes=[
+        ["FREIGHT","Flete"],["DUTY","Arancel"],["BROKERAGE","Agencia/aduana"],
+        ["INSURANCE","Seguro"],["LOCAL_TRANSPORT","Transporte local"],
+        ["PACKAGING","Empaque"],["MANUFACTURING","Manufactura"],["OTHER","Otro"]
+      ];
+      const componentOptions=(selected:string)=>componentTypes.map(([value,label])=>
+        '<option value="'+value+'" '+(selected===value?'selected':'')+'>'+label+'</option>'
+      ).join("");
+
+      const addComponent=canManage&&draft
+        ?'<form method="post" action="/landed-cost/'+caseId+'/components" class="actions" style="margin-top:12px">'+
+          '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'">'+
+          '<label>Tipo<select name="componentType">'+componentOptions("FREIGHT")+'</select></label>'+
+          '<label>Monto '+esc(x.currency)+'<input name="amount" type="number" min="0" step="0.01" required></label>'+
+          '<label>Descripción<input name="description" maxlength="1000"></label>'+
+          '<button>Agregar componente</button></form>'
+        :'';
+
+      const componentCards=components.length?components.map((comp:any)=>{
+        const edit=canManage&&draft
+          ?'<details style="margin-top:8px"><summary>Editar componente</summary><form method="post" action="/landed-cost-components/'+Number(comp.id)+'/update" class="actions" style="margin-top:8px">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="caseId" value="'+caseId+'">'+
+            '<label>Tipo<select name="componentType">'+componentOptions(String(comp.componentType))+'</select></label>'+
+            '<label>Monto<input name="amount" type="number" min="0" step="0.01" value="'+(Number(comp.amountMinor)/100).toFixed(2)+'"></label>'+
+            '<label>Descripción<input name="description" maxlength="1000" value="'+esc(comp.description||"")+'"></label>'+
+            '<label style="display:flex;align-items:center;gap:8px"><input name="active" type="checkbox" style="width:auto" '+(comp.active?'checked':'')+'> Activo</label>'+
+            '<label>Nota<input name="changeNote" maxlength="1000"></label><button>Guardar</button></form></details>'
+          :'';
+        return '<article class="item"><div class="item-head"><div><b>'+esc(comp.componentType)+'</b><div class="meta">'+money(comp.amountMinor,x.currency)+' · '+esc(comp.description||"Sin descripción")+'</div></div><span class="pill">'+(comp.active?'ACTIVO':'INACTIVO')+'</span></div>'+edit+'</article>';
+      }).join(""):'<div class="empty">Sin componentes.</div>';
+
+      const allocationCards=lines.length?lines.map((line:any)=>{
+        const existing:any=allocationByTarget.get(Number(line.targetId));
+        const targetLabel=(line.lotCode?esc(line.lotCode)+' · ':'')+esc(line.productName||"Producto")+' · '+esc(line.sku||"");
+        const base=line.baseCostMinor==null?'Sin costo base de origen':('Base '+money(line.baseCostMinor,x.currency));
+        const form=canManage&&draft
+          ?'<form method="post" action="'+(existing?'/landed-cost-allocations/'+Number(existing.id)+'/update':'/landed-cost/'+caseId+'/allocations')+'" class="actions" style="margin-top:8px">'+
+            '<input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input type="hidden" name="caseId" value="'+caseId+'">'+
+            (!existing?'<input type="hidden" name="targetId" value="'+Number(line.targetId)+'">':'')+
+            '<label>Asignación '+esc(x.currency)+'<input name="amount" type="number" min="0" step="0.01" required value="'+(existing?(Number(existing.allocatedCostMinor)/100).toFixed(2):"0.00")+'"></label>'+
+            '<label>Notas<input name="notes" maxlength="1000" value="'+esc(existing?.notes||"")+'"></label>'+
+            (existing?'<label>Nota de cambio<input name="changeNote" maxlength="1000"></label>':'')+
+            '<button>'+(existing?'Actualizar':'Asignar')+'</button></form>'
+          :'';
+        return '<article class="item"><div class="item-head"><div><b>'+targetLabel+'</b><div class="meta">'+Number(line.quantity)+' unidades · '+base+'</div></div><span class="pill">'+(existing?money(existing.allocatedCostMinor,x.currency):money(0,x.currency))+'</span></div>'+
+          (existing?'<div class="meta">Total línea con landed cost: '+money(existing.totalCostMinor,x.currency)+(existing.exactUnitTotalCostMinor==null?'':' · unitario exacto '+money(existing.exactUnitTotalCostMinor,x.currency))+'</div>':'')+form+'</article>';
+      }).join(""):'<div class="empty">La fuente no tiene líneas elegibles.</div>';
+
+      const editCase=canManage&&draft
+        ?'<form method="post" action="/landed-cost/'+caseId+'/update" class="toolbar" style="margin-top:12px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Notas<input name="notes" maxlength="4000" value="'+esc(x.notes||"")+'"></label><label>Nota de cambio<input name="changeNote" maxlength="1000"></label><button>Guardar notas</button></form>'
+        :'';
+
+      const finalize=canFinalize&&draft
+        ?'<form method="post" action="/landed-cost/'+caseId+'/finalize" class="toolbar" style="margin-top:12px"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nota de finalización<input name="note" maxlength="1000"></label><button>Finalizar costeo</button></form>'
+        :'';
+
+      detail='<section class="panel" style="margin-top:24px"><div class="eyebrow">'+esc(x.caseCode)+' · '+esc(x.status)+'</div><h2>'+esc(x.source?.sourceLabel||"Fuente")+'</h2>'+
+        '<p class="meta">Moneda '+esc(x.currency)+' · método MANUAL · sin FX. Finalizar no cambia inventario ni reescribe el costo de la fuente.</p>'+
+        '<div class="grid" style="margin-bottom:16px">'+
+          '<div class="metric"><span>Costo base</span><b>'+(totals.sourceBaseCostMinor==null?'—':money(totals.sourceBaseCostMinor,x.currency))+'</b></div>'+
+          '<div class="metric"><span>Componentes</span><b>'+money(totals.landedComponentsMinor,x.currency)+'</b></div>'+
+          '<div class="metric"><span>Asignado</span><b>'+money(totals.allocatedMinor,x.currency)+'</b></div>'+
+          '<div class="metric"><span>Delta</span><b>'+money(totals.allocationDeltaMinor,x.currency)+'</b></div>'+
+        '</div>'+editCase+
+        '<h3 style="margin-top:20px">Componentes</h3><div class="queue">'+componentCards+'</div>'+addComponent+
+        '<h3 style="margin-top:20px">Asignaciones</h3><div class="queue">'+allocationCards+'</div>'+finalize+
+        '</section>';
+    }else{
+      detail='<div class="panel empty" style="margin-top:18px">No se pudo cargar el caso solicitado.</div>';
+    }
+  }
+
+  return shell(
+    '<div class="eyebrow">W8 · Costeo</div><h1>Landed cost</h1>'+
+    '<p class="meta">Costeo interno por recepción o production run. Asignación manual, moneda explícita y cero FX implícito.</p>'+
+    notice+createForm+'<section class="queue">'+caseCards+'</section>'+detail,
     session
   );
 }
@@ -2219,6 +2383,7 @@ Bun.serve({
     if(url.pathname==="/manufacturers"&&req.method==="GET")return html(await manufacturersPage(url,session));
     if(url.pathname==="/product-specifications"&&req.method==="GET")return html(await productSpecificationsPage(url,session));
     if(url.pathname==="/production"&&req.method==="GET")return html(await productionRunsPage(url,session));
+    if(url.pathname==="/landed-cost"&&req.method==="GET")return html(await landedCostPage(url,session));
     if(url.pathname==="/quality-control"&&req.method==="GET")return html(await qualityControlPage(url,session));
     if(url.pathname==="/vendor-review"&&req.method==="GET")return html(await vendorReviewPage(url,session));
     if(url.pathname==="/purchases"&&req.method==="GET")return html(await purchasesPage(url,session));
@@ -2330,6 +2495,123 @@ Bun.serve({
         }
       });
       return redirect("/quality-control?inspectionId="+id+"&n="+catalogResult(result,"finalized"));
+    }
+
+    if(url.pathname==="/landed-cost"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const source=String(fd.get("source")||"");
+      const match=source.match(/^(GOODS_RECEIPT|PRODUCTION_RUN):(\d+)$/);
+      if(!match)return redirect("/landed-cost?n=error");
+      const result=await api("/v1/internal/landed-cost/cases",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          caseCode:String(fd.get("caseCode")||"").trim(),
+          sourceType:match[1],
+          sourceId:Number(match[2]),
+          currency:String(fd.get("currency")||"").trim().toUpperCase()||null,
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      const id=Number(result.body?.landedCostCase?.id||0);
+      return redirect("/landed-cost?n="+catalogResult(result,"created")+(id?"&caseId="+id:""));
+    }
+
+    const landedCaseUpdate=url.pathname.match(/^\/landed-cost\/(\d+)\/update$/);
+    if(landedCaseUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(landedCaseUpdate[1]);
+      const result=await api("/v1/internal/landed-cost/cases/"+id,{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          notes:String(fd.get("notes")||"").trim()||null,
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/landed-cost?caseId="+id+"&n="+catalogResult(result,"updated"));
+    }
+
+    const landedComponentCreate=url.pathname.match(/^\/landed-cost\/(\d+)\/components$/);
+    if(landedComponentCreate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(landedComponentCreate[1]);
+      const amount=String(fd.get("amount")||"").trim();
+      const result=await api("/v1/internal/landed-cost/cases/"+id+"/components",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          componentType:String(fd.get("componentType")||"").trim(),
+          amountMinor:Math.round(Number(amount||0)*100),
+          description:String(fd.get("description")||"").trim()||null
+        }
+      });
+      return redirect("/landed-cost?caseId="+id+"&n="+catalogResult(result,"component_created"));
+    }
+
+    const landedComponentUpdate=url.pathname.match(/^\/landed-cost-components\/(\d+)\/update$/);
+    if(landedComponentUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const caseId=Number(fd.get("caseId")||0);
+      const amount=String(fd.get("amount")||"").trim();
+      const result=await api("/v1/internal/landed-cost/components/"+Number(landedComponentUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          componentType:String(fd.get("componentType")||"").trim(),
+          amountMinor:Math.round(Number(amount||0)*100),
+          description:String(fd.get("description")||"").trim()||null,
+          active:fd.get("active")==="on",
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/landed-cost?caseId="+caseId+"&n="+catalogResult(result,"component_updated"));
+    }
+
+    const landedAllocationCreate=url.pathname.match(/^\/landed-cost\/(\d+)\/allocations$/);
+    if(landedAllocationCreate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(landedAllocationCreate[1]);
+      const amount=String(fd.get("amount")||"").trim();
+      const result=await api("/v1/internal/landed-cost/cases/"+id+"/allocations",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          targetId:Number(fd.get("targetId")||0),
+          allocatedCostMinor:Math.round(Number(amount||0)*100),
+          notes:String(fd.get("notes")||"").trim()||null
+        }
+      });
+      return redirect("/landed-cost?caseId="+id+"&n="+catalogResult(result,"allocation_created"));
+    }
+
+    const landedAllocationUpdate=url.pathname.match(/^\/landed-cost-allocations\/(\d+)\/update$/);
+    if(landedAllocationUpdate&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const caseId=Number(fd.get("caseId")||0);
+      const amount=String(fd.get("amount")||"").trim();
+      const result=await api("/v1/internal/landed-cost/allocations/"+Number(landedAllocationUpdate[1]),{
+        method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{
+          allocatedCostMinor:Math.round(Number(amount||0)*100),
+          notes:String(fd.get("notes")||"").trim()||null,
+          changeNote:String(fd.get("changeNote")||"").trim()||null
+        }
+      });
+      return redirect("/landed-cost?caseId="+caseId+"&n="+catalogResult(result,"allocation_updated"));
+    }
+
+    const landedFinalize=url.pathname.match(/^\/landed-cost\/(\d+)\/finalize$/);
+    if(landedFinalize&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const id=Number(landedFinalize[1]);
+      const result=await api("/v1/internal/landed-cost/cases/"+id+"/finalize",{
+        method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,
+        body:{note:String(fd.get("note")||"").trim()||null}
+      });
+      return redirect("/landed-cost?caseId="+id+"&n="+catalogResult(result,"finalized"));
     }
 
     if(url.pathname==="/production"&&req.method==="POST"){
