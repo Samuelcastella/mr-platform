@@ -196,7 +196,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -771,6 +771,79 @@ async function economicReadinessPage(session:Session){
 }
 
 
+async function productIntelligencePage(url:URL,session:Session){
+  const requestedDays=Number(url.searchParams.get("days")||90);
+  const days=Number.isSafeInteger(requestedDays)&&requestedDays>=7&&requestedDays<=365?requestedDays:90;
+  const result=await api("/v1/internal/product-intelligence?days="+days,{cookieHeader:session.cookieHeader});
+  if(result.response?.status===403){
+    return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso reports.read.</p></div>',session);
+  }
+  if(!result.response?.ok){
+    return shell('<div class="panel empty"><h2>Inteligencia no disponible</h2><p>No se pudo consultar el Commerce Core.</p></div>',session);
+  }
+
+  const summary:any=result.body?.summary||{};
+  const products:any[]=Array.isArray(result.body?.products)?result.body.products:[];
+  const categories:any[]=Array.isArray(result.body?.categories)?result.body.categories:[];
+  const missing:any[]=Array.isArray(result.body?.missingDemand)?result.body.missingDemand:[];
+
+  const money=(value:any)=>{
+    const entries=Object.entries(value&&typeof value==="object"?value:{});
+    if(!entries.length)return "—";
+    return entries.map(([currency,minor])=>esc(currency)+" "+(Number(minor||0)/100).toFixed(2)).join(" · ");
+  };
+
+  const productCards=products.length?products.slice(0,30).map((p:any,index:number)=>{
+    const mix=p.ownershipMix||{};
+    return '<article class="item"><div class="item-head"><div><div class="eyebrow">#'+(index+1)+' · '+esc(p.category||"Sin categoría")+'</div><h3>'+esc(p.name)+'</h3>'+
+      '<div class="meta">'+esc(p.brand||"Sin marca")+' · venta completada '+money(p.completedGrossByCurrency)+'</div></div>'+
+      '<span class="pill">'+Number(p.completedUnits||0)+' unidades</span></div>'+
+      '<div class="grid" style="margin-top:12px">'+
+        '<div class="metric"><span>Completadas</span><b>'+Number(p.completedUnits||0)+'</b></div>'+
+        '<div class="metric"><span>Devueltas</span><b>'+Number(p.returnedUnits||0)+'</b></div>'+
+        '<div class="metric"><span>Stock disponible</span><b>'+Number(p.currentAvailableUnits||0)+'</b></div>'+
+        '<div class="metric"><span>Señales demanda</span><b>'+Number(p.demandSignals||0)+'</b></div>'+
+      '</div>'+
+      '<div class="meta" style="margin-top:12px">Ownership histórico: MR '+Number(mix.mrOwnedUnits||0)+' · terceros '+Number(mix.thirdPartyUnits||0)+' · sin clasificar '+Number(mix.unclassifiedUnits||0)+'</div>'+
+      '<div class="meta">Interés reposición '+Number(p.restockInterest||0)+' · solicitudes vinculadas '+Number(p.productRequests||0)+' · cobertura de costo '+Number(p.costCoveragePct||0).toFixed(1)+'%</div>'+
+      '<div class="meta">Margen bruto proxy conocido: '+money(p.knownGrossMarginProxyByCurrency)+'</div>'+
+      '</article>';
+  }).join(""):'<div class="panel empty">Aún no hay actividad suficiente en esta ventana.</div>';
+
+  const categoryCards=categories.length?categories.slice(0,20).map((x:any,index:number)=>
+    '<article class="item"><div class="item-head"><div><div class="eyebrow">#'+(index+1)+'</div><h3>'+esc(x.category)+'</h3>'+
+    '<div class="meta">'+Number(x.productsWithActivity||0)+' productos con señal · venta completada '+money(x.completedGrossByCurrency)+'</div></div>'+
+    '<span class="pill">'+Number(x.completedUnits||0)+' unidades</span></div>'+
+    '<div class="meta">Devueltas '+Number(x.returnedUnits||0)+' · stock '+Number(x.currentAvailableUnits||0)+' · demanda '+Number(x.demandSignals||0)+' · cobertura de costo '+Number(x.costCoveragePct||0).toFixed(1)+'%</div></article>'
+  ).join(""):'<div class="panel empty">Sin categorías con actividad.</div>';
+
+  const missingDemand=missing.length
+    ?'<ol>'+missing.map((x:any)=>'<li>'+esc(x.item)+' <span class="score">'+Number(x.count||0)+'</span></li>').join("")+'</ol>'
+    :'<p class="meta">No hay solicitudes no vinculadas en esta ventana.</p>';
+
+  const filters='<form method="get" action="/product-intelligence" class="toolbar"><label>Ventana<select name="days">'+
+    [30,60,90,180,365].map(v=>'<option value="'+v+'" '+(v===days?'selected':'')+'>'+v+' días</option>').join("")+
+    '</select></label><button>Actualizar</button></form>';
+
+  return shell(
+    '<div class="eyebrow">Decisiones de surtido</div><h1>Inteligencia de producto</h1>'+
+    '<p class="meta">Señales observables para decidir qué seguir probando, comprar directamente o estudiar para marca propia. No existe score automático ni recomendación de inversión.</p>'+
+    filters+
+    '<div class="notice">El “margen bruto proxy” usa precio de línea menos cost basis histórico conocido. No incluye todas las asignaciones, impuestos, fees o costos operativos y no es utilidad contable.</div>'+
+    '<section class="grid" style="margin-bottom:22px">'+
+      '<div class="metric"><span>Órdenes completadas</span><b>'+Number(summary.completedOrders||0)+'</b></div>'+
+      '<div class="metric"><span>Unidades completadas</span><b>'+Number(summary.completedUnits||0)+'</b></div>'+
+      '<div class="metric"><span>Unidades devueltas</span><b>'+Number(summary.returnedUnits||0)+'</b></div>'+
+      '<div class="metric"><span>Cobertura de costo</span><b>'+Number(summary.costCoveragePct||0).toFixed(1)+'%</b></div>'+
+    '</section>'+
+    '<section style="margin-bottom:28px"><h2>Productos</h2><div class="queue">'+productCards+'</div></section>'+
+    '<section style="margin-bottom:28px"><h2>Categorías</h2><div class="queue">'+categoryCards+'</div></section>'+
+    '<section class="intel-card"><div class="eyebrow" style="color:#d8b96d">Demanda no cubierta</div><h3>Solicitudes sin producto vinculado</h3>'+missingDemand+'</section>',
+    session
+  );
+}
+
+
 async function catalogPage(url:URL,session:Session){
   const result=await api("/v1/internal/catalog",{cookieHeader:session.cookieHeader});
   if(result.response?.status===403)return shell('<div class="panel empty"><h2>Acceso insuficiente</h2><p>Falta permiso catalog.read.</p></div>',session);
@@ -1098,6 +1171,7 @@ Bun.serve({
     if(url.pathname==="/inventory-adjustments"&&req.method==="GET")return html(await inventoryAdjustmentsPage(url,session));
     if(url.pathname==="/health-desk"&&req.method==="GET")return html(await healthDeskPage(url,session));
     if(url.pathname==="/economic-readiness"&&req.method==="GET")return html(await economicReadinessPage(session));
+    if(url.pathname==="/product-intelligence"&&req.method==="GET")return html(await productIntelligencePage(url,session));
 
 
 
