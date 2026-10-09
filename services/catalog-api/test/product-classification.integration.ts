@@ -88,6 +88,19 @@ ok(
   "legacy sin clasificación no puede pasar a active"
 );
 
+const partialLegacyClassification=await api("/v1/internal/catalog/products/"+legacyDraftId,{
+  method:"PATCH",
+  headers:internalHeaders,
+  body:JSON.stringify({
+    commercialModel:"third_party"
+  })
+});
+ok(
+  partialLegacyClassification.response.status===409 &&
+  partialLegacyClassification.body.error==="classification_required",
+  "reclasificación explícita no puede quedar parcial"
+);
+
 const classifyLegacy=await api("/v1/internal/catalog/products/"+legacyDraftId,{
   method:"PATCH",
   headers:internalHeaders,
