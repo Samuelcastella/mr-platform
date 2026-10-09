@@ -43,6 +43,19 @@ function actorFields(actor: any) {
     : { userId: null, service: actor.service };
 }
 
+function jsonObject(value: unknown) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 export async function ensureSourcingOffersSchema(db: DB) {
   await db`
     CREATE TABLE IF NOT EXISTS supplier_variants (
@@ -192,7 +205,7 @@ async function history(db: DB, id: number) {
       ? {type:"SERVICE",service:row.actor_service}
       : {type:"USER",userId:Number(row.actor_user_id),displayName:row.actor_display_name || null},
     action:row.action,
-    snapshot:row.snapshot,
+    snapshot:jsonObject(row.snapshot),
     note:row.note || null,
     createdAt:row.created_at
   }));
@@ -286,6 +299,16 @@ async function createOffer(req: Request, db: DB) {
   const note=clean(body?.note,1000) || null;
   const actor=actorFields(auth.actor);
 
+  const duplicate=await db`
+    SELECT id
+    FROM supplier_variants
+    WHERE supplier_id=${supplierId}
+      AND variant_id=${variantId}
+    LIMIT 1`;
+  if(duplicate.length) {
+    return json({error:"supplier_variant_exists",offerId:Number(duplicate[0].id)},409);
+  }
+
   try {
     const result:any=await db.begin(async(tx:DB)=>{
       const rows=await tx`
@@ -337,7 +360,10 @@ async function createOffer(req: Request, db: DB) {
       inventoryChanged:false
     },201);
   } catch(error:any) {
-    if(error?.code==="23505") return json({error:"supplier_variant_exists"},409);
+    const message=String(error?.message || "");
+    if(error?.code==="23505" || message.includes("duplicate key") || message.includes("unique constraint")) {
+      return json({error:"supplier_variant_exists"},409);
+    }
     throw error;
   }
 }
