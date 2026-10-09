@@ -1,4 +1,4 @@
-import { auditActor, authorizeInternal, writeAuditEvent } from "./auth";
+import { auditActor, authorizeInternal, machineAuthorized, readStaffSession, writeAuditEvent } from "./auth";
 
 type DB = any;
 
@@ -39,6 +39,44 @@ function actorFields(actor:any){
   return actor.type==="USER"
     ?{userId:actor.userId,service:null}
     :{userId:null,service:actor.service};
+}
+
+
+async function authorizeLandedCostListRead(req:Request,db:DB){
+  if(machineAuthorized(req)){
+    return {
+      ok:true as const,
+      actor:{type:"SERVICE" as const,service:"internal-api"},
+      global:true,
+      locationIds:[] as number[]
+    };
+  }
+
+  const actor=await readStaffSession(req,db);
+  if(!actor)return {ok:false as const,response:json({error:"unauthorized"},401)};
+
+  const relevant=actor.grants.filter((g:any)=>g.permission==="landed_cost.read");
+  if(!relevant.length){
+    return {ok:false as const,response:json({error:"forbidden"},403)};
+  }
+
+  const global=relevant.some((g:any)=>g.scopeType==="GLOBAL");
+  const locationIds=[
+    ...new Set(
+      relevant
+        .filter((g:any)=>g.scopeType==="LOCATION"&&g.locationId!=null)
+        .map((g:any)=>Number(g.locationId))
+    )
+  ];
+
+  return {ok:true as const,actor,global,locationIds};
+}
+
+function landedCostRowVisible(scope:any,row:any){
+  if(scope.global)return true;
+  if(row.source_type!=="GOODS_RECEIPT")return false;
+  const locationId=Number(row.source_location_id||0);
+  return locationId>0&&scope.locationIds.includes(locationId);
 }
 
 export async function ensureLandedCostSchema(db:DB){
@@ -507,12 +545,12 @@ async function history(db:DB,caseId:number){
 }
 
 async function listSources(req:Request,db:DB){
-  const auth=await authorizeInternal(req,db,"landed_cost.read");
-  if(!auth.ok)return auth.response;
+  const scope=await authorizeLandedCostListRead(req,db);
+  if(!scope.ok)return scope.response;
 
   const receipts=await db`
     SELECT
-      gr.id,gr.receipt_number,gr.received_at,po.currency,
+      gr.id,gr.receipt_number,gr.received_at,gr.location_id,po.currency,
       po.po_number,po.supplier_name_snapshot,
       COUNT(gri.id)::int AS line_count,
       COALESCE(SUM(gri.quantity_received),0)::bigint AS quantity_total,
@@ -523,7 +561,7 @@ async function listSources(req:Request,db:DB){
     LEFT JOIN goods_receipt_items gri ON gri.goods_receipt_id=gr.id
     LEFT JOIN landed_cost_cases existing ON existing.goods_receipt_id=gr.id
     WHERE gr.status='POSTED'
-    GROUP BY gr.id,gr.receipt_number,gr.received_at,po.currency,po.po_number,
+    GROUP BY gr.id,gr.receipt_number,gr.received_at,gr.location_id,po.currency,po.po_number,
       po.supplier_name_snapshot,existing.id
     ORDER BY gr.received_at DESC,gr.id DESC
     LIMIT 200`;
@@ -550,7 +588,9 @@ async function listSources(req:Request,db:DB){
     LIMIT 200`;
 
   return json({
-    goodsReceipts:receipts.map((x:any)=>({
+    goodsReceipts:receipts
+      .filter((x:any)=>scope.global||scope.locationIds.includes(Number(x.location_id)))
+      .map((x:any)=>({
       sourceType:"GOODS_RECEIPT",
       sourceId:Number(x.id),
       label:x.receipt_number,
@@ -563,7 +603,7 @@ async function listSources(req:Request,db:DB){
       occurredAt:x.received_at,
       landedCostCaseId:x.landed_cost_case_id==null?null:Number(x.landed_cost_case_id)
     })),
-    productionRuns:runs.map((x:any)=>({
+    productionRuns:(scope.global?runs:[]).map((x:any)=>({
       sourceType:"PRODUCTION_RUN",
       sourceId:Number(x.id),
       label:x.run_code,
@@ -580,8 +620,8 @@ async function listSources(req:Request,db:DB){
 }
 
 async function listCases(req:Request,url:URL,db:DB){
-  const auth=await authorizeInternal(req,db,"landed_cost.read");
-  if(!auth.ok)return auth.response;
+  const scope=await authorizeLandedCostListRead(req,db);
+  if(!scope.ok)return scope.response;
 
   const status=clean(url.searchParams.get("status"),20).toUpperCase();
   const sourceType=clean(url.searchParams.get("sourceType"),30).toUpperCase();
@@ -591,12 +631,14 @@ async function listCases(req:Request,url:URL,db:DB){
   const rows=await db`
     SELECT
       c.id,c.case_code,c.source_type,c.goods_receipt_id,c.production_run_id,
+      gr.location_id AS source_location_id,
       c.currency,c.status,c.allocation_method,c.notes,
       c.finalized_by_user_id,finalizer.display_name AS finalized_by_display_name,
       c.finalized_at,c.created_by_user_id,creator.display_name AS created_by_display_name,
       c.updated_by_user_id,updater.display_name AS updated_by_display_name,
       c.created_at,c.updated_at
     FROM landed_cost_cases c
+    LEFT JOIN goods_receipts gr ON gr.id=c.goods_receipt_id
     LEFT JOIN staff_users finalizer ON finalizer.id=c.finalized_by_user_id
     LEFT JOIN staff_users creator ON creator.id=c.created_by_user_id
     LEFT JOIN staff_users updater ON updater.id=c.updated_by_user_id
@@ -606,7 +648,10 @@ async function listCases(req:Request,url:URL,db:DB){
     LIMIT 200`;
 
   const data=[];
-  for(const row of rows)data.push(await mapCase(db,row));
+  for(const row of rows){
+    if(!landedCostRowVisible(scope,row))continue;
+    data.push(await mapCase(db,row));
+  }
   return json({data});
 }
 
@@ -694,10 +739,23 @@ async function createCase(req:Request,db:DB){
 }
 
 async function getCase(req:Request,db:DB,id:number){
-  const auth=await authorizeInternal(req,db,"landed_cost.read");
-  if(!auth.ok)return auth.response;
   const row=await caseRow(db,id);
   if(!row)return json({error:"not_found"},404);
+
+  const source:any=await sourceContext(
+    db,
+    String(row.source_type),
+    row.source_type==="GOODS_RECEIPT"
+      ?Number(row.goods_receipt_id)
+      :Number(row.production_run_id)
+  );
+  if(source.error)return json({error:source.error},source.status||400);
+
+  const auth=await authorizeInternal(req,db,"landed_cost.read",{
+    locationId:row.source_type==="GOODS_RECEIPT"?Number(source.locationId):null
+  });
+  if(!auth.ok)return auth.response;
+
   return json({
     landedCostCase:await mapCase(db,row),
     sourceLines:await sourceLines(db,row),
