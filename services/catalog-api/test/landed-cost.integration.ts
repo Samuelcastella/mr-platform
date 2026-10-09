@@ -350,6 +350,22 @@ ok(
   "landed_cost.manage LOCATION bloquea update fuera de scope"
 );
 
+const wrongScopedComponentCreate=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/components",{
+  method:"POST",
+  headers:staffHeaders(wrongScopedCostManager),
+  body:JSON.stringify({
+    componentType:"FREIGHT",
+    amountMinor:1,
+    description:"No autorizado"
+  })
+});
+ok(
+  wrongScopedComponentCreate.response.status===403 &&
+  wrongScopedComponentCreate.body.error==="forbidden",
+  "landed_cost.manage LOCATION bloquea component create fuera de scope"
+);
+
+
 
 const scopedReceiptCases=await api("/v1/internal/landed-cost/cases",{
   headers:{cookie:inventoryReader.cookie}
@@ -404,6 +420,18 @@ const freight=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/compon
 ok(freight.response.status===201,"agrega flete");
 const freightId=Number(freight.body.component?.id);
 
+const wrongScopedComponentUpdate=await api("/v1/internal/landed-cost/components/"+freightId,{
+  method:"PATCH",
+  headers:staffHeaders(wrongScopedCostManager),
+  body:JSON.stringify({amountMinor:1300})
+});
+ok(
+  wrongScopedComponentUpdate.response.status===403 &&
+  wrongScopedComponentUpdate.body.error==="forbidden",
+  "landed_cost.manage LOCATION bloquea component update fuera de scope"
+);
+
+
 const duty=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/components",{
   method:"POST",
   headers:staffHeaders(scopedCostManager),
@@ -426,6 +454,32 @@ const allocation=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/all
 });
 ok(allocation.response.status===201,"crea asignación de receipt item");
 const receiptAllocationId=Number(allocation.body.allocation?.id);
+
+const wrongScopedAllocationCreate=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/allocations",{
+  method:"POST",
+  headers:staffHeaders(wrongScopedCostManager),
+  body:JSON.stringify({
+    targetId:receiptItemId,
+    allocatedCostMinor:1
+  })
+});
+ok(
+  wrongScopedAllocationCreate.response.status===403 &&
+  wrongScopedAllocationCreate.body.error==="forbidden",
+  "landed_cost.manage LOCATION bloquea allocation create fuera de scope"
+);
+
+const wrongScopedAllocationUpdate=await api("/v1/internal/landed-cost/allocations/"+receiptAllocationId,{
+  method:"PATCH",
+  headers:staffHeaders(wrongScopedCostManager),
+  body:JSON.stringify({allocatedCostMinor:1600})
+});
+ok(
+  wrongScopedAllocationUpdate.response.status===403 &&
+  wrongScopedAllocationUpdate.body.error==="forbidden",
+  "landed_cost.manage LOCATION bloquea allocation update fuera de scope"
+);
+
 ok(Number(allocation.body.allocation?.quantitySnapshot)===4,"snapshot conserva cantidad recibida");
 ok(Number(allocation.body.allocation?.baseUnitCostMinor)===10000,"snapshot conserva costo unitario de receipt");
 ok(Number(allocation.body.allocation?.baseCostMinor)===40000,"snapshot conserva costo base de línea");
@@ -440,6 +494,17 @@ ok(
   mismatchFinalize.body.error==="allocation_total_mismatch" &&
   Number(mismatchFinalize.body.deltaMinor)===500,
   "finalización exige suma de asignaciones exactamente igual a componentes"
+);
+
+const wrongScopedFinalize=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/finalize",{
+  method:"POST",
+  headers:staffHeaders(wrongScopedCostManager),
+  body:JSON.stringify({note:"No autorizado por ubicación"})
+});
+ok(
+  wrongScopedFinalize.response.status===403 &&
+  wrongScopedFinalize.body.error==="forbidden",
+  "landed_cost.finalize LOCATION bloquea otra ubicación"
 );
 
 const serviceFinalize=await api("/v1/internal/landed-cost/cases/"+receiptCaseId+"/finalize",{
