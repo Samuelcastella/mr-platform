@@ -315,6 +315,136 @@ ok(
   "production_runs.read no concede manage"
 );
 
+const variantManufacturerLink=await api("/v1/internal/manufacturer-links",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    manufacturerId,
+    targetType:"VARIANT",
+    targetId:variantAId,
+    manufacturerReference:"FACTORY-VARIANT-A-CI"
+  })
+});
+ok(variantManufacturerLink.response.status===201,"crea ManufacturerLink específico de variante A");
+const variantManufacturerLinkId=Number(variantManufacturerLink.body.link?.id);
+
+const variantSpec=await api("/v1/internal/product-specifications",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    code:"SPEC-VARIANT-"+crypto.randomUUID().slice(0,6),
+    title:"Production CI Variant A Specification",
+    targetType:"VARIANT",
+    targetId:variantAId
+  })
+});
+ok(variantSpec.response.status===201,"crea specification específica de variante A");
+const variantSpecId=Number(variantSpec.body.specification?.id);
+
+const variantSpecDraft=await api("/v1/internal/product-specifications/"+variantSpecId+"/versions",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    changeSummary:"Specification específica para variante A",
+    sections:{measurements:{size:"M"},qualityRequirements:{visual:"required"}}
+  })
+});
+ok(variantSpecDraft.response.status===201,"crea versión de specification de variante A");
+const variantSpecVersionId=Number(variantSpecDraft.body.version?.id);
+
+const variantSpecApproved=await api("/v1/internal/product-specification-versions/"+variantSpecVersionId+"/approve",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({note:"Aprobada para validar compatibilidad por variante"})
+});
+ok(
+  variantSpecApproved.response.status===200 &&
+  variantSpecApproved.body.version?.status==="APPROVED",
+  "aprueba specification de variante A"
+);
+
+const variantSpecRun=await api("/v1/internal/production-runs",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    runCode:"RUN-VARIANT-SPEC-"+crypto.randomUUID().slice(0,6),
+    productSpecificationVersionId:variantSpecVersionId,
+    manufacturerLinkId
+  })
+});
+ok(
+  variantSpecRun.response.status===201,
+  "spec VARIANT puede usar ManufacturerLink PRODUCT del mismo producto"
+);
+const variantSpecRunId=Number(variantSpecRun.body.run?.id);
+
+const wrongLotForVariantSpec=await api("/v1/internal/production-runs/"+variantSpecRunId+"/lots",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    lotCode:"LOT-WRONG-SPEC-"+crypto.randomUUID().slice(0,6),
+    variantId:variantBId,
+    plannedQuantity:2
+  })
+});
+ok(
+  wrongLotForVariantSpec.response.status===409 &&
+  wrongLotForVariantSpec.body.error==="specification_variant_mismatch",
+  "specification VARIANT rechaza lote de otra variante"
+);
+
+const correctLotForVariantSpec=await api("/v1/internal/production-runs/"+variantSpecRunId+"/lots",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    lotCode:"LOT-CORRECT-SPEC-"+crypto.randomUUID().slice(0,6),
+    variantId:variantAId,
+    plannedQuantity:2
+  })
+});
+ok(correctLotForVariantSpec.response.status===201,"specification VARIANT acepta su variante exacta");
+
+const variantManufacturerRun=await api("/v1/internal/production-runs",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    runCode:"RUN-VARIANT-MFG-"+crypto.randomUUID().slice(0,6),
+    productSpecificationVersionId:v2Id,
+    manufacturerLinkId:variantManufacturerLinkId
+  })
+});
+ok(
+  variantManufacturerRun.response.status===201,
+  "spec PRODUCT puede usar ManufacturerLink VARIANT del mismo producto"
+);
+const variantManufacturerRunId=Number(variantManufacturerRun.body.run?.id);
+
+const wrongLotForVariantManufacturer=await api("/v1/internal/production-runs/"+variantManufacturerRunId+"/lots",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    lotCode:"LOT-WRONG-MFG-"+crypto.randomUUID().slice(0,6),
+    variantId:variantBId,
+    plannedQuantity:2
+  })
+});
+ok(
+  wrongLotForVariantManufacturer.response.status===409 &&
+  wrongLotForVariantManufacturer.body.error==="manufacturer_link_variant_mismatch",
+  "ManufacturerLink VARIANT rechaza lote de otra variante"
+);
+
+const correctLotForVariantManufacturer=await api("/v1/internal/production-runs/"+variantManufacturerRunId+"/lots",{
+  method:"POST",
+  headers:staffHeaders(manager),
+  body:JSON.stringify({
+    lotCode:"LOT-CORRECT-MFG-"+crypto.randomUUID().slice(0,6),
+    variantId:variantAId,
+    plannedQuantity:2
+  })
+});
+ok(correctLotForVariantManufacturer.response.status===201,"ManufacturerLink VARIANT acepta su variante exacta");
+
 const inventoryBefore=(await db`
   SELECT
     COALESCE(SUM(quantity),0)::int AS quantity,
