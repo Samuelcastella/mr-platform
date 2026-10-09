@@ -232,6 +232,14 @@ Read scope semantics:
 - case-detail reads apply the same rule and fail with `forbidden` outside scope;
 - internal service authentication remains global for internal workflows.
 
+Mutation/finalization scope semantics:
+
+- GOODS_RECEIPT mutations evaluate `landed_cost.manage` / `landed_cost.finalize` against the receipt's `location_id`;
+- a LOCATION grant can therefore manage/finalize only receipts in that exact location;
+- PRODUCTION_RUN mutations/finalization require a GLOBAL grant in v1 because ProductionRun has no authoritative location field;
+- the rule applies uniformly to case, component and allocation mutations;
+- internal service authentication remains global, but FINAL still requires a human StaffUser.
+
 Staff mutations require CSRF.
 
 ## API
@@ -346,3 +354,7 @@ Landed Cost v1 must not automatically:
 18. InventorySource, PO, receipt, production and QC state remain unchanged.
 19. No FX is applied.
 20. History/audit are complete.
+21. LOCATION-scoped landed_cost.manage can mutate only GoodsReceipt cases in its exact location.
+22. LOCATION-scoped landed_cost.finalize can finalize only GoodsReceipt cases in its exact location.
+23. LOCATION-scoped manage/finalize cannot act on ProductionRun landed-cost cases in v1.
+24. Component and allocation mutation endpoints enforce the same source scope as the parent case.
