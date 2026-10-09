@@ -179,6 +179,9 @@ ok(
   reviewQueue.body?.data?.some((p: any) => Number(p.id) === productId),
   "Control Center recibe producto enviado"
 );
+const queuedProduct = reviewQueue.body?.data?.find((p: any) => Number(p.id) === productId);
+ok(queuedProduct?.commercialModel == null, "producto proveedor llega sin commercialModel inferido");
+ok(queuedProduct?.defaultCondition == null, "producto proveedor llega sin condición inferida");
 
 const approved = await api("/v1/internal/vendor-products/" + productId + "/review", {
   method: "POST",
