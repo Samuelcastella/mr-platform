@@ -436,6 +436,7 @@ async function qualityControlPage(url:URL,session:Session){
 
   const inspections:any[]=Array.isArray(listResult.body?.data)?listResult.body.data:[];
   const products:any[]=Array.isArray(catalogResultApi.body?.data)?catalogResultApi.body.data:[];
+  const performance:any=performanceResult.response?.ok?performanceResult.body:null;
   const specs:any[]=Array.isArray(specResult.body?.data)?specResult.body.data:[];
 
   const n=url.searchParams.get("n")||"";
@@ -1536,6 +1537,8 @@ async function inventoryAdjustmentsPage(url:URL,session:Session){
   );
 
   const selectedVariantId=Number(url.searchParams.get("variantId")||0);
+  const requestedDays=Number(url.searchParams.get("days")||90);
+  const performanceDays=Number.isSafeInteger(requestedDays)&&requestedDays>=30&&requestedDays<=365?requestedDays:90;
   const n=url.searchParams.get("n")||"";
   const messages:any={
     created:"Solicitud de ajuste creada.",
@@ -1910,10 +1913,11 @@ async function sourcingPage(url:URL,session:Session){
   const canWrite=permissions.has("suppliers.write");
   const selectedVariantId=Number(url.searchParams.get("variantId")||0);
 
-  const [offersResult,suppliersResult,catalogResultApi]=await Promise.all([
+  const [offersResult,suppliersResult,catalogResultApi,performanceResult]=await Promise.all([
     api("/v1/internal/sourcing/offers"+(selectedVariantId?"?variantId="+selectedVariantId:""),{cookieHeader:session.cookieHeader}),
     api("/v1/internal/suppliers?active=true",{cookieHeader:session.cookieHeader}),
-    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader})
+    api("/v1/internal/catalog",{cookieHeader:session.cookieHeader}),
+    api("/v1/internal/supplier-performance?days="+performanceDays,{cookieHeader:session.cookieHeader})
   ]);
 
   if(offersResult.response?.status===403||suppliersResult.response?.status===403){
@@ -1960,7 +1964,8 @@ async function sourcingPage(url:URL,session:Session){
 
   const filter='<section class="panel" style="margin-bottom:18px"><form method="get" action="/sourcing" class="toolbar">'+
     '<label>Comparar variante<select name="variantId"><option value="">Todas</option>'+variantOptions+'</select></label>'+
-    '<button>Comparar</button></form></section>';
+    '<label>Desempeño<select name="days">'+[30,90,180,365].map(v=>'<option value="'+v+'" '+(v===performanceDays?'selected':'')+'>'+v+' días</option>').join("")+'</select></label>'+
+    '<button>Actualizar</button></form></section>';
 
   const createForm=canWrite&&suppliers.length&&variants.length
     ?'<section class="panel" style="margin-bottom:18px"><h3>Nueva relación proveedor-variante</h3>'+
@@ -1981,6 +1986,41 @@ async function sourcingPage(url:URL,session:Session){
         '<button>Registrar oferta</button>'+
       '</form></section>'
     :'';
+
+  const performanceHtml=performance
+    ?(()=>{
+      const summary=performance.summary||{};
+      const perfRows:any[]=Array.isArray(performance.suppliers)?performance.suppliers:[];
+      const money=(value:any)=>{
+        const entries=Object.entries(value&&typeof value==="object"?value:{});
+        return entries.length?entries.map(([currency,minor])=>esc(currency)+" "+(Number(minor||0)/100).toFixed(2)).join(" · "):"—";
+      };
+      const cards=perfRows
+        .filter((x:any)=>Number(x.purchaseOrders?.total||0)>0||Number(x.sourcing?.activeOffers||0)>0)
+        .slice(0,20)
+        .map((x:any)=>{
+          const first=x.timing?.avgDaysToFirstReceipt;
+          const complete=x.timing?.avgDaysToCompleteReceipt;
+          const onTime=x.timing?.onTimeCompletionPct;
+          return '<article class="item"><div class="item-head"><div><h3>'+esc(x.supplier?.name||"Proveedor")+'</h3>'+
+            '<div class="meta">'+esc(x.supplier?.countryCode||"—")+' · '+Number(x.purchaseOrders?.total||0)+' POs · '+Number(x.sourcing?.activeOffers||0)+' ofertas activas</div></div>'+
+            '<span class="pill">'+(x.units?.receiptProgressPct==null?'SIN BASE':Number(x.units.receiptProgressPct).toFixed(1)+'% recibido')+'</span></div>'+
+            '<div class="meta">Unidades '+Number(x.units?.received||0)+' / '+Number(x.units?.ordered||0)+
+            ' · primera recepción '+(first==null?'—':Number(first).toFixed(1)+' días')+
+            ' · recepción completa '+(complete==null?'—':Number(complete).toFixed(1)+' días')+'</div>'+
+            '<div class="meta">On-time '+(onTime==null?'sin muestra':Number(onTime).toFixed(1)+'% ('+Number(x.timing?.onTimeEligibleOrders||0)+' elegibles)')+
+            ' · costo recibido '+money(x.receivedCostByCurrency)+'</div></article>';
+        }).join("");
+      return '<section style="margin-bottom:24px"><div class="eyebrow">Histórico operativo</div><h2>Señales de desempeño de proveedores</h2>'+
+        '<p class="meta">Datos de compras y recepciones de '+performanceDays+' días. No existe score compuesto ni selección automática.</p>'+
+        '<div class="grid" style="margin-bottom:14px">'+
+          '<div class="metric"><span>POs</span><b>'+Number(summary.purchaseOrders||0)+'</b></div>'+
+          '<div class="metric"><span>Recibidas</span><b>'+Number(summary.received||0)+'</b></div>'+
+          '<div class="metric"><span>Parciales</span><b>'+Number(summary.partiallyReceived||0)+'</b></div>'+
+          '<div class="metric"><span>Progreso unidades</span><b>'+(summary.receiptProgressPct==null?'—':Number(summary.receiptProgressPct).toFixed(1)+'%')+'</b></div>'+
+        '</div><div class="queue">'+(cards||'<div class="panel empty">Todavía no hay historial de procurement en esta ventana.</div>')+'</div></section>';
+    })()
+    :'<div class="notice">Las señales históricas requieren también permiso procurement.read.</div>';
 
   const comparisonHtml=comparison
     ?'<section class="panel" style="margin-bottom:18px"><div class="eyebrow">Comparación por variante</div><h2>'+esc(comparison.variant?.productName||"")+' · '+esc(comparison.variant?.sku||"")+'</h2>'+
@@ -2029,7 +2069,7 @@ async function sourcingPage(url:URL,session:Session){
   return shell(
     '<div class="eyebrow">Abastecimiento</div><h1>Ofertas de sourcing</h1>'+
     '<p class="meta">Compara proveedores por variante antes de crear compras. Las monedas distintas permanecen separadas y no se convierten automáticamente.</p>'+
-    notice+filter+comparisonHtml+createForm+
+    notice+filter+performanceHtml+comparisonHtml+createForm+
     '<section><h2>Relaciones proveedor-variante</h2><div class="queue">'+cards+'</div></section>',
     session
   );
