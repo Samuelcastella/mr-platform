@@ -198,6 +198,32 @@ ok(expiredOrder.body.order?.status === "CANCELLED", "orden vencida queda CANCELL
 const invExpired = await db`SELECT quantity, reserved FROM inventory WHERE variant_id = ${v3} AND location_id = ${locationId}`;
 ok(Number(invExpired[0].quantity) === 1 && Number(invExpired[0].reserved) === 0, "expiración devuelve disponibilidad");
 
+// Two concurrent expiry workers must release a reservation exactly once.
+const expiryRace = await createOrder("ci-expiry-race-0001", v3, 1);
+ok(expiryRace.response.status === 201, "crea orden para expiración concurrente");
+const expiryRaceId = Number(expiryRace.body.order?.id);
+await db`UPDATE inventory_reservations SET expires_at = NOW() - INTERVAL '1 minute' WHERE order_id = ${expiryRaceId} AND status = 'ACTIVE'`;
+const expireCall = () => api("/v1/internal/reservations/expire", {
+  method: "POST", headers: { "x-internal-key": internalKey }
+});
+const [expiryWorkerA, expiryWorkerB] = await Promise.all([expireCall(), expireCall()]);
+ok(expiryWorkerA.response.status === 200 && expiryWorkerB.response.status === 200,
+  "dos workers de expiración responden correctamente");
+ok(Number(expiryWorkerA.body.expired) + Number(expiryWorkerB.body.expired) === 1,
+  "dos workers solo procesan una vez la reserva vencida");
+const expiryRaceInventory = await db`SELECT quantity, reserved FROM inventory WHERE variant_id = ${v3} AND location_id = ${locationId}`;
+ok(Number(expiryRaceInventory[0].quantity) === 1 && Number(expiryRaceInventory[0].reserved) === 0,
+  "liberación concurrente no descuenta dos veces reserved");
+const expiryRaceRows = await db`
+  SELECT status FROM inventory_reservations WHERE order_id = ${expiryRaceId}`;
+ok(expiryRaceRows.length === 1 && expiryRaceRows[0].status === "EXPIRED",
+  "la reserva concurrente termina EXPIRED una sola vez");
+const expiryRaceHistory = await db`
+  SELECT COUNT(*)::int AS total FROM order_status_history
+  WHERE order_id = ${expiryRaceId} AND to_status = 'CANCELLED' AND reason = 'reservation_expired'`;
+ok(Number(expiryRaceHistory[0].total) === 1,
+  "solo un movimiento de historial por expiración concurrente");
+
 const unauth = await api("/v1/internal/orders");
 ok(unauth.response.status === 401, "rutas internas requieren autenticación");
 
