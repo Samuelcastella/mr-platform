@@ -487,6 +487,30 @@ export async function authorizeInternal(
   permission: string,
   options: { locationId?: number | null; mutation?: boolean } = {}
 ) {
+  const serviceCredentialsRaw = Bun.env.INTERNAL_SERVICE_CREDENTIALS_JSON;
+  if (serviceCredentialsRaw) {
+    let credentials: unknown = null;
+    try { credentials = JSON.parse(serviceCredentialsRaw); } catch { /* fail closed */ }
+    if (Array.isArray(credentials)) {
+      const supplied = req.headers.get("x-internal-key") || "";
+      for (const item of credentials) {
+        if (!item || typeof item !== "object") continue;
+        const entry = item as Record<string, unknown>;
+        if (typeof entry.token !== "string" || entry.token.length < 32 ||
+            typeof entry.service !== "string" || !Array.isArray(entry.permissions)) continue;
+        if (!supplied || !constantTimeEqual(supplied, entry.token)) continue;
+        if (entry.disabled === true || !entry.permissions.includes(permission)) {
+          return { ok: false as const, response: json({ error: "forbidden" }, 403) };
+        }
+        if (entry.locationIds !== undefined &&
+            (!Array.isArray(entry.locationIds) || options.locationId == null ||
+             !entry.locationIds.includes(options.locationId))) {
+          return { ok: false as const, response: json({ error: "forbidden" }, 403) };
+        }
+        return { ok: true as const, actor: { type: "SERVICE" as const, service: entry.service } };
+      }
+    }
+  }
   if (machineAuthorized(req) && Bun.env.ALLOW_LEGACY_INTERNAL_TOKEN !== "false") {
     return {
       ok: true as const,
