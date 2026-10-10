@@ -155,21 +155,34 @@ ok(statuses[0] === 201 && statuses[1] === 409, "concurrencia permite un solo gan
 const invConcurrent = await db`SELECT quantity, reserved FROM inventory WHERE variant_id = ${v2} AND location_id = ${locationId}`;
 ok(Number(invConcurrent[0].quantity) - Number(invConcurrent[0].reserved) === 0, "concurrencia nunca produce disponibilidad negativa");
 
-// Stress regression: 50 independent buyers race for one unit in the isolated CI database.
-// This file TRUNCATEs fixtures above; NEVER run it against production PostgreSQL.
+// Stress regression: 50 independent buyers race for one fresh unit in isolated CI.
+// This file TRUNCATEs fixtures above; NEVER run against production PostgreSQL.
+const stressVariant = await db`
+  INSERT INTO product_variants(product_id, sku, size, color, price, currency, active)
+  VALUES(${productId}, 'CI-STRESS-ONE', 'ONE', 'Negro', 100.00, 'HNL', TRUE)
+  RETURNING id`;
+const stressVariantId = Number(stressVariant[0].id);
+await db`
+  INSERT INTO inventory(variant_id, location_id, quantity, reserved)
+  VALUES(${stressVariantId}, ${locationId}, 1, 0)`;
 const stress = await Promise.all(
-  Array.from({ length: 50 }, (_, i) => createOrder("ci-stress-" + i, v2, 1))
+  Array.from({ length: 50 }, (_, i) => createOrder("ci-stress-" + i, stressVariantId, 1))
 );
 const stressSuccess = stress.filter(x => x.response.status === 201);
 const stressRejected = stress.filter(x => x.response.status === 409 && x.body.error === "insufficient_stock");
-// v2 was already reserved by the two-buyer test; release its winner before this
-// separate stress test, or all 50 should correctly be rejected.
-ok(stressSuccess.length === 0 && stressRejected.length === 50,
-  "50 compras adicionales no pueden reservar una unidad ya agotada");
-const stressInventory = await db`SELECT quantity, reserved FROM inventory WHERE variant_id = ${v2} AND location_id = ${locationId}`;
+ok(stressSuccess.length === 1 && stressRejected.length === 49,
+  "50 compras simultáneas sobre última unidad: un ganador y 49 rechazos");
+const stressInventory = await db`
+  SELECT quantity, reserved FROM inventory
+  WHERE variant_id = ${stressVariantId} AND location_id = ${locationId}`;
 ok(Number(stressInventory[0].quantity) === 1 &&
    Number(stressInventory[0].reserved) === 1,
-  "50 solicitudes no alteran el saldo ni generan disponibilidad negativa");
+  "50 solicitudes no alteran stock físico ni generan disponibilidad negativa");
+const stressReservations = await db`
+  SELECT COUNT(*)::int AS total FROM inventory_reservations
+  WHERE variant_id = ${stressVariantId} AND status = 'ACTIVE'`;
+ok(Number(stressReservations[0].total) === 1,
+  "solo una reserva activa queda registrada para la última unidad");
 
 const expiring = await createOrder("ci-order-0006", v3, 1);
 const expiringId = Number(expiring.body.order?.id);
