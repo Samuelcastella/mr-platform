@@ -114,7 +114,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
   MANAGER: {
     name: "Manager",
     permissions: Object.keys(PERMISSIONS).filter(
-      p => !["users.manage", "roles.manage", "health.admin", "economics.fiscal.validate"].includes(p)
+      p => !["users.manage", "roles.manage", "health.admin", "economics.fiscal.validate", "settings.manage", "payments.refund"].includes(p)
     )
   },
   CASHIER: {
@@ -139,7 +139,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "catalog.read",
       "inventory.read",
       "inventory.receive",
-      "inventory.adjust",
+      // Direct stock mutation is reserved for governed adjustment workflows.
       "inventory.transfer",
       "inventory_adjustments.read",
       "inventory_adjustments.create",
@@ -487,7 +487,7 @@ export async function authorizeInternal(
   permission: string,
   options: { locationId?: number | null; mutation?: boolean } = {}
 ) {
-  if (machineAuthorized(req)) {
+  if (machineAuthorized(req) && Bun.env.ALLOW_LEGACY_INTERNAL_TOKEN !== "false") {
     return {
       ok: true as const,
       actor: { type: "SERVICE" as const, service: "internal-api" }

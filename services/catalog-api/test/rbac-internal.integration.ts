@@ -208,7 +208,12 @@ ok(
 const machineList = await api("/v1/internal/orders", {
   headers: { "x-internal-key": serviceKey }
 });
-ok(machineList.response.status === 200, "credencial técnica sigue compatible");
+if (Bun.env.ALLOW_LEGACY_INTERNAL_TOKEN === "false") {
+  ok(machineList.response.status === 401,
+    "modo estricto rechaza credencial tecnica heredada");
+} else {
+  ok(machineList.response.status === 200, "credencial técnica sigue compatible");
+}
 
 const audits = await db`
   SELECT actor_type, actor_user_id, action, resource_id

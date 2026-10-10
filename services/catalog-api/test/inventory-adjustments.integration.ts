@@ -173,6 +173,40 @@ const submitted = await api("/v1/internal/inventory-adjustments/" + adjustmentId
 ok(submitted.response.status === 200, "operador somete ajuste");
 ok(submitted.body.adjustment?.status === "SUBMITTED", "ajuste queda SUBMITTED");
 
+// Negative RBAC: location-scoped operator cannot approve, post, or cross locations.
+const operatorApproveDenied = await api("/v1/internal/inventory-adjustments/" + adjustmentId + "/approve", {
+  method: "POST", headers: headers(operator.session), body: "{}"
+});
+ok(operatorApproveDenied.response.status === 403 && operatorApproveDenied.body.error === "forbidden",
+  "operador sin permiso no aprueba ajustes");
+const operatorPostDenied = await api("/v1/internal/inventory-adjustments/" + adjustmentId + "/post", {
+  method: "POST", headers: headers(operator.session, "m12-negative-post"), body: "{}"
+});
+ok(operatorPostDenied.response.status === 403 && operatorPostDenied.body.error === "forbidden",
+  "operador sin permiso no contabiliza ajustes");
+const locOther = await db`
+  INSERT INTO locations(name, country_code, type, active)
+  VALUES(${"M12 OTHER " + crypto.randomUUID().slice(0, 6)}, 'HN', 'store', TRUE)
+  RETURNING id`;
+const otherLocationId = Number(locOther[0].id);
+const crossLocationCreate = await api("/v1/internal/inventory-adjustments", {
+  method: "POST", headers: headers(operator.session),
+  body: JSON.stringify({ locationId: otherLocationId, reasonCode: "COUNT_VARIANCE_NEGATIVE",
+    lines: [{ variantId, quantityDelta: -1 }] })
+});
+ok(crossLocationCreate.response.status === 403 && crossLocationCreate.body.error === "forbidden",
+  "operador no crea ajuste en otra sucursal");
+const crossLocationRead = await api("/v1/internal/inventory-adjustments?locationId=" + otherLocationId, {
+  headers: { cookie: operator.session.cookie }
+});
+ok(crossLocationRead.response.status === 403 && crossLocationRead.body.error === "forbidden",
+  "operador no lista ajustes de otra sucursal");
+const missingCsrf = await api("/v1/internal/inventory-adjustments/" + adjustmentId + "/approve", {
+  method: "POST", headers: { cookie: manager.session.cookie, "content-type": "application/json" }, body: "{}"
+});
+ok(missingCsrf.response.status === 403 && missingCsrf.body.error === "csrf_required",
+  "aprobación sin CSRF es rechazada");
+
 const approved = await api("/v1/internal/inventory-adjustments/" + adjustmentId + "/approve", {
   method: "POST",
   headers: headers(manager.session),

@@ -212,6 +212,35 @@ ok(Number(roleSeed[0]?.role_count) === 7, "roles iniciales están seedados");
 const permissionSeed = await db`SELECT COUNT(*)::int AS permission_count FROM permissions`;
 ok(Number(permissionSeed[0]?.permission_count) >= 20, "vocabulario de permisos está seedado");
 
+// Regression: inventory operators must use governed adjustment requests,
+// not the legacy direct-stock mutation permission.
+const inventoryOperatorGrants = await db`
+  SELECT rp.permission_code
+  FROM role_permissions rp
+  JOIN roles r ON r.id = rp.role_id
+  WHERE r.code = 'INVENTORY_OPERATOR'`;
+const inventoryOperatorPermissions = new Set(inventoryOperatorGrants.map((row: any) => String(row.permission_code)));
+ok(!inventoryOperatorPermissions.has("inventory.adjust"),
+  "INVENTORY_OPERATOR no tiene permiso de ajuste directo de existencias");
+ok(inventoryOperatorPermissions.has("inventory_adjustments.create") &&
+   inventoryOperatorPermissions.has("inventory_adjustments.submit"),
+  "INVENTORY_OPERATOR conserva flujo supervisado de ajustes");
+ok(!inventoryOperatorPermissions.has("inventory_adjustments.approve") &&
+   !inventoryOperatorPermissions.has("inventory_adjustments.post"),
+  "INVENTORY_OPERATOR no puede aprobar ni contabilizar ajustes");
+const managerGrants = await db`
+  SELECT rp.permission_code
+  FROM role_permissions rp JOIN roles r ON r.id = rp.role_id
+  WHERE r.code = 'MANAGER'`;
+const managerPermissions = new Set(managerGrants.map((row: any) => String(row.permission_code)));
+ok(!managerPermissions.has("users.manage") && !managerPermissions.has("roles.manage"),
+  "MANAGER no administra identidades ni asignaciones de roles");
+ok(!managerPermissions.has("settings.manage"),
+  "MANAGER no puede administrar configuracion global");
+ok(!managerPermissions.has("payments.refund"),
+  "MANAGER no puede ejecutar reembolsos sin rol financiero autorizado");
+
+
 ok(
   permissionAllowed(
     [{ permission: "inventory.adjust", scopeType: "LOCATION", locationId: 10 }],
