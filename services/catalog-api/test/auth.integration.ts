@@ -235,6 +235,8 @@ const managerGrants = await db`
 const managerPermissions = new Set(managerGrants.map((row: any) => String(row.permission_code)));
 ok(!managerPermissions.has("users.manage") && !managerPermissions.has("roles.manage"),
   "MANAGER no administra identidades ni asignaciones de roles");
+ok(!managerPermissions.has("settings.manage"),
+  "MANAGER no puede administrar configuracion global");
 
 
 ok(
