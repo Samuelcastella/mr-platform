@@ -487,7 +487,7 @@ export async function authorizeInternal(
   permission: string,
   options: { locationId?: number | null; mutation?: boolean } = {}
 ) {
-  if (machineAuthorized(req)) {
+  if (machineAuthorized(req) && Bun.env.ALLOW_LEGACY_INTERNAL_TOKEN !== "false") {
     return {
       ok: true as const,
       actor: { type: "SERVICE" as const, service: "internal-api" }
