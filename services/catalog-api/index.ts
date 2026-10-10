@@ -1,3 +1,4 @@
+import { ensureIntegrationMatrixSchema, handleIntegrationMatrix } from "./integration-matrix";
 import { SQL } from "bun";
 import { ensureRestockSchema, handleRestock } from "./restock";
 import { ensureOrdersSchema, handleOrders } from "./orders";
@@ -177,6 +178,7 @@ await ensureEconomicReadinessSchema(db);
 await ensureAssortmentDecisionSchema(db);
 await ensureSourcingOffersSchema(db);
 await ensureSupplierEvaluationSchema(db);
+await ensureIntegrationMatrixSchema(db);
 await ensureManufacturerRegistrySchema(db);
 await ensureProductSpecificationSchema(db);
 await ensureProductionRunsSchema(db);
@@ -238,6 +240,9 @@ Bun.serve({
 
     const assortmentDecisionResponse = await handleAssortmentDecisions(req, url, db);
     if (assortmentDecisionResponse) return assortmentDecisionResponse;
+
+    const integrationMatrixResponse = await handleIntegrationMatrix(req, url, db);
+    if (integrationMatrixResponse) return integrationMatrixResponse;
 
     const supplierEvaluationResponse = await handleSupplierEvaluations(req, url, db);
     if (supplierEvaluationResponse) return supplierEvaluationResponse;
