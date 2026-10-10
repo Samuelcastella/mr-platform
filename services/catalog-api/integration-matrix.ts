@@ -1,5 +1,6 @@
 import { authorizeInternal, auditActor, writeAuditEvent } from "./auth";
 type DB=any;
+const componentIds=new Set(["catalog","inventory","orders","payments","fiscal","reconciliation","logistics","notifications","credit","loyalty","outfits"]);
 const statuses=new Set(["pending","implemented","verified","blocked"]);
 const fields=["api","webhooks","authentication","inventorySync","fiscalCompliance","production"] as const;
 const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{"cache-control":"no-store","x-content-type-options":"nosniff"}});
@@ -36,7 +37,7 @@ export async function handleIntegrationMatrix(req:Request,url:URL,db:DB){
   const body=await req.json().catch(()=>null);
   if(!body||typeof body!=="object"||Array.isArray(body))return json({error:"invalid_body"},400);
   const id=body.componentId;
-  if(typeof id!=="string"||!/^[a-z][a-z0-9_-]{1,63}$/.test(id))return json({error:"invalid_component"},400);
+  if(typeof id!=="string"||!componentIds.has(id))return json({error:"invalid_component"},400);
   const checks=body.checks;
   if(!checks||typeof checks!=="object"||Array.isArray(checks)||Object.keys(checks).length!==fields.length||fields.some(k=>!statuses.has(checks[k])))return json({error:"invalid_checks"},400);
   const evidence=body.evidenceUrl;
