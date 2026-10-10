@@ -237,6 +237,8 @@ ok(!managerPermissions.has("users.manage") && !managerPermissions.has("roles.man
   "MANAGER no administra identidades ni asignaciones de roles");
 ok(!managerPermissions.has("settings.manage"),
   "MANAGER no puede administrar configuracion global");
+ok(!managerPermissions.has("payments.refund"),
+  "MANAGER no puede ejecutar reembolsos sin rol financiero autorizado");
 
 
 ok(
