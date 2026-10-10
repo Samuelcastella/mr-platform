@@ -1,5 +1,5 @@
 import { SQL } from "bun";
-import { permissionAllowed } from "../auth";
+import { authorizeInternal, permissionAllowed } from "../auth";
 
 if (Bun.env.ALLOW_DESTRUCTIVE_TEST_DB !== "true") {
   throw new Error("Refusing destructive integration test without ALLOW_DESTRUCTIVE_TEST_DB=true");
@@ -265,6 +265,41 @@ ok(
   ),
   "permiso GLOBAL cubre ubicación"
 );
+
+const scopedToken = "scoped-ci-" + crypto.randomUUID() + "-service";
+const previousServiceConfig = Bun.env.INTERNAL_SERVICE_CREDENTIALS_JSON;
+Bun.env.INTERNAL_SERVICE_CREDENTIALS_JSON = JSON.stringify([{
+  service: "stock-worker",
+  token: scopedToken,
+  permissions: ["inventory_adjustments.create"],
+  locationIds: [10]
+}]);
+const scopedRequest = new Request(base + "/v1/internal/test", {
+  headers: { "x-internal-key": scopedToken }
+});
+const scopedAllowed = await authorizeInternal(
+  scopedRequest, db, "inventory_adjustments.create", { locationId: 10 }
+);
+ok(scopedAllowed.ok && scopedAllowed.actor.type === "SERVICE" &&
+   scopedAllowed.actor.service === "stock-worker",
+  "credencial individual identifica servicio y permite permiso/sucursal autorizados");
+const scopedDeniedPermission = await authorizeInternal(
+  scopedRequest, db, "inventory_adjustments.approve", { locationId: 10 }
+);
+ok(!scopedDeniedPermission.ok && scopedDeniedPermission.response.status === 403,
+  "credencial individual no puede aprobar ajustes sin permiso");
+const scopedDeniedLocation = await authorizeInternal(
+  scopedRequest, db, "inventory_adjustments.create", { locationId: 11 }
+);
+ok(!scopedDeniedLocation.ok && scopedDeniedLocation.response.status === 403,
+  "credencial individual no cruza sucursales");
+const scopedMissingLocation = await authorizeInternal(
+  scopedRequest, db, "inventory_adjustments.create"
+);
+ok(!scopedMissingLocation.ok && scopedMissingLocation.response.status === 403,
+  "credencial limitada no obtiene acceso sin contexto de sucursal");
+if (previousServiceConfig === undefined) delete Bun.env.INTERNAL_SERVICE_CREDENTIALS_JSON;
+else Bun.env.INTERNAL_SERVICE_CREDENTIALS_JSON = previousServiceConfig;
 
 const audits = await db`
   SELECT action, outcome
