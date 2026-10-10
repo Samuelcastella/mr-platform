@@ -2542,13 +2542,29 @@ Bun.serve({
       const statusLabel:Record<string,string>={pending:"Pendiente",implemented:"Código identificado",verified:"Verificado",blocked:"Bloqueado"};
       const columns=["api","webhooks","authentication","inventorySync","fiscalCompliance","production"] as const;
       const titles=["API","Webhooks","Autenticación","Inventario","Fiscal","Producción"];
+      const saved=await api("/v1/internal/integration-matrix",{cookieHeader:session.cookieHeader});
+      if(!saved.response?.ok)return html(shell("<h1>Matriz de integración</h1><div class=\"notice\">No se pudo consultar el registro de evaluaciones.</div>",session),502);
+      const stored=new Map((Array.isArray(saved.body?.data)?saved.body.data:[]).map((x:any)=>[String(x.component_id),x]));
       const rows=integrationBaseline.map(item=>{
-        const cells=columns.map((key,i)=>'<td data-label="'+titles[i]+'" style="padding:9px;border-bottom:1px solid #eee">'+esc(statusLabel[item[key]])+'</td>').join("");
+        const record:any=stored.get(item.id);
+        const current=record?.checks||item;
+        const cells=columns.map((key,i)=>'<td data-label="'+titles[i]+'" style="padding:9px;border-bottom:1px solid #eee">'+esc(statusLabel[current[key]]||"Pendiente")+'</td>').join("");
         return '<tr><td style="padding:9px;border-bottom:1px solid #eee">'+esc(item.phase)+' · '+esc(phases[item.phase-1])+'</td><td style="padding:9px;border-bottom:1px solid #eee"><b>'+esc(item.component)+'</b><br><small>'+esc(item.ownership)+' / '+esc(item.priority)+'</small></td>'+cells+'</tr>';
       }).join("");
+      const editor=integrationBaseline.map(item=>{const record:any=stored.get(item.id);const current=record?.checks||item;return `<form method="post" action="/integration-matrix/update" class="panel" style="margin-top:12px"><h3>${esc(item.component)}</h3><input type="hidden" name="csrf" value="${esc(session.csrf)}"><input type="hidden" name="componentId" value="${esc(item.id)}"><input type="hidden" name="revision" value="${record?.revision??0}"><div class="toolbar">${columns.map((key,i)=>`<label>${esc(titles[i])}<select name="${key}">${Object.entries(statusLabel).map(([value,label])=>`<option value="${value}" ${current[key]===value?"selected":""}>${esc(label)}</option>`).join("")}</select></label>`).join("")}</div><label>Evidencia HTTPS<input name="evidenceUrl" maxlength="1000" value="${esc(record?.evidence_url||"")}"></label><label>Justificación<textarea name="note" maxlength="2000">${esc(record?.note||"")}</textarea></label><button>Guardar evaluación</button></form>`}).join("");
       const table='<div class="panel" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'+["Fase","Componente",...titles].map(x=>'<th style="padding:9px;text-align:left;border-bottom:2px solid #ded5c8">'+esc(x)+'</th>').join("")+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
       const intro='<div class="eyebrow">Gobierno tecnológico · línea base</div><h1>Matriz de integración</h1><p class="meta">Inventario de '+integrationBaseline.length+' componentes en seis fases. Los estados son una línea base documental, no pruebas de funcionamiento en producción. «Código identificado» tampoco equivale a integración verificada.</p><div class="notice">Vista de consulta: las evaluaciones aún no se guardan en PostgreSQL. Las integraciones fiscales y financieras requieren autorización y pruebas independientes antes de habilitarse.</div>';
-      return html(shell(intro+table,session));
+      return html(shell(intro+table+"<h2>Editar evaluaciones</h2>"+editor,session));
+    }
+
+    if(url.pathname==="/integration-matrix/update"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const keys=["api","webhooks","authentication","inventorySync","fiscalCompliance","production"];
+      const checks=Object.fromEntries(keys.map(k=>[k,String(fd.get(k)||"")]));
+      const result=await api("/v1/internal/integration-matrix",{method:"PATCH",cookieHeader:session.cookieHeader,csrf:session.csrf,body:{componentId:String(fd.get("componentId")||""),expectedRevision:Number(fd.get("revision")),checks,evidenceUrl:String(fd.get("evidenceUrl")||"").trim()||null,note:String(fd.get("note")||"").trim()||null}});
+      if(!result.response?.ok)return html(shell("<h1>No se guardó la evaluación</h1><p>"+esc(result.body?.error||"Error de conexión o permisos")+"</p><a href=\"/integration-matrix\">Volver</a>",session),result.response?.status===409?409:400);
+      return redirect("/integration-matrix");
     }
 
     if(url.pathname==="/logout"&&req.method==="POST"){
