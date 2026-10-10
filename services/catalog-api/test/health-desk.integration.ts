@@ -205,7 +205,7 @@ ok(Number(healthyRefresh.body.autoResolved)>=3,"condiciones sanas auto-resuelven
 
 const snapshot2=await api("/v1/internal/health-desk",{headers:headers(analyst.session)});
 ok(snapshot2.response.status===200,"Analyst puede leer Health Desk");
-ok(snapshot2.body.overall==="HEALTHY","estado general vuelve HEALTHY");
+ok(snapshot2.body.overall==="UNKNOWN","sin telemetria fiscal el estado general permanece UNKNOWN");
 
 const activeBusiness=await db`
   SELECT
