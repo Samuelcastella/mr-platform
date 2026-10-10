@@ -205,6 +205,20 @@ ok(
   "cashier sin orders.cancel no cancela"
 );
 
+const invalidMachineList = await api("/v1/internal/orders", {
+  headers: { "x-internal-key": "invalid-ci-key" }
+});
+ok(
+  invalidMachineList.response.status === 401,
+  "credencial tecnica incorrecta no obtiene acceso"
+);
+
+const missingMachineList = await api("/v1/internal/orders");
+ok(
+  missingMachineList.response.status === 401,
+  "solicitud interna sin credencial ni sesion se rechaza"
+);
+
 const machineList = await api("/v1/internal/orders", {
   headers: { "x-internal-key": serviceKey }
 });
