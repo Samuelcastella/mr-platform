@@ -155,6 +155,22 @@ ok(statuses[0] === 201 && statuses[1] === 409, "concurrencia permite un solo gan
 const invConcurrent = await db`SELECT quantity, reserved FROM inventory WHERE variant_id = ${v2} AND location_id = ${locationId}`;
 ok(Number(invConcurrent[0].quantity) - Number(invConcurrent[0].reserved) === 0, "concurrencia nunca produce disponibilidad negativa");
 
+// Stress regression: 50 independent buyers race for one unit in the isolated CI database.
+// This file TRUNCATEs fixtures above; NEVER run it against production PostgreSQL.
+const stress = await Promise.all(
+  Array.from({ length: 50 }, (_, i) => createOrder("ci-stress-" + i, v2, 1))
+);
+const stressSuccess = stress.filter(x => x.response.status === 201);
+const stressRejected = stress.filter(x => x.response.status === 409 && x.body.error === "insufficient_stock");
+// v2 was already reserved by the two-buyer test; release its winner before this
+// separate stress test, or all 50 should correctly be rejected.
+ok(stressSuccess.length === 0 && stressRejected.length === 50,
+  "50 compras adicionales no pueden reservar una unidad ya agotada");
+const stressInventory = await db`SELECT quantity, reserved FROM inventory WHERE variant_id = ${v2} AND location_id = ${locationId}`;
+ok(Number(stressInventory[0].quantity) === 1 &&
+   Number(stressInventory[0].reserved) === 1,
+  "50 solicitudes no alteran el saldo ni generan disponibilidad negativa");
+
 const expiring = await createOrder("ci-order-0006", v3, 1);
 const expiringId = Number(expiring.body.order?.id);
 const expiringToken = String(expiring.body.order?.token || "");
