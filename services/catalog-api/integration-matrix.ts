@@ -28,7 +28,7 @@ export async function ensureIntegrationMatrixSchema(db:DB){
 export async function handleIntegrationMatrix(req:Request,url:URL,db:DB){
   if(url.pathname!=="/v1/internal/integration-matrix")return null;
   if(req.method!=="GET"&&req.method!=="PATCH")return json({error:"method_not_allowed"},405);
-  const auth=await authorizeInternal(req,db,req.method==="GET"?"suppliers.read":"suppliers.write");
+  const auth=await authorizeInternal(req,db,req.method==="GET"?"suppliers.read":"suppliers.write",{mutation:req.method==="PATCH"});
   if(!auth.ok)return auth.response;
   if(req.method==="GET"){
     const rows=await db`SELECT component_id,checks,evidence_url,note,updated_at,revision FROM integration_matrix_evaluations ORDER BY component_id`;
