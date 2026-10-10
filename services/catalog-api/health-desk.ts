@@ -243,9 +243,12 @@ async function snapshot(req: Request, db: DB) {
   ]);
 
   const active = signals.filter((x:any)=>Boolean(x.active));
+  // An empty or entirely unknown signal set is not evidence of a healthy system.
   const overall =
     active.some((x:any)=>x.severity==="CRITICAL") ? "DOWN" :
-    active.length ? "DEGRADED" : "HEALTHY";
+    active.length ? "DEGRADED" :
+    (!signals.length || signals.some((x:any)=>x.status==="UNKNOWN")) ? "UNKNOWN" :
+    "HEALTHY";
 
   return json({
     overall,
