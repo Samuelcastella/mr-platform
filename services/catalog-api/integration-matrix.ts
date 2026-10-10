@@ -49,6 +49,8 @@ export async function handleIntegrationMatrix(req:Request,url:URL,db:DB){
   const actor=auth.actor;
   if(actor.type!=="USER")return json({error:"staff_user_required"},403);
   const result=await db.begin(async(tx:DB)=>{
+    // Serialize even the first write, when no row exists to lock yet.
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${id}, 2026))`;
     const existing=await tx`SELECT revision FROM integration_matrix_evaluations WHERE component_id=${id} FOR UPDATE`;
     const expected=body.expectedRevision;
     if(existing.length&&(!Number.isSafeInteger(expected)||expected!==existing[0].revision))return {conflict:true};
