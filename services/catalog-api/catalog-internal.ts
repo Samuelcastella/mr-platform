@@ -496,11 +496,15 @@ export async function handleInternalCatalog(
       if (!variant.length) return { error: "variant_not_found", status: 404 };
 
       const location = await defaultLocation(tx);
+      // Lock the SKU even if the inventory row has not been created yet.
+      await tx`SELECT id FROM product_variants WHERE id=${variantId} FOR UPDATE`;
       const current = await tx`
-        SELECT quantity FROM inventory
+        SELECT quantity,reserved FROM inventory
         WHERE variant_id=${variantId} AND location_id=${location.id}
         FOR UPDATE`;
       const before = current.length ? Number(current[0].quantity) : 0;
+      const reserved = current.length ? Number(current[0].reserved) : 0;
+      if (quantity < reserved) return { error: "stock_below_reserved", status: 409, reserved };
       const delta = quantity - before;
 
       await tx`
