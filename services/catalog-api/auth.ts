@@ -114,7 +114,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
   MANAGER: {
     name: "Manager",
     permissions: Object.keys(PERMISSIONS).filter(
-      p => !["users.manage", "roles.manage", "health.admin", "economics.fiscal.validate"].includes(p)
+      p => !["users.manage", "roles.manage", "health.admin", "economics.fiscal.validate", "settings.manage"].includes(p)
     )
   },
   CASHIER: {
