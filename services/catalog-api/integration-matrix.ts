@@ -22,7 +22,8 @@ export async function ensureIntegrationMatrixSchema(db:DB){
     evidence_url TEXT,
     note TEXT,
     actor_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(component_id,revision)
   )`;
 }
 export async function handleIntegrationMatrix(req:Request,url:URL,db:DB){
@@ -39,7 +40,7 @@ export async function handleIntegrationMatrix(req:Request,url:URL,db:DB){
   const id=body.componentId;
   if(typeof id!=="string"||!componentIds.has(id))return json({error:"invalid_component"},400);
   const checks=body.checks;
-  if(!checks||typeof checks!=="object"||Array.isArray(checks)||Object.keys(checks).length!==fields.length||fields.some(k=>!statuses.has(checks[k])))return json({error:"invalid_checks"},400);
+  if(!checks||typeof checks!=="object"||Array.isArray(checks)||Object.keys(checks).length!==fields.length||fields.some(k=>!Object.prototype.hasOwnProperty.call(checks,k)||!statuses.has(checks[k])))return json({error:"invalid_checks"},400);
   const evidence=body.evidenceUrl;
   if(evidence!==undefined&&evidence!==null&&(typeof evidence!=="string"||evidence.length>1000||!/^https:\/\//.test(evidence)))return json({error:"invalid_evidence_url"},400);
   const note=body.note;
