@@ -139,7 +139,7 @@ const ROLE_BUNDLES: Record<string, { name: string; permissions: string[] }> = {
       "catalog.read",
       "inventory.read",
       "inventory.receive",
-      "inventory.adjust",
+      // Direct stock mutation is reserved for governed adjustment workflows.
       "inventory.transfer",
       "inventory_adjustments.read",
       "inventory_adjustments.create",
