@@ -1,4 +1,5 @@
 import { transitionOrderInTx } from "./orders";
+import { acceptHeavyQuoteInTx } from "./heavy-quote-acceptance";
 import { auditActor, authorizeInternal, writeAuditEvent, type InternalActor } from "./auth";
 
 type DB = any;
@@ -408,6 +409,8 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
     return json({ error: "client_delivery_quote_not_allowed" }, 400);
   }
 
+  const heavyQuoteId = body?.heavyQuoteId == null ? null : Number(body.heavyQuoteId);
+  if (heavyQuoteId !== null && (!Number.isSafeInteger(heavyQuoteId) || heavyQuoteId <= 0)) return json({ error: "invalid_heavy_quote", status: 400 }, 400);
   const orderId = Number(body?.orderId);
   const orderToken = clean(body?.orderToken, 80);
   const type = clean(body?.type, 32).toUpperCase();
@@ -434,7 +437,8 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
     addressLine,
     addressReference,
     recipientName,
-    recipientPhone
+    recipientPhone,
+    heavyQuoteId
   };
   const hash = requestHash(normalized);
 
@@ -456,7 +460,7 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
     provider: "MR"
   };
 
-  if (type !== "STORE_PICKUP") {
+  if (type !== "STORE_PICKUP" && heavyQuoteId === null) {
     const zones = await db`
       SELECT shipping_minor, currency, eta_min_days, eta_max_days, provider
       FROM delivery_zones
@@ -498,6 +502,27 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
 
       const prior = await tx`SELECT id FROM fulfillments WHERE order_id = ${orderId} LIMIT 1`;
       if (prior.length) return { error: "fulfillment_exists", status: 409, fulfillmentId: Number(prior[0].id) };
+
+      if (heavyQuoteId !== null) {
+        if (type === "STORE_PICKUP") return { error: "heavy_quote_requires_delivery", status: 409 };
+        const quoteRows = await tx`
+          SELECT provider, department, service_type, shipping_minor, currency
+          FROM heavy_logistics_quotes WHERE id = ${heavyQuoteId} AND order_id = ${orderId} FOR UPDATE`;
+        if (!quoteRows.length) return { error: "quote_not_found", status: 404 };
+        const heavy = quoteRows[0];
+        if (heavy.department !== department || heavy.service_type !== type)
+          return { error: "heavy_quote_destination_mismatch", status: 409 };
+        const accepted = await acceptHeavyQuoteInTx(tx, orderId, heavyQuoteId, orderToken);
+        if (accepted.error) return accepted;
+        if (accepted.replayed) return { error: "heavy_quote_already_accepted", status: 409 };
+        quote = {
+          shippingMinor: Number(heavy.shipping_minor),
+          currency: String(heavy.currency),
+          etaMinDays: null,
+          etaMaxDays: null,
+          provider: String(heavy.provider)
+        };
+      }
 
       if (String(order.currency) !== quote.currency) {
         return { error: "delivery_currency_mismatch", status: 409 };
