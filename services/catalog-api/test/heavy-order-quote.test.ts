@@ -27,7 +27,7 @@ test("rejects duplicate variants and invalid quantities", () => {
     .toThrow("invalid_order_line");
 });
 test("rejects unsafe multiplied monetary totals", () => {
-  const expensive = { ...rate, baseMinor: Number.MAX_SAFE_INTEGER };
+  const expensive = { ...rate, baseMinor: Number.MAX_SAFE_INTEGER - 100 };
   expect(() => calculateHeavyOrderQuote([{ variantId: 1, quantity: 2, parcel }], expensive))
     .toThrow("order_weight_overflow");
 });
