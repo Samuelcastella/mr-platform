@@ -72,6 +72,9 @@ jobs:
       PGPASSWORD: test
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.2.0'
       - name: Create minimal referenced tables
         run: |
           psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "CREATE TABLE product_variants(id BIGINT PRIMARY KEY); CREATE TABLE orders(id BIGINT PRIMARY KEY); CREATE TABLE fulfillments(id BIGINT PRIMARY KEY);"
