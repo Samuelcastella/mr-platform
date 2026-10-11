@@ -1,4 +1,5 @@
 import { handleCredit } from "./credit-routes";
+import { handleCredit as handleInternalCredit } from "./credit-internal-routes";
 import { ensureIntegrationMatrixSchema, handleIntegrationMatrix } from "./integration-matrix";
 import { SQL } from "bun";
 import { ensureRestockSchema, handleRestock } from "./restock";
@@ -214,6 +215,8 @@ Bun.serve({
 
     const creditResponse = await handleCredit(req, url);
     if (creditResponse) return creditResponse;
+    const internalCreditResponse = await handleInternalCredit(req, url, db);
+    if (internalCreditResponse) return internalCreditResponse;
 
     const authResponse = await handleAuth(req, url, db);
     if (authResponse) return authResponse;
