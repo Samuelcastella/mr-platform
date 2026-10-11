@@ -18,6 +18,7 @@ on:
       - 'db/migrations/017_heavy_logistics_quotes.sql'
       - 'db/migrations/018_installation_jobs.sql'
       - 'db/migrations/019_heavy_quote_lines.sql'
+      - 'scripts/test-heavy-quote-concurrency.sh'
       - '.github/workflows/m04-heavy-logistics-ci.yml'
   push:
     branches: [main]
@@ -38,6 +39,7 @@ on:
       - 'db/migrations/017_heavy_logistics_quotes.sql'
       - 'db/migrations/018_installation_jobs.sql'
       - 'db/migrations/019_heavy_quote_lines.sql'
+      - 'scripts/test-heavy-quote-concurrency.sh'
       - '.github/workflows/m04-heavy-logistics-ci.yml'
 jobs:
   unit:
@@ -78,6 +80,10 @@ jobs:
               psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f "db/migrations/${version}.sql"
             done
           done
+      - name: Concurrent quote acceptance with real PostgreSQL sessions
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/mr_test
+        run: bash scripts/test-heavy-quote-concurrency.sh
       - name: Verify profile and installation schema
         run: |
           psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO product_variants(id) VALUES (1); INSERT INTO orders(id) VALUES (1); INSERT INTO product_shipping_profiles(variant_id,weight_grams,length_cm,width_cm,height_cm) VALUES (1,10000,50,40,30); INSERT INTO installation_jobs(order_id,idempotency_key,service_code) VALUES (1,'ci-install-1','BASIC_INSTALL');"
