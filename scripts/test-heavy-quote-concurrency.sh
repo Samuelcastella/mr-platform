@@ -15,27 +15,6 @@ INSERT INTO m04_concurrency_test.heavy_logistics_quotes(id,order_id,shipping_min
 SQL
 # Both sessions lock the order before reading competing accepted quotes.
 # The first holds the lock long enough to force the second to wait.
-run_accept() {
-  local quote="$1" delay="$2"
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v q="$quote" -v delay="$delay" <<'SQL'
-BEGIN;
-SET LOCAL search_path = m04_concurrency_test;
-SELECT id FROM orders WHERE id=1 FOR UPDATE;
-SELECT pg_sleep(:delay);
-DO $block$
-DECLARE q bigint := current_setting('m04.quote_id')::bigint;
-BEGIN
- IF EXISTS(SELECT 1 FROM heavy_logistics_quotes WHERE order_id=1 AND status='ACCEPTED') THEN
-   RETURN;
- END IF;
- UPDATE orders SET shipping_total_minor=(SELECT shipping_minor FROM heavy_logistics_quotes WHERE id=q),
-   grand_total_minor=10000+(SELECT shipping_minor FROM heavy_logistics_quotes WHERE id=q) WHERE id=1;
- UPDATE heavy_logistics_quotes SET status='ACCEPTED' WHERE id=q;
-END
-$block$;
-COMMIT;
-SQL
-}
 # Session-local quote ID is set via psql substitution, not client SQL identifiers.
 run_accept() {
   local quote="$1" delay="$2"
