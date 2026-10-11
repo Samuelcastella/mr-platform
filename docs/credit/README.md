@@ -1,22 +1,25 @@
-# Crédito — comparador y simulador (primera entrega)
+# Crédito — comparador y simulador (entrega incremental)
 
-El cálculo de amortización se implementa en `services/catalog-api/credit-calculator.ts`.
-Utiliza cuota fija sobre saldo insoluto, redondeo a centavos por período y ajuste final de capital.
-La tasa de entrada es nominal anual, expresada como porcentaje. No equivale a una tasa efectiva anual.
+## Implementado en la rama de trabajo
+- `credit-calculator.ts`: amortización en HNL con tasa nominal anual, prima y cargos mensuales.
+- `credit-routes.ts`: `POST /v1/credit/simulate` conectado en `index.ts`, con validación de JSON.
+- `credit-comparator.ts`: comparación por costo total solo cuando las condiciones tienen fuente y fecha de verificación.
+- Pruebas unitarias y de contrato en `*.test.ts`.
 
-## Contrato propuesto
-`POST /v1/credit/simulate` con `{amount,downPayment,annualRate,months,monthlyFee?}`.
-Respuesta: `currency, financed, downPayment, monthlyPaymentEstimate, totalInterest, totalFees, totalPayable, schedule`.
+Ejemplo de solicitud:
+```json
+{"amount":15000,"downPayment":0,"annualRate":24,"months":12,"monthlyFee":0}
+```
 
-**Importante:** el endpoint aún no está conectado a `index.ts`. La primera entrega mantiene
-el cálculo independiente para permitir revisión y pruebas sin modificar producción.
+El resultado es **ilustrativo** y no constituye aprobación, cotización contractual ni asesoramiento crediticio. La tasa nominal anual no equivale a la tasa efectiva; para comparaciones comerciales finales hay que integrar comisiones, seguros, cargos iniciales, impuestos y fechas de pago.
 
-## Comparador pendiente
-Crear tabla de proveedores y planes con fuente, fecha de verificación, vigencia, límites,
-costos y requisitos. Nunca publicar tasas o condiciones no verificadas como ofertas reales.
-Comparar costo total y tasa efectiva (incluyendo seguros y comisiones), no solo cuotas.
-Agregar consentimiento y controles de privacidad antes de almacenar solicitudes de clientes.
+## Ejecutar pruebas
+`cd services/catalog-api && bun test credit-calculator.test.ts credit-routes.test.ts credit-comparator.test.ts`
 
-## Pruebas
-`cd services/catalog-api && bun test credit-calculator.test.ts`.
-Pendiente: validación de API, persistencia PostgreSQL, interfaz del storefront y CI.
+## Pendientes
+- Ejecutar pruebas en CI; verificar manejo de redondeo y límites de centavos.
+- Crear persistencia PostgreSQL de proveedores, planes y fuentes verificadas, con historial de vigencia.
+- Exponer planes verificables mediante API y conectar la interfaz del storefront.
+- Implementar cálculo de tasa efectiva y desglose completo de cargos.
+- Añadir protección contra abuso, observabilidad y políticas de datos antes de aceptar solicitudes personales.
+- Validar el flujo de despliegue Railway; no publicar cambios hasta revisar el PR.
