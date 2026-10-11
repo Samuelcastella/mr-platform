@@ -9,3 +9,6 @@ Version: [VERSION](skills/skill-lom-001/VERSION). History: [CHANGELOG](skills/sk
 Initial evidence-limited audit: [2026-10-11 report](docs/audit/lom/initial-audit-2026-10-11.md).
 
 When auditing, read the canonical SKILL.md first. Preserve source identifiers and distinguish verified facts from documentation claims and hypotheses. Start read-only; do not alter code, databases, infrastructure, or deployments as part of an audit. Do not put credentials or personal data into the repository. Proposed fixes require separate review and reproducible validation. Keep skill instructions centralized in SKILL.md rather than duplicating them here.
+
+## Catálogo de habilidades
+Consultar [skills/README.md](skills/README.md) para el inventario de todas las skills históricas y su estado de recuperación. No considerar instaladas las que figuran pendientes.
