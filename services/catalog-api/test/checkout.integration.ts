@@ -267,7 +267,9 @@ ok(multiReservationsAfter.length === 2 && multiReservationsAfter.some((r: any) =
 
 // Signed simulated gateway events: concurrent replay, late payment exception, no SALE.
 const webhookSecret = Bun.env.SIMULATED_PAYMENT_WEBHOOK_SECRET;
-if (webhookSecret && webhookSecret.length >= 32) {
+if (!webhookSecret || webhookSecret.length < 32) {
+  ok(false, "secreto de simulación requerido para regresión webhook");
+} else {
   const { signSimulatedWebhook } = await import("../simulated-payment-webhook");
   const paymentId = Number(cashCheckout.payment.id);
   await db`UPDATE payments SET provider = 'SIMULATED' WHERE id = ${paymentId}`;
