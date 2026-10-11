@@ -1,3 +1,4 @@
+import { getFinancingSchemaStatus } from "./credit-financing-db";
 import { requireStaffPermission } from "./auth";
 import { simulateCredit, compareOffers, type CreditOffer } from "./credit-finance";
 
@@ -42,8 +43,14 @@ export async function handleCredit(req:Request,url:URL,db:any):Promise<Response|
  const auth=await requireStaffPermission(req,db,"reports.read",{requireCsrf:req.method==="POST"});
  if(!auth.ok)return auth.response;
  if(restricted(req))return response({error:"rate_limited"},429);
- if(url.pathname==="/v1/internal/credit/capabilities"&&req.method==="GET")
-  return response({enabled:true,mode:"INDICATIVE_ONLY",currency:"HNL",lendingEnabled:false,providerIntegrationsEnabled:false,termsVerified:false});
+ if(url.pathname==="/v1/internal/credit/capabilities"&&req.method==="GET"){
+  try {
+   const financingDatabase=await getFinancingSchemaStatus();
+   return response({enabled:true,mode:"INDICATIVE_ONLY",currency:"HNL",lendingEnabled:false,providerIntegrationsEnabled:false,termsVerified:false,financingDatabase});
+  } catch {
+   return response({enabled:true,mode:"INDICATIVE_ONLY",currency:"HNL",lendingEnabled:false,providerIntegrationsEnabled:false,termsVerified:false,financingDatabase:{connected:false,schemaReady:false,tables:[]},warning:"financing_database_unavailable"});
+  }
+ }
  if(url.pathname==="/v1/internal/credit/simulate"&&req.method==="POST"){
   if(Number(req.headers.get("content-length")||0)>8192)return response({error:"payload_too_large"},413);
   let body:any;
