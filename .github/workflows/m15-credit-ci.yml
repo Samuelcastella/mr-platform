@@ -1,0 +1,31 @@
+name: M15 Credit Comparator CI
+on:
+  pull_request:
+    paths:
+      - "services/catalog-api/credit-*.ts"
+      - "services/catalog-api/test/credit-*.test.ts"
+      - "services/catalog-api/index.ts"
+      - "services/control-center/index.ts"
+      - ".github/workflows/m15-credit-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/catalog-api/credit-*.ts"
+      - "services/catalog-api/test/credit-*.test.ts"
+      - "services/catalog-api/index.ts"
+      - "services/control-center/index.ts"
+      - ".github/workflows/m15-credit-ci.yml"
+jobs:
+  financing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.0"
+      - name: Test financing math
+        run: bun test services/catalog-api/test/credit-finance.test.ts
+      - name: Compile credit API
+        run: bun build services/catalog-api/index.ts --target=bun --outfile=/tmp/catalog-m15.js
+      - name: Compile Control Center
+        run: bun build services/control-center/index.ts --target=bun --outfile=/tmp/control-m15.js
