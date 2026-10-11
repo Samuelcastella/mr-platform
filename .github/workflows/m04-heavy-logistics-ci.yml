@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'services/catalog-api/heavy-logistics.ts'
+      - 'services/catalog-api/heavy-quote-acceptance.ts'
+      - 'services/catalog-api/fulfillment.ts'
       - 'services/catalog-api/heavy-rate-repository.ts'
       - 'services/catalog-api/test/heavy-logistics.test.ts'
       - 'services/catalog-api/test/heavy-rate-repository.test.ts'
@@ -14,6 +16,8 @@ on:
     branches: [main]
     paths:
       - 'services/catalog-api/heavy-logistics.ts'
+      - 'services/catalog-api/heavy-quote-acceptance.ts'
+      - 'services/catalog-api/fulfillment.ts'
       - 'services/catalog-api/heavy-rate-repository.ts'
       - 'services/catalog-api/test/heavy-logistics.test.ts'
       - 'services/catalog-api/test/heavy-rate-repository.test.ts'
