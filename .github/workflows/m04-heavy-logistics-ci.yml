@@ -3,10 +3,12 @@ on:
   pull_request:
     paths:
       - 'services/catalog-api/heavy-logistics.ts'
+      - 'services/catalog-api/heavy-order-quote.ts'
       - 'services/catalog-api/heavy-quote-acceptance.ts'
       - 'services/catalog-api/fulfillment.ts'
       - 'services/catalog-api/heavy-rate-repository.ts'
       - 'services/catalog-api/test/heavy-logistics.test.ts'
+      - 'services/catalog-api/test/heavy-order-quote.test.ts'
       - 'services/catalog-api/test/heavy-quote-acceptance.test.ts'
       - 'services/catalog-api/test/heavy-rate-repository.test.ts'
       - 'db/migrations/016_heavy_logistics.sql'
@@ -17,10 +19,12 @@ on:
     branches: [main]
     paths:
       - 'services/catalog-api/heavy-logistics.ts'
+      - 'services/catalog-api/heavy-order-quote.ts'
       - 'services/catalog-api/heavy-quote-acceptance.ts'
       - 'services/catalog-api/fulfillment.ts'
       - 'services/catalog-api/heavy-rate-repository.ts'
       - 'services/catalog-api/test/heavy-logistics.test.ts'
+      - 'services/catalog-api/test/heavy-order-quote.test.ts'
       - 'services/catalog-api/test/heavy-quote-acceptance.test.ts'
       - 'services/catalog-api/test/heavy-rate-repository.test.ts'
       - 'db/migrations/016_heavy_logistics.sql'
@@ -36,7 +40,7 @@ jobs:
         with:
           bun-version: '1.2.0'
       - name: Run heavy logistics unit tests
-        run: bun test services/catalog-api/test/heavy-logistics.test.ts services/catalog-api/test/heavy-rate-repository.test.ts services/catalog-api/test/heavy-quote-acceptance.test.ts
+        run: bun test services/catalog-api/test/heavy-logistics.test.ts services/catalog-api/test/heavy-rate-repository.test.ts services/catalog-api/test/heavy-quote-acceptance.test.ts services/catalog-api/test/heavy-order-quote.test.ts
   migration:
     runs-on: ubuntu-latest
     services:
