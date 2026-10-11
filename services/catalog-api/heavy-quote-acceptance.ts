@@ -12,11 +12,34 @@ export async function acceptHeavyQuoteInTx(tx: DB, orderId: number, quoteId: num
   if (!quotes.length) return { error: "quote_not_found", status: 404 };
   const order = orders[0], quote = quotes[0];
   if (quote.status === "ACCEPTED") return { accepted: true, replayed: true };
-  // M04 quotes price exactly one unit of one variant. Fail closed for mixed or multi-quantity orders.
+  // Compare the immutable priced lines to the current order while holding the order lock.
   const lines = await tx`SELECT variant_id, quantity FROM order_items WHERE order_id = ${orderId}`;
-  if (lines.length !== 1 || Number(lines[0].quantity) !== 1 ||
-      Number(lines[0].variant_id) !== Number(quote.variant_id))
+  const snapshots = await tx`SELECT variant_id, quantity, shipping_minor
+    FROM heavy_logistics_quote_lines WHERE quote_id = ${quoteId}`;
+  if (snapshots.length) {
+    const ordered = new Map<number, number>();
+    for (const line of lines) {
+      const variant = Number(line.variant_id), quantity = Number(line.quantity);
+      if (!Number.isSafeInteger(variant) || variant <= 0 || !Number.isSafeInteger(quantity) || quantity <= 0)
+        return { error: "heavy_quote_order_coverage_required", status: 409 };
+      ordered.set(variant, (ordered.get(variant) || 0) + quantity);
+    }
+    let sum = 0;
+    if (snapshots.length !== ordered.size) return { error: "heavy_quote_order_coverage_required", status: 409 };
+    for (const snapshot of snapshots) {
+      const variant = Number(snapshot.variant_id), quantity = Number(snapshot.quantity);
+      const price = Number(snapshot.shipping_minor);
+      if (ordered.get(variant) !== quantity || !Number.isSafeInteger(price) || price < 0)
+        return { error: "heavy_quote_order_coverage_required", status: 409 };
+      sum += price;
+      if (!Number.isSafeInteger(sum)) return { error: "invalid_amount", status: 409 };
+    }
+    if (sum !== Number(quote.shipping_minor)) return { error: "heavy_quote_total_mismatch", status: 409 };
+  } else if (lines.length !== 1 || Number(lines[0].quantity) !== 1 ||
+             Number(lines[0].variant_id) !== Number(quote.variant_id)) {
+    // Legacy quotes without snapshots cover only one unit of one variant.
     return { error: "heavy_quote_order_coverage_required", status: 409 };
+  }
   if (quote.status !== "DRAFT" || new Date(quote.expires_at).getTime() <= Date.now())
     return { error: "quote_unavailable", status: 409 };
   if (!["PENDING_CONFIRMATION", "CONFIRMED"].includes(order.status) || String(order.currency) !== String(quote.currency))
