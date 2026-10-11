@@ -197,7 +197,7 @@ button{border:0;border-radius:999px;padding:11px 14px;font-weight:900;cursor:poi
 `;
 
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/landed-cost" style="color:#e7cf89;text-decoration:none;font-weight:800">Costeo</a><a href="/traceability" style="color:#e7cf89;text-decoration:none;font-weight:800">Trazabilidad</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/integration-matrix" style="color:#e7cf89;text-decoration:none;font-weight:800">Integraciones</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם Control Center</title><style>${css}</style></head><body><header><b>MR עדולם · Control Center</b><nav style="display:flex;gap:10px;flex-wrap:wrap"><a href="/" style="color:#e7cf89;text-decoration:none;font-weight:800">Operación</a><a href="/catalog" style="color:#e7cf89;text-decoration:none;font-weight:800">Catálogo</a><a href="/orders" style="color:#e7cf89;text-decoration:none;font-weight:800">Pedidos</a><a href="/customers" style="color:#e7cf89;text-decoration:none;font-weight:800">Clientes</a><a href="/suppliers" style="color:#e7cf89;text-decoration:none;font-weight:800">Proveedores</a><a href="/manufacturers" style="color:#e7cf89;text-decoration:none;font-weight:800">Fabricantes</a><a href="/product-specifications" style="color:#e7cf89;text-decoration:none;font-weight:800">Especificaciones</a><a href="/production" style="color:#e7cf89;text-decoration:none;font-weight:800">Producción</a><a href="/landed-cost" style="color:#e7cf89;text-decoration:none;font-weight:800">Costeo</a><a href="/traceability" style="color:#e7cf89;text-decoration:none;font-weight:800">Trazabilidad</a><a href="/quality-control" style="color:#e7cf89;text-decoration:none;font-weight:800">Calidad</a><a href="/vendor-review" style="color:#e7cf89;text-decoration:none;font-weight:800">Revisión</a><a href="/purchases" style="color:#e7cf89;text-decoration:none;font-weight:800">Compras</a><a href="/fulfillment" style="color:#e7cf89;text-decoration:none;font-weight:800">Entregas</a><a href="/returns" style="color:#e7cf89;text-decoration:none;font-weight:800">Devoluciones</a><a href="/inventory-adjustments" style="color:#e7cf89;text-decoration:none;font-weight:800">Ajustes</a><a href="/credit" style="color:#e7cf89;text-decoration:none;font-weight:800">Crédito</a><a href="/integration-matrix" style="color:#e7cf89;text-decoration:none;font-weight:800">Integraciones</a><a href="/health-desk" style="color:#e7cf89;text-decoration:none;font-weight:800">Health Desk</a><a href="/economic-readiness" style="color:#e7cf89;text-decoration:none;font-weight:800">Políticas</a><a href="/product-intelligence" style="color:#e7cf89;text-decoration:none;font-weight:800">Inteligencia</a><a href="/assortment-decisions" style="color:#e7cf89;text-decoration:none;font-weight:800">Decisiones</a><a href="/sourcing" style="color:#e7cf89;text-decoration:none;font-weight:800">Sourcing</a><a href="/supplier-evaluations" style="color:#e7cf89;text-decoration:none;font-weight:800">Evaluaciones</a></nav><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></header><main class="wrap">${content}</main></body></html>`;
 }
 
 function loginPage(message=""){
@@ -2535,6 +2535,55 @@ Bun.serve({
       return html(loginPage("Inicia sesión con tu usuario del equipo para continuar."),401,{
         "set-cookie":clearCookie(SESSION_COOKIE)
       });
+    }
+
+
+    if(url.pathname==="/credit"&&req.method==="GET"){
+      return html(shell(`<div class="eyebrow">M15 · Crédito externo</div>
+<h1>Comparador y simulador de financiamiento</h1>
+<p class="meta">Simulación informativa en lempiras. Las tasas son supuestos; no son ofertas verificadas de CrediLee o Crédito Mendels.</p>
+<div class="notice">Originación, aprobaciones, cobros y afectaciones del inventario permanecen deshabilitados.</div>
+<form method="post" action="/credit/simulate" class="card" style="display:grid;gap:14px;max-width:760px">
+<input type="hidden" name="csrf" value="${esc(session.csrf)}">
+<label>Precio de compra (L)<input type="number" min="0.01" max="10000000" step="0.01" required name="purchase" value="15000"></label>
+<label>Prima (L)<input type="number" min="0" max="10000000" step="0.01" required name="down" value="0"></label>
+<label>Escenario A — tasa nominal anual (%)<input type="number" min="0" max="1000" step="0.01" name="rateA" value="18" required></label>
+<label>Escenario B — tasa nominal anual (%)<input type="number" min="0" max="1000" step="0.01" name="rateB" value="30" required></label>
+<label>Escenario C — tasa nominal anual (%)<input type="number" min="0" max="1000" step="0.01" name="rateC" value="42" required></label>
+<label>Plazo (meses)<select name="months"><option>6</option><option>9</option><option selected>12</option><option>24</option><option>36</option></select></label>
+<label>Cargo de apertura (L)<input type="number" min="0" step="0.01" name="setup" value="0"></label>
+<label>Cargo mensual (L)<input type="number" min="0" step="0.01" name="monthly" value="0"></label>
+<label>Seguro mensual (L)<input type="number" min="0" step="0.01" name="insurance" value="0"></label>
+<button type="submit">Comparar 3 escenarios y ver amortización</button></form>
+<p><small>Los resultados son indicativos; las ofertas deben estar respaldadas por condiciones contractuales vigentes.</small></p>`,session));
+    }
+    if(url.pathname==="/credit/simulate"&&req.method==="POST"){
+      const fd=await req.formData();
+      if(!requireFormCsrf(fd,session))return html("Solicitud inválida",403);
+      const num=(key:string)=>Number(fd.get(key));
+      const purchase=num("purchase"),down=num("down"),months=num("months");
+      const rates=["rateA","rateB","rateC"].map(num);
+      const setup=num("setup"),monthly=num("monthly"),insurance=num("insurance");
+      if([purchase,down,months,setup,monthly,insurance,...rates].some(v=>!Number.isFinite(v)||v<0)
+        ||purchase<=0||purchase>10000000||down>purchase
+        || ![6,9,12,24,36].includes(months)
+        ||rates.some(v=>v>1000)||[setup,monthly,insurance].some(v=>v>1000000))
+        return html(shell('<h1>Parámetros inválidos</h1><a href="/credit">Regresar al simulador</a>',session),400);
+      const cents=(n:number)=>Math.round(n*100);
+      const offers=rates.map((rate,i)=>({providerCode:"SCENARIO_"+(i+1),providerName:"Escenario "+String.fromCharCode(65+i)+" (hipotético)",months,annualNominalBps:Math.round(rate*100),downPaymentMinor:cents(down),setupFeeMinor:cents(setup),recurringFeeMinor:cents(monthly),insurancePerMonthMinor:cents(insurance)}));
+      const result=await api("/v1/internal/credit/simulate",{method:"POST",cookieHeader:session.cookieHeader,csrf:session.csrf,body:{purchaseMinor:cents(purchase),offers}});
+      if(result.response?.status===403)return html("Permiso insuficiente para simulaciones financieras",403);
+      if(!result.response?.ok)return html(shell('<h1>El simulador no está disponible</h1><a href="/credit">Volver</a>',session),502);
+      const fmt=(minor:number)=>"L "+(Number(minor||0)/100).toLocaleString("es-HN",{minimumFractionDigits:2,maximumFractionDigits:2});
+      const compare=(Array.isArray(result.body.comparison)?result.body.comparison:[]);
+      const summary=compare.map((item:any)=>`<tr><td>${esc(item.offer.providerName)}</td><td>${esc(item.offer.months)} meses</td><td>${esc(fmt(item.simulation.regularPaymentMinor))}</td><td>${esc(fmt(item.simulation.totalInterestMinor))}</td><td>${esc(fmt(item.simulation.totalFeesMinor))}</td><td><strong>${esc(fmt(item.simulation.totalOutlayMinor))}</strong></td></tr>`).join("");
+      const schedules=compare.map((item:any)=>`<details><summary>${esc(item.offer.providerName)} — tabla de amortización</summary><div style="overflow-x:auto"><table><thead><tr><th>Cuota</th><th>Capital</th><th>Interés</th><th>Cargos</th><th>Pago</th><th>Saldo</th></tr></thead><tbody>${item.simulation.rows.map((row:any)=>`<tr><td>${row.installment}</td><td>${esc(fmt(row.principalMinor))}</td><td>${esc(fmt(row.interestMinor))}</td><td>${esc(fmt(row.feesMinor))}</td><td>${esc(fmt(row.paymentMinor))}</td><td>${esc(fmt(row.balanceMinor))}</td></tr>`).join("")}</tbody></table></div></details>`).join("");
+      return html(shell(`<div class="eyebrow">M15 · Comparación financiera</div><h1>Resultados indicativos</h1>
+<p class="meta">Compra: ${esc(fmt(cents(purchase)))} · Prima: ${esc(fmt(cents(down)))} · Plazo: ${months} meses</p>
+<div class="notice">No son cotizaciones de CrediLee, Mendels ni de ninguna institución. No se ha solicitado ni aprobado crédito.</div>
+<div style="overflow-x:auto"><table><thead><tr><th>Escenario</th><th>Plazo</th><th>Cuota estimada*</th><th>Intereses</th><th>Otros cargos</th><th>Total a pagar</th></tr></thead><tbody>${summary}</tbody></table></div>
+<p><small>*Cuota regular aproximada; el cargo de apertura se suma a la primera cuota. El último período puede variar por redondeo.</small></p>
+${schedules}<p><a href="/credit">Nueva simulación</a></p>`,session));
     }
 
     if(url.pathname==="/integration-matrix"&&req.method==="GET"){
