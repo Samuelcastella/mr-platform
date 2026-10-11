@@ -195,6 +195,22 @@ const expire = await api("/v1/internal/reservations/expire", {
 ok(expire.response.status === 200 && Number(expire.body.expired) >= 1, "expiración libera reservas vencidas");
 const expiredOrder = await api("/v1/orders/" + expiringId + "?token=" + encodeURIComponent(expiringToken));
 ok(expiredOrder.body.order?.status === "CANCELLED", "orden vencida queda CANCELLED");
+// A late checkout cannot revive an expired order or create payment / SALE entries.
+const lateCheckout = await api("/v1/checkouts", {
+  method: "POST",
+  headers: { "content-type": "application/json", "idempotency-key": "ci-late-expired-checkout" },
+  body: JSON.stringify({ orderId: expiringId, orderToken: expiringToken, paymentMethod: "CASH" })
+});
+ok(lateCheckout.response.status === 409, "checkout tardío no confirma pedido expirado");
+const lateOrder = await db`SELECT status FROM orders WHERE id = ${expiringId}`;
+ok(lateOrder[0]?.status === "CANCELLED", "pedido expirado permanece CANCELLED");
+const latePayments = await db`SELECT COUNT(*)::int AS total FROM payments WHERE order_id = ${expiringId}`;
+ok(Number(latePayments[0]?.total) === 0, "checkout tardío no crea pago");
+const lateSales = await db`SELECT COUNT(*)::int AS total FROM inventory_movements WHERE reference = ${"order:" + expiringId} AND movement_type = 'SALE'`;
+ok(Number(lateSales[0]?.total) === 0, "checkout tardío no genera salida Kardex");
+const lateHistory = await db`SELECT COUNT(*)::int AS total FROM order_status_history WHERE order_id = ${expiringId} AND reason = 'reservation_expired'`;
+ok(Number(lateHistory[0]?.total) === 1, "expiración tardía conserva historial único");
+
 const invExpired = await db`SELECT quantity, reserved FROM inventory WHERE variant_id = ${v3} AND location_id = ${locationId}`;
 ok(Number(invExpired[0].quantity) === 1 && Number(invExpired[0].reserved) === 0, "expiración devuelve disponibilidad");
 
