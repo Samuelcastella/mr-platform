@@ -309,6 +309,16 @@ async function createCheckout(req: Request, db: DB, clean: (v: unknown, max: num
           throw new Error("reservation_not_active");
         }
 
+        // Every active reservation must be valid; a single expired line blocks checkout.
+        const reservationIntegrity = await tx`
+          SELECT COUNT(*)::int AS total,
+                 COUNT(*) FILTER (WHERE expires_at IS NULL OR expires_at > NOW())::int AS valid
+          FROM inventory_reservations
+          WHERE order_id = ${orderId} AND status = 'ACTIVE'`;
+        if (Number(reservationIntegrity[0]?.total || 0) !== Number(reservationIntegrity[0]?.valid || 0)) {
+          throw new Error("reservation_not_active");
+        }
+
         await tx`
           UPDATE inventory_reservations
           SET expires_at = NULL, updated_at = NOW()
