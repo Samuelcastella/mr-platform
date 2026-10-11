@@ -6,6 +6,7 @@ import { SQL } from "bun";
 import { ensureRestockSchema, handleRestock } from "./restock";
 import { ensureOrdersSchema, handleOrders } from "./orders";
 import { ensureCheckoutSchema, handleCheckout } from "./checkout";
+import { ensureSimulatedWebhookSchema, handleSimulatedWebhook } from "./simulated-payment-webhook";
 import { ensureFulfillmentSchema, handleFulfillment } from "./fulfillment";
 import { ensureAuthSchema, handleAuth } from "./auth";
 import { ensureCustomersSchema, handleCustomers } from "./customers";
@@ -168,6 +169,7 @@ ON public_events(event_name, created_at DESC)`;
 await ensureRestockSchema(db);
 await ensureOrdersSchema(db);
 await ensureCheckoutSchema(db);
+await ensureSimulatedWebhookSchema(db);
 await ensureFulfillmentSchema(db);
 await ensureAuthSchema(db);
 await ensureCustomersSchema(db);
@@ -357,6 +359,9 @@ Bun.serve({
 
     const fulfillmentResponse = await handleFulfillment(req, url, db, clean);
     if (fulfillmentResponse) return fulfillmentResponse;
+
+    const simulatedWebhookResponse = await handleSimulatedWebhook(req, url, db);
+    if (simulatedWebhookResponse) return simulatedWebhookResponse;
 
     const checkoutResponse = await handleCheckout(req, url, db, clean);
     if (checkoutResponse) return checkoutResponse;
