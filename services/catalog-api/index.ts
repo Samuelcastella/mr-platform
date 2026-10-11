@@ -1,3 +1,4 @@
+import { handleCredit } from "./credit-routes";
 import { ensureIntegrationMatrixSchema, handleIntegrationMatrix } from "./integration-matrix";
 import { SQL } from "bun";
 import { ensureRestockSchema, handleRestock } from "./restock";
@@ -210,6 +211,9 @@ Bun.serve({
       const result = await db`SELECT NOW() AS db_time`;
       return json({ ok: true, service: "MR עדולם Catalog API", database: "connected", dbTime: result[0].db_time });
     }
+
+    const creditResponse = await handleCredit(req, url);
+    if (creditResponse) return creditResponse;
 
     const authResponse = await handleAuth(req, url, db);
     if (authResponse) return authResponse;
