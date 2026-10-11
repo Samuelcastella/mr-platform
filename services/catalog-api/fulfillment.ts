@@ -507,7 +507,7 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
         if (type === "STORE_PICKUP") return { error: "heavy_quote_requires_delivery", status: 409 };
         const quoteRows = await tx`
           SELECT provider, department, service_type, shipping_minor, currency
-          FROM heavy_logistics_quotes WHERE id = ${heavyQuoteId} AND order_id = ${orderId} FOR UPDATE`;
+          FROM heavy_logistics_quotes WHERE id = ${heavyQuoteId} AND order_id = ${orderId}`;
         if (!quoteRows.length) return { error: "quote_not_found", status: 404 };
         const heavy = quoteRows[0];
         if (heavy.department !== department || heavy.service_type !== type)
