@@ -224,6 +224,18 @@ async function createCheckout(req: Request, db: DB, clean: (v: unknown, max: num
         return { error: "checkout_exists", status: 409, checkoutId: Number(prior[0].id) };
       }
 
+      const fulfillmentRows = await tx`
+        SELECT id, type
+        FROM fulfillments
+        WHERE order_id = ${orderId}
+        LIMIT 1`;
+
+      if (paymentMethod === "CASH_ON_DELIVERY") {
+        if (!fulfillmentRows.length || fulfillmentRows[0].type === "STORE_PICKUP") {
+          return { error: "cod_requires_delivery", status: 409 };
+        }
+      }
+
       const token = crypto.randomUUID();
       const inserted = await tx`
         INSERT INTO checkout_sessions(
@@ -236,18 +248,6 @@ async function createCheckout(req: Request, db: DB, clean: (v: unknown, max: num
         )
         RETURNING id`;
       const checkoutId = Number(inserted[0].id);
-
-      const fulfillmentRows = await tx`
-        SELECT id, type
-        FROM fulfillments
-        WHERE order_id = ${orderId}
-        LIMIT 1`;
-
-      if (paymentMethod === "CASH_ON_DELIVERY") {
-        if (!fulfillmentRows.length || fulfillmentRows[0].type === "STORE_PICKUP") {
-          return { error: "cod_requires_delivery", status: 409 };
-        }
-      }
 
       const paymentRows = await tx`
         INSERT INTO payments(
