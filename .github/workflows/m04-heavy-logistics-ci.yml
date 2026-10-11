@@ -1,0 +1,54 @@
+name: M04 Heavy Logistics CI
+on:
+  pull_request:
+    paths:
+      - 'services/catalog-api/heavy-logistics.ts'
+      - 'services/catalog-api/test/heavy-logistics.test.ts'
+      - 'db/migrations/016_heavy_logistics.sql'
+      - '.github/workflows/m04-heavy-logistics-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/catalog-api/heavy-logistics.ts'
+      - 'services/catalog-api/test/heavy-logistics.test.ts'
+      - 'db/migrations/016_heavy_logistics.sql'
+      - '.github/workflows/m04-heavy-logistics-ci.yml'
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.2.0'
+      - name: Run heavy logistics unit tests
+        run: bun test services/catalog-api/test/heavy-logistics.test.ts
+  migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mr_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d mr_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create minimal referenced product schema
+        run: |
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "CREATE TABLE product_variants(id BIGINT PRIMARY KEY);"
+      - name: Apply migration twice to verify idempotency
+        run: |
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f db/migrations/016_heavy_logistics.sql
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f db/migrations/016_heavy_logistics.sql
+      - name: Verify schema
+        run: |
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO product_variants(id) VALUES (1); INSERT INTO product_shipping_profiles(variant_id,weight_grams,length_cm,width_cm,height_cm) VALUES (1,10000,50,40,30);"
