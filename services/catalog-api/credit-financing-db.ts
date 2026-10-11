@@ -11,7 +11,7 @@ export function getFinancingDb(): SQL | null {
   const url = Bun.env.FINANCING_DATABASE_URL;
   if (!url) return null;
   if (!financingDb) {
-    financingDb = new SQL({ url, max: 3, tls: false });
+    financingDb = new SQL(url);
   }
   return financingDb;
 }
