@@ -231,6 +231,40 @@ const paymentRows = await db`SELECT COUNT(*)::int AS count FROM payments`;
 const checkoutRows = await db`SELECT COUNT(*)::int AS count FROM checkout_sessions`;
 ok(Number(paymentRows[0]?.count) === 3 && Number(checkoutRows[0]?.count) === 3, "un checkout produce exactamente un Payment");
 
+// Multi-line order: one valid line must not mask another expired reservation.
+const multiOrderResp = await api("/v1/orders", {
+  method: "POST",
+  headers: { "content-type": "application/json", "idempotency-key": "ci-checkout-partial-expiry-order" },
+  body: JSON.stringify({
+    channel: "WEB",
+    customer: { name: "Cliente Partial Expiry", phone: "9999-4444" },
+    items: [{ variantId: cashVariant, quantity: 1 }, { variantId: transferVariant, quantity: 1 }]
+  })
+});
+ok(multiOrderResp.response.status === 201, "crea pedido multilínea para expiración parcial");
+const multiOrder = multiOrderResp.body.order;
+const multiReservations = await db`
+  SELECT variant_id, status FROM inventory_reservations WHERE order_id = ${multiOrder.id} ORDER BY variant_id`;
+ok(multiReservations.length === 2, "pedido multilínea tiene dos reservas");
+await db`
+  UPDATE inventory_reservations
+  SET expires_at = NOW() - INTERVAL '1 minute'
+  WHERE order_id = ${multiOrder.id} AND variant_id = ${transferVariant} AND status = 'ACTIVE'`;
+const rejectedMulti = await createCheckout("ci-checkout-partial-expiry", multiOrder, "CASH");
+ok(rejectedMulti.response.status === 409 && rejectedMulti.body.error === "reservation_not_active",
+  "checkout rechaza pedido cuando solo una de dos reservas está vencida");
+const multiState = await db`
+  SELECT status FROM orders WHERE id = ${multiOrder.id}`;
+ok(multiState[0]?.status === "PENDING_CONFIRMATION", "checkout rechazado no confirma pedido");
+const multiPayments = await db`SELECT COUNT(*)::int AS count FROM payments WHERE order_id = ${multiOrder.id}`;
+ok(Number(multiPayments[0]?.count) === 0, "checkout rechazado no crea pagos");
+const multiReservationsAfter = await db`
+  SELECT variant_id, expires_at FROM inventory_reservations
+  WHERE order_id = ${multiOrder.id} AND status = 'ACTIVE'`;
+ok(multiReservationsAfter.length === 2 && multiReservationsAfter.some((r: any) =>
+  Number(r.variant_id) === transferVariant && r.expires_at != null),
+  "checkout rechazado no extiende reservas vencidas");
+
 if (failures) {
   console.error(failures + " fallo(s)");
   process.exit(1);
