@@ -14,6 +14,7 @@ on:
       - 'db/migrations/016_heavy_logistics.sql'
       - 'db/migrations/017_heavy_logistics_quotes.sql'
       - 'db/migrations/018_installation_jobs.sql'
+      - 'db/migrations/019_heavy_quote_lines.sql'
       - '.github/workflows/m04-heavy-logistics-ci.yml'
   push:
     branches: [main]
@@ -30,6 +31,7 @@ on:
       - 'db/migrations/016_heavy_logistics.sql'
       - 'db/migrations/017_heavy_logistics_quotes.sql'
       - 'db/migrations/018_installation_jobs.sql'
+      - 'db/migrations/019_heavy_quote_lines.sql'
       - '.github/workflows/m04-heavy-logistics-ci.yml'
 jobs:
   unit:
@@ -66,7 +68,7 @@ jobs:
       - name: Apply migrations twice
         run: |
           for pass in 1 2; do
-            for version in 016_heavy_logistics 017_heavy_logistics_quotes 018_installation_jobs; do
+            for version in 016_heavy_logistics 017_heavy_logistics_quotes 018_installation_jobs 019_heavy_quote_lines; do
               psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f "db/migrations/${version}.sql"
             done
           done
