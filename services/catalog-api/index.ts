@@ -1,4 +1,5 @@
 import { handleCredit } from "./credit-routes";
+import { handleHeavyOrderQuote } from "./heavy-order-quote-routes";
 import { handleCredit as handleInternalCredit } from "./credit-internal-routes";
 import { ensureIntegrationMatrixSchema, handleIntegrationMatrix } from "./integration-matrix";
 import { SQL } from "bun";
@@ -350,6 +351,9 @@ Bun.serve({
 
     const orderResponse = await handleOrders(req, url, db, clean);
     if (orderResponse) return orderResponse;
+
+    const heavyOrderQuoteResponse = await handleHeavyOrderQuote(req, url, db);
+    if (heavyOrderQuoteResponse) return heavyOrderQuoteResponse;
 
     const fulfillmentResponse = await handleFulfillment(req, url, db, clean);
     if (fulfillmentResponse) return fulfillmentResponse;
