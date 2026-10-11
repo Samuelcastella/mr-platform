@@ -27,5 +27,5 @@ test("returns auditable selected rate and price", async () => {
   expect(result.selection.quote.shippingMinor).toBe(22000);
 });
 test("rejects invalid variant id", async () => {
-  expect(quoteHeavyDelivery(mockDB([], []), { ...input, variantId: -1 })).rejects.toThrow("invalid_variant");
+  await expect(quoteHeavyDelivery(mockDB([], []), { ...input, variantId: -1 })).rejects.toThrow("invalid_variant");
 });
