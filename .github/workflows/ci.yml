@@ -73,6 +73,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export SIMULATED_PAYMENT_WEBHOOK_SECRET="$(openssl rand -hex 32)"
           bun run services/catalog-api/index.ts >/tmp/catalog-api.log 2>&1 &
           API_PID=$!
           trap 'kill "$API_PID" 2>/dev/null || true' EXIT
