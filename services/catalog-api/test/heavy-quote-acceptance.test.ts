@@ -14,8 +14,8 @@ function mockTx(options: { order?: any; quote?: any; checkout?: boolean; fulfill
     if (sql.includes("FROM order_items")) return options.lines ?? [{ variant_id: 3, quantity: 1 }];
     if (sql.includes("FROM checkout_sessions")) return options.checkout ? [{ id: 1 }] : [];
     if (sql.includes("FROM fulfillments")) return options.fulfillment ? [{ id: 1 }] : [];
-    if (sql.includes("status = 'ACCEPTED'")) return options.other ? [{ id: 2 }] : [];
     if (sql.startsWith("UPDATE")) { writes.push(sql); return []; }
+    if (sql.includes("status = 'ACCEPTED'")) return options.other ? [{ id: 2 }] : [];
     throw Error("unexpected SQL: " + sql);
   };
   return { tx, writes };
@@ -25,7 +25,7 @@ test("accepts and updates order and quote once", async () => {
   expect(await acceptHeavyQuoteInTx(tx, 1, 7, "token")).toEqual({
     accepted: true, replayed: false, shippingMinor: 2000, grandTotalMinor: 12350
   });
-  expect(writes).toHaveLength(1);
+  expect(writes).toHaveLength(2);
 });
 test("rejects expired quote without writes", async () => {
   const { tx, writes } = mockTx({ quote: { ...quote, expires_at: "2020-01-01T00:00:00Z" } });
