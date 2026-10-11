@@ -63,3 +63,7 @@ jobs:
       - name: Verify profile and installation schema
         run: |
           psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO product_variants(id) VALUES (1); INSERT INTO orders(id) VALUES (1); INSERT INTO product_shipping_profiles(variant_id,weight_grams,length_cm,width_cm,height_cm) VALUES (1,10000,50,40,30); INSERT INTO installation_jobs(order_id,idempotency_key,service_code) VALUES (1,'ci-install-1','BASIC_INSTALL');"
+      - name: Verify invalid records are rejected
+        run: |
+          if psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO product_shipping_profiles(variant_id,weight_grams,length_cm,width_cm,height_cm) VALUES (1,-1,50,40,30);"; then exit 1; fi
+          if psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO installation_jobs(order_id,idempotency_key,service_code,status) VALUES (1,'ci-invalid-install','BASIC_INSTALL','COMPLETED');"; then exit 1; fi
