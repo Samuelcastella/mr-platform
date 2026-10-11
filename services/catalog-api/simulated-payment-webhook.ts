@@ -48,7 +48,13 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
       || event.type !== "payment.succeeded") return reply({ error: "invalid_event" }, 400);
   const hash = new Bun.CryptoHasher("sha256").update(raw).digest("hex");
   const result = await db.begin(async (tx: DB) => {
-    const prior = await tx`SELECT payload_hash, outcome FROM simulated_payment_events WHERE event_id = ${event.eventId}`;
+    // Serialize identical event IDs before locking payment/order rows.
+    // ON CONFLICT waits for the winning transaction and avoids a unique-key race.
+    const claimed = await tx`
+      INSERT INTO simulated_payment_events(event_id, payment_id, payload_hash, outcome)
+      VALUES(${event.eventId}, ${event.paymentId}, ${hash}, 'PROCESSING')
+      ON CONFLICT(event_id) DO NOTHING RETURNING event_id`;
+    const prior = claimed.length ? [] : await tx`SELECT payload_hash, outcome FROM simulated_payment_events WHERE event_id = ${event.eventId}`;
     if (prior.length) return prior[0].payload_hash === hash
       ? { replayed: true, outcome: prior[0].outcome }
       : { error: "event_id_conflict", status: 409 };
@@ -68,8 +74,7 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
     const outcome = eligible && payment.status === "PENDING" ? "PAID" :
       payment.status === "PAID" ? "ALREADY_PAID" : "LATE_PAYMENT_EXPIRED_RESERVATION";
     await tx`
-      INSERT INTO simulated_payment_events(event_id, payment_id, payload_hash, outcome)
-      VALUES(${event.eventId}, ${event.paymentId}, ${hash}, ${outcome})`;
+      UPDATE simulated_payment_events SET outcome = ${outcome} WHERE event_id = ${event.eventId}`;
     if (outcome === "PAID") {
       await tx`UPDATE payments SET status = 'PAID', updated_at = NOW() WHERE id = ${event.paymentId}`;
       await tx`
