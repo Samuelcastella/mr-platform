@@ -21,3 +21,14 @@ Reconstrucción operativa a partir de contexto histórico recuperado el 2026-10-
 
 ## Política
 No confundir reconstrucción con recuperación literal; cotejar documentos originales antes de promover a estable. Cada skill deberá incorporar VERSION, CHANGELOG, ejemplos y pruebas verificables antes de declararse instalada. AGENTS.md y CLAUDE.md enlazan a este índice.
+
+## Originales localizados y cotejo (2026-10-11)
+
+- **Web Design:** original íntegro en [`docs/skills/MR_Adulam_Skill_Web_Design.md`](../docs/skills/MR_Adulam_Skill_Web_Design.md), importado como texto exacto según manifiesto. El borrador `skills/web-design/SKILL.md` NO sustituye este original.
+- **SKILL-12:** original íntegro `SKILL.md` en [`docs/skills/SKILL.md`](../docs/skills/SKILL.md), con versión declarada 1.0.0. La copia original usa `RM עדולם` en partes, en conflicto con la regla vigente `MR עדולם`; conservar original y documentar corrección por versión, no reescribir su historia.
+- **SKILL-12 paquete ZIP:** `SKILL-12-RM-Web-Architecture-Design.zip` aparece en [`docs/import/PROJECT_LIBRARY_MANIFEST.md`](../docs/import/PROJECT_LIBRARY_MANIFEST.md) como binario pendiente; no afirmar que sus archivos complementarios estén recuperados.
+- **LOM:** paquete original `SKILL.md` disponible como adjunto de conversación; versión 1.0.0. Verificar diferencias frente a la versión de GitHub antes de considerarlos idénticos.
+- **SKILL-01, 02 y 03:** se localizaron referencias a documentos íntegros en conversaciones históricas; todavía no se han importado íntegramente a GitHub.
+- **Otras skills:** no se ha localizado un original íntegro verificable; mantener borradores diferenciados.
+
+**Regla de precedencia:** preservar originales íntegros como fuentes históricas, y producir nuevas versiones normalizadas en lugar de sobreescribirlos. Nunca presentar un borrador reconstruido como copia exacta.
