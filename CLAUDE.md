@@ -9,3 +9,6 @@ Antes de realizar una auditoría, leer [SKILL-LOM-001](skills/skill-lom-001/SKIL
 Aplicar auditoría de solo lectura; distinguir hechos, afirmaciones documentales e hipótesis. Vincular cada hallazgo a evidencias y fuentes identificables. No modificar producción, bases de datos o infraestructura durante la auditoría. No almacenar secretos ni información personal en GitHub. Proponer correcciones mediante PR independiente y pruebas reproducibles.
 
 SKILL.md es la fuente canónica: actualizar allí la metodología y mantener aquí únicamente el enlace y las reglas de integración.
+
+## Catálogo de habilidades
+Consultar [skills/README.md](skills/README.md) para el inventario de todas las skills históricas y su estado de recuperación. No considerar instaladas las que figuran pendientes.
