@@ -7,11 +7,16 @@ export async function acceptHeavyQuoteInTx(tx: DB, orderId: number, quoteId: num
     discount_total_minor, tax_total_minor FROM orders WHERE id = ${orderId} FOR UPDATE`;
   if (!orders.length || String(orders[0].public_token) !== orderToken)
     return { error: "order_not_found", status: 404 };
-  const quotes = await tx`SELECT id, status, currency, shipping_minor, expires_at
+  const quotes = await tx`SELECT id, variant_id, status, currency, shipping_minor, expires_at
     FROM heavy_logistics_quotes WHERE id = ${quoteId} AND order_id = ${orderId} FOR UPDATE`;
   if (!quotes.length) return { error: "quote_not_found", status: 404 };
   const order = orders[0], quote = quotes[0];
   if (quote.status === "ACCEPTED") return { accepted: true, replayed: true };
+  // M04 quotes price exactly one unit of one variant. Fail closed for mixed or multi-quantity orders.
+  const lines = await tx`SELECT variant_id, quantity FROM order_items WHERE order_id = ${orderId}`;
+  if (lines.length !== 1 || Number(lines[0].quantity) !== 1 ||
+      Number(lines[0].variant_id) !== Number(quote.variant_id))
+    return { error: "heavy_quote_order_coverage_required", status: 409 };
   if (quote.status !== "DRAFT" || new Date(quote.expires_at).getTime() <= Date.now())
     return { error: "quote_unavailable", status: 409 };
   if (!["PENDING_CONFIRMATION", "CONFIRMED"].includes(order.status) || String(order.currency) !== String(quote.currency))
