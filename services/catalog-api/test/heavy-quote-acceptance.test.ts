@@ -5,12 +5,13 @@ const order = { id: 1, public_token: "token", status: "PENDING_CONFIRMATION",
   currency: "HNL", subtotal_minor: 10000, discount_total_minor: 1000, tax_total_minor: 1350 };
 const quote = { id: 7, variant_id: 3, status: "DRAFT", currency: "HNL", shipping_minor: 2000,
   expires_at: "2099-01-01T00:00:00Z" };
-function mockTx(options: { order?: any; quote?: any; checkout?: boolean; fulfillment?: boolean; other?: boolean; lines?: any[] } = {}) {
+function mockTx(options: { order?: any; quote?: any; checkout?: boolean; fulfillment?: boolean; other?: boolean; lines?: any[]; snapshots?: any[] } = {}) {
   const writes: string[] = [];
   const tx = async (parts: TemplateStringsArray) => {
     const sql = parts.join("?").replace(/\s+/g, " ");
     if (sql.startsWith("SELECT id, public_token")) return options.order === null ? [] : [options.order ?? order];
     if (sql.startsWith("SELECT id, variant_id, status, currency")) return options.quote === null ? [] : [options.quote ?? quote];
+    if (sql.includes("FROM heavy_logistics_quote_lines")) return options.snapshots ?? [];
     if (sql.includes("FROM order_items")) return options.lines ?? [{ variant_id: 3, quantity: 1 }];
     if (sql.includes("FROM checkout_sessions")) return options.checkout ? [{ id: 1 }] : [];
     if (sql.includes("FROM fulfillments")) return options.fulfillment ? [{ id: 1 }] : [];
@@ -62,6 +63,26 @@ test("rejects multiple units or mismatched variants without changing totals", as
   for (const lines of [[{ variant_id: 3, quantity: 2 }], [{ variant_id: 4, quantity: 1 }]]) {
     const { tx, writes } = mockTx({ lines });
     expect((await acceptHeavyQuoteInTx(tx, 1, 7, "token")).error).toBe("heavy_quote_order_coverage_required");
+    expect(writes).toHaveLength(0);
+  }
+});
+
+test("accepts matching multi-line snapshot with exact shipping sum", async () => {
+  const { tx, writes } = mockTx({
+    lines: [{ variant_id: 3, quantity: 2 }, { variant_id: 4, quantity: 1 }],
+    snapshots: [{ variant_id: 3, quantity: 2, shipping_minor: 1500 },
+                { variant_id: 4, quantity: 1, shipping_minor: 500 }]
+  });
+  expect((await acceptHeavyQuoteInTx(tx, 1, 7, "token")).accepted).toBe(true);
+  expect(writes).toHaveLength(2);
+});
+test("rejects stale quantities and tampered consolidated totals", async () => {
+  for (const snapshots of [
+    [{ variant_id: 3, quantity: 1, shipping_minor: 2000 }],
+    [{ variant_id: 3, quantity: 2, shipping_minor: 1999 }]
+  ]) {
+    const { tx, writes } = mockTx({ lines: [{ variant_id: 3, quantity: 2 }], snapshots });
+    expect((await acceptHeavyQuoteInTx(tx, 1, 7, "token")).error).toBeTruthy();
     expect(writes).toHaveLength(0);
   }
 });
