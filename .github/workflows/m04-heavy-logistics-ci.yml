@@ -4,6 +4,9 @@ on:
     paths:
       - 'services/catalog-api/heavy-logistics.ts'
       - 'services/catalog-api/heavy-order-quote.ts'
+      - 'services/catalog-api/heavy-order-quote-repository.ts'
+      - 'services/catalog-api/heavy-order-quote-routes.ts'
+      - 'services/catalog-api/index.ts'
       - 'services/catalog-api/heavy-quote-acceptance.ts'
       - 'services/catalog-api/fulfillment.ts'
       - 'services/catalog-api/heavy-rate-repository.ts'
@@ -21,6 +24,9 @@ on:
     paths:
       - 'services/catalog-api/heavy-logistics.ts'
       - 'services/catalog-api/heavy-order-quote.ts'
+      - 'services/catalog-api/heavy-order-quote-repository.ts'
+      - 'services/catalog-api/heavy-order-quote-routes.ts'
+      - 'services/catalog-api/index.ts'
       - 'services/catalog-api/heavy-quote-acceptance.ts'
       - 'services/catalog-api/fulfillment.ts'
       - 'services/catalog-api/heavy-rate-repository.ts'
