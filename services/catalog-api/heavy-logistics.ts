@@ -8,7 +8,7 @@ export function calculateHeavyQuote(parcel: ParcelDimensions, rate: HeavyRate | 
     throw new RangeError("invalid_parcel_dimensions");
   if (!rate) return { quoteRequired: true, reason: "rate_not_configured" };
   if (![rate.baseMinor, rate.includedGrams, rate.additionalMinorPerKg, rate.volumetricDivisor].every(valid) ||
-      rate.volumetricDivisor === 0 || rate.currency !== "HNL")
+      rate.volumetricDivisor === 0 || (rate.maxBillableGrams != null && (!valid(rate.maxBillableGrams) || rate.maxBillableGrams === 0)) || rate.currency !== "HNL")
     throw new RangeError("invalid_rate");
   const volumetricGrams = Math.ceil(parcel.lengthCm * parcel.widthCm * parcel.heightCm * 1000 / rate.volumetricDivisor);
   if (!Number.isSafeInteger(volumetricGrams)) throw new RangeError("parcel_too_large");
