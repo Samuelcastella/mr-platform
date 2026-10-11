@@ -1,23 +1,23 @@
-# Catálogo maestro de skills — MR עדולם
+# Catálogo maestro de habilidades — MR עדולם
 
-Estado: inventario inicial de habilidades identificadas en conversaciones anteriores. **No equivale a instalación de todas las skills**. Cada una requiere recuperar su SKILL.md original, validar dependencias y versionado antes de activarse.
+Reconstrucción operativa a partir de contexto histórico recuperado el 2026-10-11. Los textos de las skills marcadas como reconstruidas **no son copias verificadas de los documentos originales**. Versión 0.1.0 de reconstrucción, pendiente de cotejo con originales; no confundir con versiones históricas declaradas.
 
-| Skill | Identificación | Estado |
+| Identificador | Habilidad | Estado |
 |---|---|---|
-| SKILL-01 | Curaduría, negocio, inventario, tendencias, narrativa y métricas | Especificación original por recuperar |
-| SKILL-02 a SKILL-06 | Conjunto inicial de habilidades (nombres y textos completos por recuperar) | Pendientes de identificación documental |
-| SKILL-07 | Triangulación internacional Honduras–EE. UU.–China y otros orígenes | Especificación original por recuperar |
-| Negociación | Proveedores, compras y acuerdos | Numeración y especificación por recuperar |
-| UI Design | Sistema de interfaz | Numeración y especificación por recuperar |
-| UX Design | Experiencia de usuario | Numeración y especificación por recuperar |
-| Web Design | Diseño web responsive, accesible y escalable | Documento previo por recuperar |
-| SKILL-11 | C++ Tricks & Techniques | Especificación original por recuperar |
-| SKILL-12 | MR עדולם Web Architecture & Design | Paquete v1.0.0 previo por recuperar y validar |
-| SKILL-LOM-001 | Auditoría, investigación y trazabilidad | v1.0.0 incorporada en este PR |
+| 01 | [Criterio Curatorial](skill-01/SKILL.md) | Borrador reconstruido; original pendiente |
+| 02 | [Fundamentos de Negocio](skill-02/SKILL.md) | Borrador reconstruido; original pendiente |
+| 03 | [Gestión de Inventario](skill-03/SKILL.md) | Borrador reconstruido; original pendiente |
+| 04 | [Análisis de Tendencias](skill-04/SKILL.md) | Borrador reconstruido; original pendiente |
+| 05 | [Storytelling de Marca](skill-05/SKILL.md) | Borrador reconstruido; original pendiente |
+| 06 | [Métricas y Toma de Decisiones](skill-06/SKILL.md) | Borrador reconstruido; original pendiente |
+| 07 | [Triangulación Internacional](skill-07/SKILL.md) | Borrador reconstruido; original pendiente |
+| 08 | [Negociación](skill-08/SKILL.md) | Borrador reconstruido; original pendiente |
+| 09 | [UI Design](skill-09/SKILL.md) | Borrador reconstruido; original pendiente |
+| 10 | [UX Design](skill-10/SKILL.md) | Borrador reconstruido; original pendiente |
+| 11 | [C++ Tricks & Techniques](skill-11/SKILL.md) | Borrador reconstruido; original pendiente |
+| 12 | [Web Architecture & Design](skill-12/SKILL.md) | Borrador reconstruido; original pendiente |
+| web-design | [Web Design](web-design/SKILL.md) | Borrador reconstruido; original pendiente |
+| LOM-001 | [Auditoría LOM](skill-lom-001/SKILL.md) | v1.0.0 incorporada en PR |
 
-## Reglas de integración
-- Fuente canónica: `skills/<skill-id>/SKILL.md`; mantener `VERSION` y `CHANGELOG.md`.
-- No asignar números definitivos ni inventar instrucciones ausentes.
-- Recuperar artefactos originales, contrastar con arquitectura vigente y validar cada skill antes de declararla instalada.
-- `AGENTS.md` y `CLAUDE.md` apuntan a este índice; no duplicar las especificaciones.
-- Proteger secretos, datos personales y producción. Integrar por PR y pruebas.
+## Política
+No confundir reconstrucción con recuperación literal; cotejar documentos originales antes de promover a estable. Cada skill deberá incorporar VERSION, CHANGELOG, ejemplos y pruebas verificables antes de declararse instalada. AGENTS.md y CLAUDE.md enlazan a este índice.
