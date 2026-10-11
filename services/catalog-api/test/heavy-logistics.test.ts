@@ -17,3 +17,11 @@ test("rejects invalid measurements", () => {
 test("rejects invalid rates", () => {
   expect(() => calculateHeavyQuote(parcel, { ...rate, volumetricDivisor: 0 })).toThrow("invalid_rate");
 });
+
+test("rejects invalid carrier maximum weight", () => {
+  expect(() => calculateHeavyQuote(parcel, { ...rate, maxBillableGrams: -1 })).toThrow("invalid_rate");
+  expect(() => calculateHeavyQuote(parcel, { ...rate, maxBillableGrams: 0 })).toThrow("invalid_rate");
+});
+test("rejects monetary overflow", () => {
+  expect(() => calculateHeavyQuote(parcel, { ...rate, baseMinor: Number.MAX_SAFE_INTEGER })).toThrow("quote_overflow");
+});
