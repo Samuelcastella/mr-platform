@@ -10,7 +10,7 @@ function mockTx(options: { order?: any; quote?: any; checkout?: boolean; fulfill
   const tx = async (parts: TemplateStringsArray) => {
     const sql = parts.join("?").replace(/\s+/g, " ");
     if (sql.startsWith("SELECT id, public_token")) return options.order === null ? [] : [options.order ?? order];
-    if (sql.startsWith("SELECT id, status, currency")) return options.quote === null ? [] : [options.quote ?? quote];
+    if (sql.startsWith("SELECT id, variant_id, status, currency")) return options.quote === null ? [] : [options.quote ?? quote];
     if (sql.includes("FROM order_items")) return options.lines ?? [{ variant_id: 3, quantity: 1 }];
     if (sql.includes("FROM checkout_sessions")) return options.checkout ? [{ id: 1 }] : [];
     if (sql.includes("FROM fulfillments")) return options.fulfillment ? [{ id: 1 }] : [];
