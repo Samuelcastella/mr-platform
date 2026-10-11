@@ -9,6 +9,7 @@ on:
       - 'services/catalog-api/test/heavy-rate-repository.test.ts'
       - 'services/catalog-api/test/heavy-logistics.test.ts'
       - 'db/migrations/016_heavy_logistics.sql'
+      - 'db/migrations/017_heavy_logistics_quotes.sql'
       - '.github/workflows/m04-heavy-logistics-ci.yml'
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - 'services/catalog-api/heavy-logistics.ts'
       - 'services/catalog-api/test/heavy-logistics.test.ts'
       - 'db/migrations/016_heavy_logistics.sql'
+      - 'db/migrations/017_heavy_logistics_quotes.sql'
       - '.github/workflows/m04-heavy-logistics-ci.yml'
 jobs:
   unit:
@@ -48,11 +50,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Create minimal referenced product schema
         run: |
-          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "CREATE TABLE product_variants(id BIGINT PRIMARY KEY);"
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "CREATE TABLE product_variants(id BIGINT PRIMARY KEY); CREATE TABLE orders(id BIGINT PRIMARY KEY);"
       - name: Apply migration twice to verify idempotency
         run: |
           psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f db/migrations/016_heavy_logistics.sql
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f db/migrations/017_heavy_logistics_quotes.sql
           psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f db/migrations/016_heavy_logistics.sql
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f db/migrations/017_heavy_logistics_quotes.sql
       - name: Verify schema
         run: |
           psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO product_variants(id) VALUES (1); INSERT INTO product_shipping_profiles(variant_id,weight_grams,length_cm,width_cm,height_cm) VALUES (1,10000,50,40,30);"
