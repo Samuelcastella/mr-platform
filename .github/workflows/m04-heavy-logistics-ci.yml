@@ -4,20 +4,22 @@ on:
     paths:
       - 'services/catalog-api/heavy-logistics.ts'
       - 'services/catalog-api/heavy-rate-repository.ts'
-      - 'services/catalog-api/test/heavy-rate-repository.test.ts'
-      - 'services/catalog-api/heavy-rate-repository.ts'
-      - 'services/catalog-api/test/heavy-rate-repository.test.ts'
       - 'services/catalog-api/test/heavy-logistics.test.ts'
+      - 'services/catalog-api/test/heavy-rate-repository.test.ts'
       - 'db/migrations/016_heavy_logistics.sql'
       - 'db/migrations/017_heavy_logistics_quotes.sql'
+      - 'db/migrations/018_installation_jobs.sql'
       - '.github/workflows/m04-heavy-logistics-ci.yml'
   push:
     branches: [main]
     paths:
       - 'services/catalog-api/heavy-logistics.ts'
+      - 'services/catalog-api/heavy-rate-repository.ts'
       - 'services/catalog-api/test/heavy-logistics.test.ts'
+      - 'services/catalog-api/test/heavy-rate-repository.test.ts'
       - 'db/migrations/016_heavy_logistics.sql'
       - 'db/migrations/017_heavy_logistics_quotes.sql'
+      - 'db/migrations/018_installation_jobs.sql'
       - '.github/workflows/m04-heavy-logistics-ci.yml'
 jobs:
   unit:
@@ -48,15 +50,16 @@ jobs:
       PGPASSWORD: test
     steps:
       - uses: actions/checkout@v4
-      - name: Create minimal referenced product schema
+      - name: Create minimal referenced tables
         run: |
-          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "CREATE TABLE product_variants(id BIGINT PRIMARY KEY); CREATE TABLE orders(id BIGINT PRIMARY KEY);"
-      - name: Apply migration twice to verify idempotency
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "CREATE TABLE product_variants(id BIGINT PRIMARY KEY); CREATE TABLE orders(id BIGINT PRIMARY KEY); CREATE TABLE fulfillments(id BIGINT PRIMARY KEY);"
+      - name: Apply migrations twice
         run: |
-          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f db/migrations/016_heavy_logistics.sql
-          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f db/migrations/017_heavy_logistics_quotes.sql
-          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f db/migrations/016_heavy_logistics.sql
-          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f db/migrations/017_heavy_logistics_quotes.sql
-      - name: Verify schema
+          for pass in 1 2; do
+            for version in 016_heavy_logistics 017_heavy_logistics_quotes 018_installation_jobs; do
+              psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f "db/migrations/${version}.sql"
+            done
+          done
+      - name: Verify profile and installation schema
         run: |
-          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO product_variants(id) VALUES (1); INSERT INTO product_shipping_profiles(variant_id,weight_grams,length_cm,width_cm,height_cm) VALUES (1,10000,50,40,30);"
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO product_variants(id) VALUES (1); INSERT INTO orders(id) VALUES (1); INSERT INTO product_shipping_profiles(variant_id,weight_grams,length_cm,width_cm,height_cm) VALUES (1,10000,50,40,30); INSERT INTO installation_jobs(order_id,idempotency_key,service_code) VALUES (1,'ci-install-1','BASIC_INSTALL');"
