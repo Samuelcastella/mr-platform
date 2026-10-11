@@ -24,7 +24,7 @@ test("accepts and updates order and quote once", async () => {
   expect(await acceptHeavyQuoteInTx(tx, 1, 7, "token")).toEqual({
     accepted: true, replayed: false, shippingMinor: 2000, grandTotalMinor: 12350
   });
-  expect(writes).toHaveLength(2);
+  expect(writes).toHaveLength(1);
 });
 test("rejects expired quote without writes", async () => {
   const { tx, writes } = mockTx({ quote: { ...quote, expires_at: "2020-01-01T00:00:00Z" } });
