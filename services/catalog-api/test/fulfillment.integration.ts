@@ -78,6 +78,14 @@ async function createCheckout(key: string, order: any, method: string) {
   });
 }
 
+async function confirmManualPayment(checkout: any) {
+  return api("/v1/internal/payments/" + checkout.payment.id + "/status", {
+    method: "PATCH",
+    headers: { "content-type": "application/json", "x-internal-key": internalKey },
+    body: JSON.stringify({ status: "PAID", reason: "ci_verified_payment" })
+  });
+}
+
 async function transitionFulfillment(id: number, status: string, extra: any = {}) {
   return api("/v1/internal/fulfillments/" + id + "/status", {
     method: "PATCH",
@@ -198,7 +206,17 @@ ok(publicTracking.response.status === 200 && publicTracking.body.fulfillment?.ev
 const deliveryCheckout = await createCheckout("ci-fulfillment-checkout-delivery", deliveryOrder, "CASH");
 ok(deliveryCheckout.response.status === 201 && deliveryCheckout.body.checkout?.amountMinor === 36000, "checkout usa total con envío");
 
-for (const status of ["PREPARING", "READY", "DISPATCHED", "OUT_FOR_DELIVERY"]) {
+for (const status of ["PREPARING", "READY"]) {
+  const step = await transitionFulfillment(deliveryFulfillment.id, status);
+  ok(step.response.status === 200 && step.body.fulfillment?.status === status, "fulfillment transiciona a " + status);
+}
+const unpaidDispatch = await transitionFulfillment(deliveryFulfillment.id, "DISPATCHED");
+ok(unpaidDispatch.response.status === 409 && unpaidDispatch.body.error === "dispatch_payment_required", "no despacha prepago sin confirmación");
+const paidDelivery = await confirmManualPayment(deliveryCheckout.body.checkout);
+ok(paidDelivery.response.status === 200 && paidDelivery.body.payment?.status === "PAID", "pago manual confirmado antes de despacho");
+const duplicateConfirmation = await confirmManualPayment(deliveryCheckout.body.checkout);
+ok(duplicateConfirmation.response.status === 409 && duplicateConfirmation.body.error === "invalid_transition", "confirmación manual repetida no duplica pago");
+for (const status of ["DISPATCHED", "OUT_FOR_DELIVERY"]) {
   const step = await transitionFulfillment(deliveryFulfillment.id, status);
   ok(step.response.status === 200 && step.body.fulfillment?.status === status, "fulfillment transiciona a " + status);
 }
@@ -263,7 +281,9 @@ const returnOrderResp = await createOrder("ci-fulfillment-order-return", returnV
 const returnOrder = returnOrderResp.body.order;
 const returnFulfillmentResp = await createFulfillment("ci-fulfillment-return-001", returnOrder);
 const returnFulfillment = returnFulfillmentResp.body.fulfillment;
-await createCheckout("ci-fulfillment-checkout-return", returnOrder, "CASH");
+const returnCheckout = await createCheckout("ci-fulfillment-checkout-return", returnOrder, "CASH");
+const paidReturn = await confirmManualPayment(returnCheckout.body.checkout);
+ok(paidReturn.response.status === 200, "pago de pedido de devolución confirmado");
 for (const status of ["PREPARING", "READY", "DISPATCHED", "FAILED", "RETURNING", "RETURNED"]) {
   const step = await transitionFulfillment(returnFulfillment.id, status);
   ok(step.response.status === 200, "ruta de retorno acepta " + status);
