@@ -534,12 +534,14 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
         Number(order.tax_total_minor) +
         quote.shippingMinor;
 
-      await tx`
-        UPDATE orders
-        SET shipping_total_minor = ${quote.shippingMinor},
-            grand_total_minor = ${grandTotalMinor},
-            updated_at = NOW()
-        WHERE id = ${orderId}`;
+      if (heavyQuoteId === null) {
+        await tx`
+          UPDATE orders
+          SET shipping_total_minor = ${quote.shippingMinor},
+              grand_total_minor = ${grandTotalMinor},
+              updated_at = NOW()
+          WHERE id = ${orderId}`;
+      }
 
       const token = crypto.randomUUID();
       const tracking = trackingReference();
