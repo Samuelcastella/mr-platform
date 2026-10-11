@@ -645,6 +645,21 @@ async function transitionFulfillmentInTx(
     };
   }
 
+  // Never dispatch an unpaid prepaid order. COD is permitted only with a pending collection.
+  if (target === "DISPATCHED") {
+    const payments = await tx`
+      SELECT p.method, p.status, c.status AS collection_status
+      FROM payments p
+      LEFT JOIN cod_collections c ON c.payment_id = p.id AND c.fulfillment_id = ${id}
+      WHERE p.order_id = ${Number(f.order_id)}
+      FOR UPDATE OF p`;
+    const authorized = payments.some((p: any) =>
+      p.status === "PAID" ||
+      (p.method === "CASH_ON_DELIVERY" && p.status === "PENDING" && p.collection_status === "PENDING")
+    );
+    if (!authorized) return { error: "dispatch_payment_required", status: 409 };
+  }
+
   if (orderTarget) {
     const orderResult: any = await transitionOrderInTx(
       tx,
