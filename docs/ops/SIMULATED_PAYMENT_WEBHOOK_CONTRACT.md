@@ -59,6 +59,7 @@ Unknown/non-simulated payment identifiers return HTTP 404 without persisting a s
 - Finance approval for `REQUEST_REFUND` requires a **different human user from the initial reviewer**; a manager lacks the refund permission by default.
 - `payment_webhook_exception_review_actions` records an immutable-style action history with globally unique idempotency keys. The audit event `payment.webhook_exception_reviewed` is written **in the same transaction**.
 - `payment_exception_refund_requests` stores `APPROVED_NOT_SUBMITTED` requests with a unique `payment_id`, source exception, captured provider reference, captured amount/currency and approver. **There is no API request to any payment provider and no update to `payments.status`**. Multiple signed event IDs for the same payment cannot generate two approved refund requests.
+- `GET /v1/internal/payments/refund-requests` exposes the latest 100 approved-but-unsubmitted refund requests and capture evidence. It requires a **human staff session** with `payments.refund`; a manager without this permission and any legacy machine token are rejected. This read-only view is not a refund execution endpoint.
 - `REQUEST_REVALIDATION` does **not** reopen an order or reservation and does not create Kardex movements; separate stock/payment revalidation is necessary.
 - Duplicate identical authorized requests return `replayed: true` without a second audit; changed request payloads using an existing idempotency key return `409 idempotency_conflict`.
 
