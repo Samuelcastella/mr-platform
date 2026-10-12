@@ -1,4 +1,4 @@
-import { writeAuditEvent } from "./auth";
+import { authorizeInternal, writeAuditEvent } from "./auth";
 
 // Provider-neutral sandbox receiver. Not homologated with an external gateway.
 type DB = any;
@@ -41,6 +41,27 @@ export async function ensureSimulatedWebhookSchema(db: DB) {
   )`;
 }
 export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
+  if (url.pathname === "/v1/internal/payments/webhook-exceptions") {
+    if (req.method !== "GET") return reply({ error: "method_not_allowed" }, 405);
+    const auth = await authorizeInternal(req, db, "payments.read");
+    if (!auth.ok) return auth.response;
+    const status = url.searchParams.get("status") || "PENDING_REVIEW";
+    if (!["PENDING_REVIEW", "ALL"].includes(status))
+      return reply({ error: "invalid_status" }, 400);
+    const filter = status === "ALL" ? null : status;
+    const rows = await db`
+      SELECT e.id, e.event_id, e.payment_id, e.order_id, e.code, e.resolution_status,
+             e.created_at, s.provider_reference, s.captured_amount_minor, s.captured_currency,
+             p.amount_minor AS expected_amount_minor, p.currency AS expected_currency,
+             p.status AS payment_status, o.order_number, o.status AS order_status
+      FROM payment_webhook_exceptions e
+      JOIN simulated_payment_events s ON s.event_id = e.event_id
+      JOIN payments p ON p.id = e.payment_id
+      JOIN orders o ON o.id = e.order_id
+      WHERE (${filter}::text IS NULL OR e.resolution_status = ${filter}::text)
+      ORDER BY e.created_at DESC, e.id DESC LIMIT 100`;
+    return reply({ data: rows });
+  }
   if (url.pathname !== "/v1/webhooks/payments/simulated") return null;
   if (req.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
   const secret = Bun.env.SIMULATED_PAYMENT_WEBHOOK_SECRET;
