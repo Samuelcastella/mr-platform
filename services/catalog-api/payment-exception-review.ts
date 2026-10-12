@@ -1,4 +1,5 @@
 import { auditActor, authorizeInternal, writeAuditEvent } from "./auth";
+import { loadRefundExecutionPreflight } from "./refund-execution-preflight";
 
 type DB = any;
 
@@ -46,6 +47,26 @@ export async function ensurePaymentExceptionReviewSchema(db: DB) {
 }
 
 export async function handlePaymentExceptionReview(req: Request, url: URL, db: DB) {
+  const preflightRoute = url.pathname.match(/^\/v1\/internal\/payments\/refund-requests\/(\d+)\/preflight$/);
+  if (preflightRoute) {
+    if (req.method !== "GET") return reply({ error: "method_not_allowed" }, 405);
+    const id = Number(preflightRoute[1]);
+    if (!Number.isSafeInteger(id) || id < 1) return reply({ error: "invalid_refund_request" }, 400);
+    // Authenticate before exposing any financial details; scope permission to order location.
+    const scope = await db`
+      SELECT o.location_id FROM payment_exception_refund_requests r
+      JOIN payment_webhook_exceptions e ON e.id = r.exception_id
+      JOIN orders o ON o.id = e.order_id WHERE r.id = ${id}`;
+    if (!scope.length) return reply({ error: "not_found" }, 404);
+    const auth = await authorizeInternal(req, db, "payments.refund", {
+      locationId: Number(scope[0].location_id)
+    });
+    if (!auth.ok) return auth.response;
+    if (auth.actor.type !== "USER") return reply({ error: "staff_approval_required" }, 403);
+    const preflight = await loadRefundExecutionPreflight(db, id);
+    if (!preflight) return reply({ error: "not_found" }, 404);
+    return reply({ preflight });
+  }
   if (url.pathname === "/v1/internal/payments/refund-requests") {
     if (req.method !== "GET") return reply({ error: "method_not_allowed" }, 405);
     const auth = await authorizeInternal(req, db, "payments.refund");
