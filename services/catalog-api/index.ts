@@ -7,6 +7,7 @@ import { ensureRestockSchema, handleRestock } from "./restock";
 import { ensureOrdersSchema, handleOrders } from "./orders";
 import { ensureCheckoutSchema, handleCheckout } from "./checkout";
 import { ensureSimulatedWebhookSchema, handleSimulatedWebhook } from "./simulated-payment-webhook";
+import { ensurePaymentExceptionReviewSchema, handlePaymentExceptionReview } from "./payment-exception-review";
 import { ensureFulfillmentSchema, handleFulfillment } from "./fulfillment";
 import { ensureAuthSchema, handleAuth } from "./auth";
 import { ensureCustomersSchema, handleCustomers } from "./customers";
@@ -172,6 +173,7 @@ await ensureCheckoutSchema(db);
 await ensureSimulatedWebhookSchema(db);
 await ensureFulfillmentSchema(db);
 await ensureAuthSchema(db);
+await ensurePaymentExceptionReviewSchema(db);
 await ensureCustomersSchema(db);
 await ensureProcurementSchema(db);
 await ensureReturnsSchema(db);
@@ -362,6 +364,9 @@ Bun.serve({
 
     const simulatedWebhookResponse = await handleSimulatedWebhook(req, url, db);
     if (simulatedWebhookResponse) return simulatedWebhookResponse;
+
+    const exceptionReviewResponse = await handlePaymentExceptionReview(req, url, db);
+    if (exceptionReviewResponse) return exceptionReviewResponse;
 
     const checkoutResponse = await handleCheckout(req, url, db, clean);
     if (checkoutResponse) return checkoutResponse;
