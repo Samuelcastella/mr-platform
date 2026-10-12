@@ -1,20 +1,10 @@
 import { authorizeInternal, writeAuditEvent } from "./auth";
+import { createPaymentGatewayAdapter } from "./payment-gateway-adapter";
+export { signSimulatedWebhook } from "./payment-gateway-adapter";
 
 // Provider-neutral sandbox receiver. Not homologated with an external gateway.
 type DB = any;
 const reply = (body: unknown, status = 200) => Response.json(body, { status });
-const encoder = new TextEncoder();
-export async function signSimulatedWebhook(secret: string, raw: string) {
-  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(raw));
-  return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
-function constantTimeHexEqual(a: string, b: string) {
-  if (!/^[0-9a-f]{64}$/i.test(a) || !/^[0-9a-f]{64}$/i.test(b)) return false;
-  let difference = 0;
-  for (let i = 0; i < 64; i++) difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return difference === 0;
-}
 export async function ensureSimulatedWebhookSchema(db: DB) {
   await db`CREATE TABLE IF NOT EXISTS simulated_payment_events (
     event_id TEXT PRIMARY KEY,
@@ -66,21 +56,24 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
   if (req.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
   const secret = Bun.env.SIMULATED_PAYMENT_WEBHOOK_SECRET;
   if (!secret || secret.length < 32) return reply({ error: "webhook_not_configured" }, 503);
-  const raw = await req.text();
-  if (raw.length > 16384) return reply({ error: "payload_too_large" }, 413);
-  const signature = req.headers.get("x-simulated-signature") || "";
-  const expected = await signSimulatedWebhook(secret, raw);
-  if (!constantTimeHexEqual(signature, expected)) return reply({ error: "invalid_signature" }, 401);
-  let event: any;
-  try { event = JSON.parse(raw); } catch { return reply({ error: "invalid_json" }, 400); }
-  if (!event || typeof event.eventId !== "string" || !/^[a-zA-Z0-9_-]{8,120}$/.test(event.eventId)
-      || !Number.isSafeInteger(event.paymentId) || event.paymentId < 1
-      || !Number.isSafeInteger(event.amountMinor) || event.amountMinor < 0
-      || typeof event.currency !== "string" || !/^[A-Z]{3}$/.test(event.currency)
-      || typeof event.providerReference !== "string"
-      || !/^[A-Za-z0-9_.:-]{8,160}$/.test(event.providerReference)
-      || event.type !== "payment.succeeded") return reply({ error: "invalid_event" }, 400);
-  const hash = new Bun.CryptoHasher("sha256").update(raw).digest("hex");
+  // Verify raw UTF-8 bytes before parsing; never authenticate re-serialized JSON.
+  const rawBytes = new Uint8Array(await req.arrayBuffer());
+  if (rawBytes.byteLength > 16384) return reply({ error: "payload_too_large" }, 413);
+  const gateway = createPaymentGatewayAdapter("SIMULATED", secret);
+  if (!(await gateway.verifyWebhookSignature(req.headers, rawBytes)))
+    return reply({ error: "invalid_signature" }, 401);
+  const normalized = gateway.parseWebhookEvent(rawBytes);
+  if (!normalized || normalized.kind !== "PAYMENT_CAPTURED" ||
+      !Number.isSafeInteger(Number(normalized.paymentReference)))
+    return reply({ error: "invalid_event" }, 400);
+  const event = {
+    eventId: normalized.eventId,
+    paymentId: Number(normalized.paymentReference),
+    providerReference: normalized.providerEventId!,
+    amountMinor: normalized.amountMinor,
+    currency: normalized.currency
+  };
+  const hash = new Bun.CryptoHasher("sha256").update(rawBytes).digest("hex");
   const result = await db.begin(async (tx: DB) => {
     // Lock the payment/order BEFORE inserting a referencing event.
     // The FK's KEY SHARE lock acquired by INSERT otherwise causes lock upgrade
