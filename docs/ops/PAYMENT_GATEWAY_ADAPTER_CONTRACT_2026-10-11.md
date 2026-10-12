@@ -8,10 +8,11 @@
 
 - `verifyWebhookSignature(headers, rawBody)` authenticates **original raw bytes**, not re-serialized JSON.
 - `parseWebhookEvent(rawBody)` normalizes signed callbacks to `PAYMENT_CAPTURED`, `REFUND_CONFIRMED` or `REFUND_FAILED` events (currently SIMULATED understands only `payment.succeeded`).
+- `executeVoid(request)` is a **different same-day reversal**, not a refund; it remains disabled until a dedicated authorization and provider sandbox contract exist.
 - `executeRefund(request)` is a **financial network side effect** reserved for a later approved-refund worker. It must receive `refundRequestId`, `paymentId`, a verified capture reference, amount **in integer minor units**, currency and a stable idempotency key.
 - `getRefundStatus(request)` reconciles UNKNOWN/ACCEPTED responses after timeouts before any retries.
 
-`SimulatedPaymentGatewayAdapter` uses HMAC-SHA256 with `x-simulated-signature` and `SIMULATED_PAYMENT_WEBHOOK_SECRET`, **only for the simulated endpoint**. Both `executeRefund` and `getRefundStatus` fail closed. The external `PIXELPAY` and `BAC_CYBERSOURCE` factories also fail closed until approved implementations are available.
+`SimulatedPaymentGatewayAdapter` uses HMAC-SHA256 with `x-simulated-signature` and `SIMULATED_PAYMENT_WEBHOOK_SECRET`, **only for the simulated endpoint**. All three financial methods (`executeVoid`, `executeRefund`, `getRefundStatus`) fail closed. The external `PIXELPAY` and `BAC_CYBERSOURCE` factories also fail closed until approved implementations are available.
 
 The existing `POST /v1/webhooks/payments/simulated` now invokes the adapter's verification and normalization methods before its PostgreSQL transaction. The existing exception-approval pipeline persists `payment_exception_refund_requests.status='APPROVED_NOT_SUBMITTED'`, without any gateway call.
 
@@ -48,6 +49,17 @@ Official docs: https://docs.pixelpay.com/ and https://docs.pixelpay.com/page/sdk
 - Docs provide SDK, API, Sandbox, payment-hash verification (`verifyPaymentHash`), and `doVoid` with a SHA-512 cancellation signature based on merchant user, order ID and secret. **This is not evidence that its callback uses the same HMAC as our simulator.**
 - The public material reviewed does **not establish** an unconditional standalone refund API matching our proposed `executeRefund` contract. Confirm separately whether a settled refund (as opposed to a same-day void) is supported, its API/status semantics, permitted timing, reversals, partial refund rules and account eligibility.
 - Do not label an auth hold, void or approved refund request as money refunded. Confirm signature format, hosted-payment callback, sandbox credential provisioning, supported currencies and settlement report with the provider.
+
+## PixelPay legacy security primitives — implemented, not connected to payments
+
+`services/catalog-api/pixelpay-legacy-security.ts` now includes:
+- `verifyPixelPayLegacyPaymentHash`: compares the documented SDK legacy `MD5(order_id|key_id|secret_key)` hash against a supplied `payment_hash`, without exposing the secret. This weak/legacy hash is **only a response-integrity check**, not a trusted webhook verifier and never sufficient to mark a payment PAID. A fresh backend transaction-status check plus amount, currency, transaction UUID and merchant reconciliation is still required.
+- `buildPixelPayLegacyVoidAuthorization`: generates `auth_user = SHA512(authorized_email)` and `void_signature = SHA512(authorized_email|order_id|secret_key)` for the documented same-day void protocol. **It sends no HTTP request, voids no funds, and cannot execute settled refunds.**
+- `pixelPayIntegrationReadiness`: explicitly reports payment acceptance and refund execution disabled, regardless of presence of provisional credentials.
+
+Tests use independently calculated MD5/SHA512 known vectors, reject altered hashes, invalid signatures, delimiter injection and short secrets, and assert that the gateway remains disabled. These primitives are not a stand-in for a signed PixelPay callback protocol; no `/v1/webhooks/payments/pixelpay` route exists.
+
+Documentation reference: https://docs.pixelpay.com/page/sdk/use-cases/index?lang=swift&locale=es and https://docs.pixelpay.com/page/sdk/use-cases/index?lang=php&locale=es
 
 ## Acceptance gates
 
