@@ -2,8 +2,8 @@
 const http = require('http'), fs = require('fs'), path = require('path'), zlib = require('zlib');
 const root = __dirname, port = Number(process.env.PORT || 3000);
 const api = (process.env.CATALOG_API_URL || '').split('/').filter((x, i, a) => i < a.length - 1 || x).join('/');
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8', '.webmanifest': 'application/manifest+json' };
-const compressible = new Set(['.html', '.js', '.json', '.svg', '.txt', '.webmanifest']);
+const types = { '.css': 'text/css; charset=utf-8', '.mp4': 'video/mp4', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8', '.webmanifest': 'application/manifest+json' };
+const compressible = new Set(['.css', '.html', '.js', '.json', '.svg', '.txt', '.webmanifest']);
 const root_files = new Set(['/index.html', '/crown3d.js', '/robots.txt', '/manifest.webmanifest']);
 const assetsDir = path.join(root, 'assets') + path.sep;
 // Solo los archivos listados o los que, ya normalizada la ruta, quedan dentro de /assets (evita ..%2f)
@@ -13,7 +13,7 @@ const SEC = {
   'referrer-policy': 'strict-origin-when-cross-origin',
   'x-frame-options': 'SAMEORIGIN',
   'permissions-policy': 'camera=(), microphone=(), geolocation=()',
-  'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
+  'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; media-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
 };
 const cache = new Map(); // ruta -> { buf, gz, br, type, etag }
 

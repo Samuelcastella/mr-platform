@@ -17,6 +17,9 @@ const get = (p, o) => fetch(base + p, o);
     ok(/<title>MR עדולם/.test(html), 'título de marca');
     ok(/<meta name="description"/.test(html) && /og:image/.test(html), 'meta description y Open Graph');
     ok(home.headers.get('x-content-type-options') === 'nosniff' && /default-src 'self'/.test(home.headers.get('content-security-policy') || ''), 'cabeceras de seguridad (nosniff + CSP)');
+    ok((await get('/assets/storefront-design.css?v=2')).headers.get('content-type') === 'text/css; charset=utf-8', 'hoja de estilos servida con MIME CSS bajo nosniff');
+    ok(/media-src 'self' blob:/.test(home.headers.get('content-security-policy') || ''), 'CSP permite video propio y blob para scroll-world');
+    ok((html.match(/<meta name="description"/g)||[]).length === 1, 'una sola meta description');
     ok((await (await get('/health')).text()) === 'ok', '/health → ok');
 
     // el script inline debe parsear (el despliegue anterior lo rompió con comillas sin escapar)
