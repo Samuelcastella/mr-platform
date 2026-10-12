@@ -404,6 +404,25 @@ if (!webhookSecret || webhookSecret.length < 32) {
     "pago tardío concurrente genera excepción idempotente");
   const exceptions = await db`SELECT COUNT(*)::int AS total FROM payment_webhook_exceptions WHERE event_id = 'ci-webhook-late-001'`;
   ok(Number(exceptions[0]?.total) === 1, "pago tardío registra una excepción única");
+  const anonymousQueue = await api("/v1/internal/payments/webhook-exceptions");
+  ok([401, 403].includes(anonymousQueue.response.status),
+    "cola de excepciones exige autenticación interna");
+  const exceptionQueue = await api("/v1/internal/payments/webhook-exceptions", {
+    headers: { "x-internal-key": internalKey }
+  });
+  ok(exceptionQueue.response.status === 200 &&
+     Array.isArray(exceptionQueue.body.data) &&
+     exceptionQueue.body.data.some((item: any) =>
+       item.event_id === "ci-webhook-late-001" &&
+       item.code === "LATE_PAYMENT_EXPIRED_RESERVATION" &&
+       item.provider_reference === "ci-capture-late-001" &&
+       item.resolution_status === "PENDING_REVIEW"),
+    "cola interna autorizada expone excepción de captura tardía y evidencia");
+  const invalidQueue = await api("/v1/internal/payments/webhook-exceptions?status=INVALID", {
+    headers: { "x-internal-key": internalKey }
+  });
+  ok(invalidQueue.response.status === 400 && invalidQueue.body.error === "invalid_status",
+    "cola de excepciones rechaza filtros inválidos");
   const lateAudit = await db`SELECT COUNT(*)::int AS total FROM audit_events WHERE correlation_id = 'ci-webhook-late-001' AND action = 'payment.webhook_exception'`;
   ok(Number(lateAudit[0]?.total) === 1, "webhooks tardíos concurrentes dejan una sola auditoría");
   const latePaymentState = await db`SELECT status FROM payments WHERE id = ${latePaymentId}`;
