@@ -61,6 +61,12 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
       || event.type !== "payment.succeeded") return reply({ error: "invalid_event" }, 400);
   const hash = new Bun.CryptoHasher("sha256").update(raw).digest("hex");
   const result = await db.begin(async (tx: DB) => {
+    // Verify the referenced payment exists before claiming an event with a payment FK.
+    // This read does not lock: the subsequent FOR UPDATE is the authoritative check.
+    const paymentLookup = await tx`
+      SELECT provider FROM payments WHERE id = ${event.paymentId}`;
+    if (!paymentLookup.length || paymentLookup[0].provider !== "SIMULATED")
+      return { error: "payment_not_found", status: 404 };
     // Serialize identical event IDs before locking payment/order rows.
     // ON CONFLICT waits for the winning transaction and avoids a unique-key race.
     const claimed = await tx`
