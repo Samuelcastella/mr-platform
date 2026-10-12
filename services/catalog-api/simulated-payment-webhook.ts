@@ -20,9 +20,16 @@ export async function ensureSimulatedWebhookSchema(db: DB) {
     event_id TEXT PRIMARY KEY,
     payment_id BIGINT NOT NULL REFERENCES payments(id),
     payload_hash TEXT NOT NULL,
+    provider_reference TEXT,
+    captured_amount_minor BIGINT,
+    captured_currency CHAR(3),
     outcome TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  // Existing sandbox environments may have the earlier event table without capture evidence.
+  await db`ALTER TABLE simulated_payment_events ADD COLUMN IF NOT EXISTS provider_reference TEXT`;
+  await db`ALTER TABLE simulated_payment_events ADD COLUMN IF NOT EXISTS captured_amount_minor BIGINT`;
+  await db`ALTER TABLE simulated_payment_events ADD COLUMN IF NOT EXISTS captured_currency CHAR(3)`;
   await db`CREATE TABLE IF NOT EXISTS payment_webhook_exceptions (
     id BIGSERIAL PRIMARY KEY,
     event_id TEXT NOT NULL UNIQUE REFERENCES simulated_payment_events(event_id),
@@ -47,21 +54,28 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
   try { event = JSON.parse(raw); } catch { return reply({ error: "invalid_json" }, 400); }
   if (!event || typeof event.eventId !== "string" || !/^[a-zA-Z0-9_-]{8,120}$/.test(event.eventId)
       || !Number.isSafeInteger(event.paymentId) || event.paymentId < 1
+      || !Number.isSafeInteger(event.amountMinor) || event.amountMinor < 0
+      || typeof event.currency !== "string" || !/^[A-Z]{3}$/.test(event.currency)
+      || typeof event.providerReference !== "string"
+      || !/^[A-Za-z0-9_.:-]{8,160}$/.test(event.providerReference)
       || event.type !== "payment.succeeded") return reply({ error: "invalid_event" }, 400);
   const hash = new Bun.CryptoHasher("sha256").update(raw).digest("hex");
   const result = await db.begin(async (tx: DB) => {
     // Serialize identical event IDs before locking payment/order rows.
     // ON CONFLICT waits for the winning transaction and avoids a unique-key race.
     const claimed = await tx`
-      INSERT INTO simulated_payment_events(event_id, payment_id, payload_hash, outcome)
-      VALUES(${event.eventId}, ${event.paymentId}, ${hash}, 'PROCESSING')
+      INSERT INTO simulated_payment_events(
+        event_id, payment_id, payload_hash, outcome, provider_reference, captured_amount_minor, captured_currency
+      )
+      VALUES(${event.eventId}, ${event.paymentId}, ${hash}, 'PROCESSING',
+             ${event.providerReference}, ${event.amountMinor}, ${event.currency})
       ON CONFLICT(event_id) DO NOTHING RETURNING event_id`;
     const prior = claimed.length ? [] : await tx`SELECT payload_hash, outcome FROM simulated_payment_events WHERE event_id = ${event.eventId}`;
     if (prior.length) return prior[0].payload_hash === hash
       ? { replayed: true, outcome: prior[0].outcome }
       : { error: "event_id_conflict", status: 409 };
     const payments = await tx`
-      SELECT p.id, p.order_id, p.status, p.provider, o.status AS order_status
+      SELECT p.id, p.order_id, p.status, p.provider, p.amount_minor, p.currency, o.status AS order_status
       FROM payments p JOIN orders o ON o.id = p.order_id
       WHERE p.id = ${event.paymentId} FOR UPDATE OF p, o`;
     if (!payments.length || payments[0].provider !== "SIMULATED") {
@@ -76,7 +90,10 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
     const eligible = payment.order_status === "CONFIRMED" &&
       reservations.length > 0 && reservations.every((r: any) =>
         r.status === "ACTIVE" && (r.expires_at == null || new Date(r.expires_at).getTime() > Date.now()));
-    const outcome = eligible && payment.status === "PENDING" ? "PAID" :
+    const amountMatches = Number(payment.amount_minor) === event.amountMinor &&
+      String(payment.currency).trim() === event.currency;
+    const outcome = !amountMatches ? "PAYMENT_AMOUNT_MISMATCH" :
+      eligible && payment.status === "PENDING" ? "PAID" :
       payment.status === "PAID" ? "ALREADY_PAID" : "LATE_PAYMENT_EXPIRED_RESERVATION";
     await tx`
       UPDATE simulated_payment_events SET outcome = ${outcome} WHERE event_id = ${event.eventId}`;
@@ -90,18 +107,18 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
         action: "payment.webhook_confirmed", resourceType: "Payment",
         resourceId: event.paymentId, outcome: "SUCCESS",
         correlationId: event.eventId,
-        metadata: { eventId: event.eventId, orderId: Number(payment.order_id), fromStatus: "PENDING", toStatus: "PAID" }
+        metadata: { eventId: event.eventId, orderId: Number(payment.order_id), providerReference: event.providerReference, amountMinor: event.amountMinor, currency: event.currency, fromStatus: "PENDING", toStatus: "PAID" }
       });
-    } else if (outcome === "LATE_PAYMENT_EXPIRED_RESERVATION") {
+    } else if (outcome === "LATE_PAYMENT_EXPIRED_RESERVATION" || outcome === "PAYMENT_AMOUNT_MISMATCH") {
       await tx`
         INSERT INTO payment_webhook_exceptions(event_id, payment_id, order_id, code)
-        VALUES(${event.eventId}, ${event.paymentId}, ${payment.order_id}, 'LATE_PAYMENT_EXPIRED_RESERVATION')`;
+        VALUES(${event.eventId}, ${event.paymentId}, ${payment.order_id}, ${outcome})`;
       await writeAuditEvent(tx, {
         actorType: "SERVICE", actorService: "simulated-payment-webhook",
         action: "payment.webhook_exception", resourceType: "Payment",
         resourceId: event.paymentId, outcome: "SUCCESS",
-        reason: "LATE_PAYMENT_EXPIRED_RESERVATION", correlationId: event.eventId,
-        metadata: { eventId: event.eventId, orderId: Number(payment.order_id), paymentStatus: payment.status, orderStatus: payment.order_status }
+        reason: outcome, correlationId: event.eventId,
+        metadata: { eventId: event.eventId, orderId: Number(payment.order_id), paymentStatus: payment.status, orderStatus: payment.order_status, providerReference: event.providerReference, amountMinor: event.amountMinor, currency: event.currency }
       });
     }
     return { replayed: false, outcome };
