@@ -445,6 +445,156 @@ if (!webhookSecret || webhookSecret.length < 32) {
   ok(lateOrderState[0]?.status === "CANCELLED", "webhook tardío no reactiva venta");
 }
 
+
+// Governed refund requests use human staff sessions, CSRF and dual control.
+// They never execute a refund with the external provider.
+const reviewerPassword = "Manager-" + crypto.randomUUID() + "-Strong9!";
+const approverPassword = "Admin-" + crypto.randomUUID() + "-Strong9!";
+const reviewerHash = await Bun.password.hash(reviewerPassword, { algorithm: "argon2id" });
+const approverHash = await Bun.password.hash(approverPassword, { algorithm: "argon2id" });
+const reviewerRows = await db`
+  INSERT INTO staff_users(email_normalized, display_name, password_hash, status, email_verified_at)
+  VALUES('webhook-reviewer-ci@example.test', 'Webhook Manager CI', ${reviewerHash}, 'ACTIVE', NOW())
+  RETURNING id`;
+const approverRows = await db`
+  INSERT INTO staff_users(email_normalized, display_name, password_hash, status, email_verified_at)
+  VALUES('webhook-approver-ci@example.test', 'Webhook Admin CI', ${approverHash}, 'ACTIVE', NOW())
+  RETURNING id`;
+const managerRole = await db`SELECT id FROM roles WHERE code = 'MANAGER'`;
+const adminRole = await db`SELECT id FROM roles WHERE code = 'ADMIN'`;
+await db`
+  INSERT INTO user_role_assignments(user_id, role_id, scope_type, scope_location_id)
+  VALUES
+    (${Number(reviewerRows[0].id)}, ${Number(managerRole[0].id)}, 'GLOBAL', NULL),
+    (${Number(approverRows[0].id)}, ${Number(adminRole[0].id)}, 'GLOBAL', NULL)`;
+const loginReviewStaff = async (email: string, password: string) => {
+  const login = await api("/v1/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  return {
+    status: login.response.status,
+    cookie: (login.response.headers.get("set-cookie") || "").split(";")[0],
+    csrf: String(login.body.csrfToken || "")
+  };
+};
+const reviewer = await loginReviewStaff("webhook-reviewer-ci@example.test", reviewerPassword);
+const approver = await loginReviewStaff("webhook-approver-ci@example.test", approverPassword);
+ok(reviewer.status === 200 && approver.status === 200 &&
+   reviewer.cookie.startsWith("mrstaff=") && approver.cookie.startsWith("mrstaff="),
+   "gestión de excepciones utiliza dos sesiones humanas");
+const lateExceptionRows = await db`
+  SELECT id FROM payment_webhook_exceptions WHERE event_id = 'ci-webhook-late-001'`;
+ok(lateExceptionRows.length === 1, "excepción tardía identificada para resolución");
+const lateExceptionId = Number(lateExceptionRows[0]?.id);
+const reviewPath = "/v1/internal/payments/webhook-exceptions/" + lateExceptionId + "/review";
+const sendReview = (staff: { cookie: string; csrf: string }, action: string, key: string,
+                    reason: string, includeCsrf = true) =>
+  api(reviewPath, {
+    method: "PATCH",
+    headers: {
+      cookie: staff.cookie, "content-type": "application/json",
+      "idempotency-key": key,
+      ...(includeCsrf ? { "x-csrf-token": staff.csrf } : {})
+    },
+    body: JSON.stringify({ action, reason })
+  });
+const reviewReason = "Revisión del comprobante de pago tardío en conciliación";
+const anonymousReview = await api(reviewPath, {
+  method: "PATCH",
+  headers: { "content-type": "application/json", "idempotency-key": "ci-review-unauthorized" },
+  body: JSON.stringify({ action: "START_REVIEW", reason: reviewReason })
+});
+ok(anonymousReview.response.status === 401, "revisión rechaza solicitudes anónimas");
+const serviceReview = await api(reviewPath, {
+  method: "PATCH",
+  headers: {
+    "content-type": "application/json", "idempotency-key": "ci-review-service",
+    "x-internal-key": internalKey
+  },
+  body: JSON.stringify({ action: "START_REVIEW", reason: reviewReason })
+});
+ok(serviceReview.response.status === 403 && serviceReview.body.error === "staff_approval_required",
+   "token de servicio no sustituye aprobación humana");
+const missingCsrf = await sendReview(reviewer, "START_REVIEW", "ci-review-no-csrf", reviewReason, false);
+ok(missingCsrf.response.status === 403 && missingCsrf.body.error === "csrf_required",
+   "mutación de excepción exige CSRF");
+const [reviewA, reviewB] = await Promise.all([
+  sendReview(reviewer, "START_REVIEW", "ci-review-start-001", reviewReason),
+  sendReview(reviewer, "START_REVIEW", "ci-review-start-001", reviewReason)
+]);
+ok(reviewA.response.status === 200 && reviewB.response.status === 200 &&
+   reviewA.body.status === "IN_REVIEW" && reviewB.body.status === "IN_REVIEW" &&
+   [reviewA.body.replayed, reviewB.body.replayed].filter(Boolean).length === 1,
+   "inicio de revisión concurrente es idempotente");
+const managerRefundAttempt = await sendReview(reviewer, "REQUEST_REFUND", "ci-review-manager-refund",
+  "Solicitar devolución tras comprobar la captura de fondos");
+ok(managerRefundAttempt.response.status === 403, "MANAGER no puede autorizar reembolso");
+const refundReason = "Aprobar solicitud de reembolso por captura de reserva expirada";
+const [refundA, refundB] = await Promise.all([
+  sendReview(approver, "REQUEST_REFUND", "ci-review-refund-001", refundReason),
+  sendReview(approver, "REQUEST_REFUND", "ci-review-refund-001", refundReason)
+]);
+ok(refundA.response.status === 200 && refundB.response.status === 200 &&
+   refundA.body.status === "REFUND_REQUESTED" && refundB.body.status === "REFUND_REQUESTED" &&
+   [refundA.body.replayed, refundB.body.replayed].filter(Boolean).length === 1,
+   "solicitud de reembolso queda pendiente sin duplicarse");
+const changedPayload = await sendReview(approver, "REQUEST_REFUND", "ci-review-refund-001",
+  "Diferente motivo para igual clave de idempotencia de reembolso");
+ok(changedPayload.response.status === 409 && changedPayload.body.error === "idempotency_conflict",
+   "clave de aprobación con distinto motivo genera conflicto");
+const invalidTransition = await sendReview(reviewer, "REQUEST_REVALIDATION", "ci-review-revalidate-after-refund",
+  "Intento de revalidación tras aprobar la solicitud de reembolso");
+ok(invalidTransition.response.status === 409 && invalidTransition.body.error === "invalid_transition",
+   "resolución de reembolso impide transición contradictoria");
+const reviewRows = await db`
+  SELECT resolution_status, reviewed_by_user_id, last_action_by_user_id
+  FROM payment_webhook_exceptions WHERE id = ${lateExceptionId}`;
+ok(reviewRows[0]?.resolution_status === "REFUND_REQUESTED" &&
+   Number(reviewRows[0]?.reviewed_by_user_id) === Number(reviewerRows[0].id) &&
+   Number(reviewRows[0]?.last_action_by_user_id) === Number(approverRows[0].id),
+   "doble control conserva revisor y aprobador distintos");
+const reviewActions = await db`
+  SELECT action FROM payment_webhook_exception_review_actions
+  WHERE exception_id = ${lateExceptionId} ORDER BY id`;
+ok(reviewActions.length === 2 &&
+   reviewActions[0].action === "START_REVIEW" && reviewActions[1].action === "REQUEST_REFUND",
+   "reintentos no duplican acciones de revisión");
+const reviewAudits = await db`
+  SELECT COUNT(*)::int AS total FROM audit_events
+  WHERE action = 'payment.webhook_exception_reviewed'
+    AND resource_id = ${String(lateExceptionId)}`;
+ok(Number(reviewAudits[0]?.total) === 2, "doble control registra exactamente dos auditorías");
+const refundPayment = await db`SELECT status FROM payments WHERE id = ${latePaymentId}`;
+ok(refundPayment[0]?.status === "PENDING", "solicitar reembolso no altera estado de pago");
+const refundSales = await db`
+  SELECT COUNT(*)::int AS total FROM inventory_movements
+  WHERE reference = ${"order:" + lateOrder.id} AND movement_type = 'SALE'`;
+ok(Number(refundSales[0]?.total) === 0, "revisión de reembolso no consume Kardex");
+
+// An ADMIN cannot both review and approve their own refund request.
+const mismatchRows = await db`
+  SELECT id FROM payment_webhook_exceptions WHERE event_id = 'ci-webhook-mismatch-001'`;
+const mismatchExceptionId = Number(mismatchRows[0]?.id);
+const mismatchPath = "/v1/internal/payments/webhook-exceptions/" + mismatchExceptionId + "/review";
+const selfReview = await api(mismatchPath, {
+  method: "PATCH",
+  headers: { cookie: approver.cookie, "x-csrf-token": approver.csrf,
+    "content-type": "application/json", "idempotency-key": "ci-self-review-start" },
+  body: JSON.stringify({ action: "START_REVIEW", reason: "Revisión de discrepancia firmada con importe diferente" })
+});
+ok(selfReview.response.status === 200 && selfReview.body.status === "IN_REVIEW",
+   "administrador puede iniciar revisión");
+const selfRefund = await api(mismatchPath, {
+  method: "PATCH",
+  headers: { cookie: approver.cookie, "x-csrf-token": approver.csrf,
+    "content-type": "application/json", "idempotency-key": "ci-self-refund-approval" },
+  body: JSON.stringify({ action: "REQUEST_REFUND", reason: "Aprobación de reembolso propio prohibida" })
+});
+ok(selfRefund.response.status === 403 && selfRefund.body.error === "separate_refund_approver_required",
+   "revisor no puede aprobar su propio reembolso");
+
 if (failures) {
   console.error(failures + " fallo(s)");
   process.exit(1);
