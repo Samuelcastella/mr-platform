@@ -33,6 +33,21 @@ export type RefundExecutionRequest = Readonly<{
   idempotencyKey: string;
 }>;
 
+/** A same-day authorization reversal, NEVER interchangeable with a settled refund. */
+export type VoidExecutionRequest = Readonly<{
+  paymentId: number;
+  providerPaymentUuid: string;
+  orderId: string;
+  reason: string;
+  idempotencyKey: string;
+}>;
+
+export type VoidExecutionResult = Readonly<{
+  status: "ACCEPTED" | "CONFIRMED" | "REJECTED" | "UNKNOWN";
+  providerVoidReference?: string;
+  providerStatus?: string;
+}>;
+
 export type RefundExecutionResult = Readonly<{
   /** ACCEPTED is not settled; UNKNOWN requires status reconciliation before retry. */
   status: "ACCEPTED" | "CONFIRMED" | "REJECTED" | "UNKNOWN";
@@ -55,6 +70,11 @@ export interface PaymentGatewayAdapter {
   verifyWebhookSignature(headers: Headers, rawBody: Uint8Array): Promise<boolean>;
   /** Validate/normalize only provider-authentic events; null means invalid input. */
   parseWebhookEvent(rawBody: Uint8Array): NormalizedGatewayEvent | null;
+  /**
+   * Same-day void/reversal. Distinct authorization policy, time window and ledger
+   * treatment from a post-settlement refund; never use for REFUND_REQUESTED.
+   */
+  executeVoid(request: VoidExecutionRequest): Promise<VoidExecutionResult>;
   /** Network financial side effect: callable only from a persisted approved-refund worker. */
   executeRefund(request: RefundExecutionRequest): Promise<RefundExecutionResult>;
   /** Required to reconcile uncertainty after network timeouts/unknown outcomes. */
@@ -113,6 +133,10 @@ export class SimulatedPaymentGatewayAdapter implements PaymentGatewayAdapter {
       currency: body.currency,
       providerEventId: body.providerReference
     };
+  }
+
+  async executeVoid(_request: VoidExecutionRequest): Promise<VoidExecutionResult> {
+    throw new Error("void_execution_disabled:simulated_gateway");
   }
 
   async executeRefund(_request: RefundExecutionRequest): Promise<RefundExecutionResult> {
