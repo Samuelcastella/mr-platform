@@ -68,5 +68,5 @@ test("PixelPay remains disabled even when candidate sandbox inputs are supplied"
   expect(readiness.paymentAcceptanceEnabled).toBe(false);
   expect(readiness.refundExecutionEnabled).toBe(false);
   expect(readiness.reason).toBe("pixelpay_sandbox_acceptance_not_completed");
-  expect(JSON.stringify(readiness)).not.toInclude("merchantSecret");
+  expect(JSON.stringify(readiness)).not.toContain("merchantSecret");
 });
