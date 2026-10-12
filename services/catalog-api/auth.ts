@@ -58,6 +58,7 @@ const PERMISSIONS: Record<string, string> = {
   "orders.confirm": "Confirm orders",
   "orders.cancel": "Cancel orders",
   "payments.read": "Read payments",
+  "payments.exceptions.review": "Review payment webhook exceptions without issuing refunds",
   "payments.confirm_manual": "Confirm manual/offline payments",
   "payments.refund": "Issue refunds",
   "fulfillment.read": "Read fulfillment",
