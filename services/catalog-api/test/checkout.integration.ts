@@ -570,6 +570,26 @@ const pendingRefundRequests = await db`
 ok(Number(pendingRefundRequests[0]?.total) === 1 &&
    pendingRefundRequests[0]?.status === "APPROVED_NOT_SUBMITTED",
    "aprobación produce solicitud de reembolso única y sin ejecución externa");
+const managerRefundQueue = await api("/v1/internal/payments/refund-requests", {
+  headers: { cookie: reviewer.cookie }
+});
+ok(managerRefundQueue.response.status === 403,
+   "MANAGER no puede leer cola financiera de reembolsos");
+const adminRefundQueue = await api("/v1/internal/payments/refund-requests", {
+  headers: { cookie: approver.cookie }
+});
+ok(adminRefundQueue.response.status === 200 &&
+   Array.isArray(adminRefundQueue.body.data) &&
+   adminRefundQueue.body.data.some((r: any) =>
+     Number(r.payment_id) === latePaymentId &&
+     r.provider_reference === "ci-capture-late-001" &&
+     r.status === "APPROVED_NOT_SUBMITTED"),
+   "administrador consulta solicitud de reembolso pendiente con referencia de captura");
+const machineRefundQueue = await api("/v1/internal/payments/refund-requests", {
+  headers: { "x-internal-key": internalKey }
+});
+ok(machineRefundQueue.response.status === 403,
+   "token técnico heredado no consulta cola de aprobaciones financieras");
 const refundPayment = await db`SELECT status FROM payments WHERE id = ${latePaymentId}`;
 ok(refundPayment[0]?.status === "PENDING", "solicitar reembolso no altera estado de pago");
 const refundSales = await db`
