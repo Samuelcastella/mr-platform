@@ -50,7 +50,7 @@ jobs:
       - name: Pruebas unitarias Cross-Sell Engine
         run: bun test services/catalog-api/test/salesAlgorithm.test.ts
       - name: Unit tests for signed gateway adapter and disabled refunds
-        run: bun test services/catalog-api/test/payment-gateway-adapter.test.ts services/catalog-api/test/simulated-payment-webhook.test.ts
+        run: bun test services/catalog-api/test/payment-gateway-adapter.test.ts services/catalog-api/test/simulated-payment-webhook.test.ts services/catalog-api/test/pixelpay-legacy-security.test.ts
       - name: Validar Catalog API
         run: bun build services/catalog-api/index.ts --target=bun --outfile=/tmp/catalog-api.js
       - name: Validar rutas internas
