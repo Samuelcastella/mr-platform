@@ -1,3 +1,5 @@
+import { writeAuditEvent } from "./auth";
+
 // Provider-neutral sandbox receiver. Not homologated with an external gateway.
 type DB = any;
 const reply = (body: unknown, status = 200) => Response.json(body, { status });
@@ -62,8 +64,11 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
       SELECT p.id, p.order_id, p.status, p.provider, o.status AS order_status
       FROM payments p JOIN orders o ON o.id = p.order_id
       WHERE p.id = ${event.paymentId} FOR UPDATE OF p, o`;
-    if (!payments.length || payments[0].provider !== "SIMULATED")
+    if (!payments.length || payments[0].provider !== "SIMULATED") {
+      // Do not commit a stranded PROCESSING event for unknown/non-sandbox payments.
+      await tx`DELETE FROM simulated_payment_events WHERE event_id = ${event.eventId}`;
       return { error: "payment_not_found", status: 404 };
+    }
     const payment = payments[0];
     const reservations = await tx`
       SELECT status, expires_at FROM inventory_reservations
@@ -80,10 +85,24 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
       await tx`
         INSERT INTO payment_status_history(payment_id, from_status, to_status, actor, reason)
         VALUES(${event.paymentId}, 'PENDING', 'PAID', 'webhook:simulated', ${event.eventId})`;
+      await writeAuditEvent(tx, {
+        actorType: "SERVICE", actorService: "simulated-payment-webhook",
+        action: "payment.webhook_confirmed", resourceType: "Payment",
+        resourceId: event.paymentId, outcome: "SUCCESS",
+        correlationId: event.eventId,
+        metadata: { eventId: event.eventId, orderId: Number(payment.order_id), fromStatus: "PENDING", toStatus: "PAID" }
+      });
     } else if (outcome === "LATE_PAYMENT_EXPIRED_RESERVATION") {
       await tx`
         INSERT INTO payment_webhook_exceptions(event_id, payment_id, order_id, code)
         VALUES(${event.eventId}, ${event.paymentId}, ${payment.order_id}, 'LATE_PAYMENT_EXPIRED_RESERVATION')`;
+      await writeAuditEvent(tx, {
+        actorType: "SERVICE", actorService: "simulated-payment-webhook",
+        action: "payment.webhook_exception", resourceType: "Payment",
+        resourceId: event.paymentId, outcome: "SUCCESS",
+        reason: "LATE_PAYMENT_EXPIRED_RESERVATION", correlationId: event.eventId,
+        metadata: { eventId: event.eventId, orderId: Number(payment.order_id), paymentStatus: payment.status, orderStatus: payment.order_status }
+      });
     }
     return { replayed: false, outcome };
   });
