@@ -341,6 +341,46 @@ if (!webhookSecret || webhookSecret.length < 32) {
   ok(Number(eventCount[0]?.total) === 1, "evento concurrente se persiste una vez");
   const paidHistory = await db`SELECT COUNT(*)::int AS total FROM payment_status_history WHERE payment_id = ${paymentId} AND actor = 'webhook:simulated'`;
   ok(Number(paidHistory[0]?.total) === 0, "pago manual previo no se vuelve a confirmar por webhook");
+  // Distinct signed provider events may race to confirm the same pending payment.
+  // Both receipts are retained, but there must be exactly one PAID transition and audit.
+  const raceOrderResp = await createOrder("ci-checkout-order-webhook-race", transferVariant);
+  ok(raceOrderResp.response.status === 201, "crea pedido para carrera entre dos eventIds");
+  const raceCheckoutResp = await createCheckout("ci-checkout-webhook-race-001", raceOrderResp.body.order, "BANK_TRANSFER");
+  ok(raceCheckoutResp.response.status === 201, "crea pago PENDING para carrera entre eventos distintos");
+  const racePaymentId = Number(raceCheckoutResp.body.checkout.payment.id);
+  await db`UPDATE payments SET provider = 'SIMULATED' WHERE id = ${racePaymentId}`;
+  const differentEventRequest = async (eventId: string) => {
+    const raw = JSON.stringify({
+      eventId, paymentId: racePaymentId, type: "payment.succeeded",
+      providerReference: "ci-capture-race-001", amountMinor: raceCheckoutResp.body.checkout.amountMinor,
+      currency: raceCheckoutResp.body.checkout.currency
+    });
+    return api("/v1/webhooks/payments/simulated", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-simulated-signature": await signSimulatedWebhook(webhookSecret, raw) },
+      body: raw
+    });
+  };
+  const [raceA, raceB] = await Promise.all([
+    differentEventRequest("ci-webhook-race-event-A"), differentEventRequest("ci-webhook-race-event-B")
+  ]);
+  const raceOutcomes = [raceA.body.outcome, raceB.body.outcome].sort();
+  ok(raceA.response.status === 200 && raceB.response.status === 200 &&
+     raceOutcomes.join(",") === "ALREADY_PAID,PAID",
+    "distintos eventIds concurrentes hacen una sola confirmación");
+  const racePaymentHistory = await db`
+    SELECT COUNT(*)::int AS total FROM payment_status_history
+    WHERE payment_id = ${racePaymentId} AND actor = 'webhook:simulated'`;
+  ok(Number(racePaymentHistory[0]?.total) === 1, "carrera entre eventIds deja una transición PAID");
+  const raceAudit = await db`
+    SELECT COUNT(*)::int AS total FROM audit_events
+    WHERE action = 'payment.webhook_confirmed' AND resource_id = ${String(racePaymentId)}`;
+  ok(Number(raceAudit[0]?.total) === 1, "carrera entre eventIds deja una auditoría");
+  const raceEvents = await db`
+    SELECT COUNT(*)::int AS total FROM simulated_payment_events
+    WHERE payment_id = ${racePaymentId}`;
+  ok(Number(raceEvents[0]?.total) === 2, "carrera conserva ambas notificaciones firmadas");
+
   // Simulate provider capture after reservation/order cancellation.
   const lateOrderResp = await createOrder("ci-checkout-order-late-webhook", cashVariant);
   ok(lateOrderResp.response.status === 201, "crea pedido exclusivo para pago tardío");
