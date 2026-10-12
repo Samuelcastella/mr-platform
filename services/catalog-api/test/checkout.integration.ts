@@ -566,6 +566,12 @@ const reviewAudits = await db`
   WHERE action = 'payment.webhook_exception_reviewed'
     AND resource_id = ${String(lateExceptionId)}`;
 ok(Number(reviewAudits[0]?.total) === 2, "doble control registra exactamente dos auditorías");
+const pendingRefundRequests = await db`
+  SELECT COUNT(*)::int AS total, MAX(status) AS status
+  FROM payment_exception_refund_requests WHERE payment_id = ${latePaymentId}`;
+ok(Number(pendingRefundRequests[0]?.total) === 1 &&
+   pendingRefundRequests[0]?.status === "APPROVED_NOT_SUBMITTED",
+   "aprobación produce solicitud de reembolso única y sin ejecución externa");
 const refundPayment = await db`SELECT status FROM payments WHERE id = ${latePaymentId}`;
 ok(refundPayment[0]?.status === "PENDING", "solicitar reembolso no altera estado de pago");
 const refundSales = await db`
@@ -594,6 +600,55 @@ const selfRefund = await api(mismatchPath, {
 });
 ok(selfRefund.response.status === 403 && selfRefund.body.error === "separate_refund_approver_required",
    "revisor no puede aprobar su propio reembolso");
+const revalidation = await api(mismatchPath, {
+  method: "PATCH",
+  headers: { cookie: approver.cookie, "x-csrf-token": approver.csrf,
+    "content-type": "application/json", "idempotency-key": "ci-mismatch-revalidate-001" },
+  body: JSON.stringify({ action: "REQUEST_REVALIDATION", reason: "Verificar monto y referencia antes de revalidación manual" })
+});
+ok(revalidation.response.status === 200 && revalidation.body.status === "REVALIDATION_REQUESTED",
+   "revalidación queda solicitada sin activar venta ni modificar Kardex");
+// A different event ID for the same captured payment cannot create a second refund request.
+const duplicateCaptureRaw = JSON.stringify({
+  eventId: "ci-webhook-late-002", paymentId: latePaymentId, type: "payment.succeeded",
+  providerReference: "ci-capture-late-001",
+  amountMinor: lateCheckoutResp.body.checkout.amountMinor,
+  currency: lateCheckoutResp.body.checkout.currency
+});
+const duplicateCapture = await api("/v1/webhooks/payments/simulated", {
+  method: "POST",
+  headers: { "content-type": "application/json",
+    "x-simulated-signature": await signSimulatedWebhook(webhookSecret, duplicateCaptureRaw) },
+  body: duplicateCaptureRaw
+});
+ok(duplicateCapture.response.status === 200 &&
+   duplicateCapture.body.outcome === "LATE_PAYMENT_EXPIRED_RESERVATION",
+   "otro eventId puede registrar misma captura tardía para investigación");
+const secondException = await db`
+  SELECT id FROM payment_webhook_exceptions WHERE event_id = 'ci-webhook-late-002'`;
+ok(secondException.length === 1, "captura tardía duplicada deja segunda excepción trazable");
+const secondPath = "/v1/internal/payments/webhook-exceptions/" + Number(secondException[0].id) + "/review";
+const secondReview = await api(secondPath, {
+  method: "PATCH",
+  headers: { cookie: reviewer.cookie, "x-csrf-token": reviewer.csrf,
+    "content-type": "application/json", "idempotency-key": "ci-second-review-start" },
+  body: JSON.stringify({ action: "START_REVIEW", reason: "Revisar segundo aviso de captura tardía del mismo pago" })
+});
+ok(secondReview.response.status === 200 && secondReview.body.status === "IN_REVIEW",
+   "segundo evento puede iniciar investigación");
+const duplicateRefundRequest = await api(secondPath, {
+  method: "PATCH",
+  headers: { cookie: approver.cookie, "x-csrf-token": approver.csrf,
+    "content-type": "application/json", "idempotency-key": "ci-second-refund-request" },
+  body: JSON.stringify({ action: "REQUEST_REFUND", reason: "Intentar duplicar solicitud sobre el mismo pago capturado" })
+});
+ok(duplicateRefundRequest.response.status === 409 &&
+   duplicateRefundRequest.body.error === "refund_already_requested",
+   "la misma captura no genera segundo reembolso solicitado con otro eventId");
+const stillOneRefundRequest = await db`
+  SELECT COUNT(*)::int AS total FROM payment_exception_refund_requests WHERE payment_id = ${latePaymentId}`;
+ok(Number(stillOneRefundRequest[0]?.total) === 1, "solo existe una solicitud de reembolso por pago");
+
 
 if (failures) {
   console.error(failures + " fallo(s)");
