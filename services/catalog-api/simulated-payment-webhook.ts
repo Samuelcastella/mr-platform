@@ -82,13 +82,17 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
       || event.type !== "payment.succeeded") return reply({ error: "invalid_event" }, 400);
   const hash = new Bun.CryptoHasher("sha256").update(raw).digest("hex");
   const result = await db.begin(async (tx: DB) => {
-    // Verify the referenced payment exists before claiming an event with a payment FK.
-    // This read does not lock: the subsequent FOR UPDATE is the authoritative check.
-    const paymentLookup = await tx`
-      SELECT provider FROM payments WHERE id = ${event.paymentId}`;
-    if (!paymentLookup.length || paymentLookup[0].provider !== "SIMULATED")
+    // Lock the payment/order BEFORE inserting a referencing event.
+    // The FK's KEY SHARE lock acquired by INSERT otherwise causes lock upgrade
+    // deadlocks when different event IDs arrive for the same payment concurrently.
+    const payments = await tx`
+      SELECT p.id, p.order_id, p.status, p.provider, p.amount_minor, p.currency, o.status AS order_status
+      FROM payments p JOIN orders o ON o.id = p.order_id
+      WHERE p.id = ${event.paymentId} FOR UPDATE OF p, o`;
+    if (!payments.length || payments[0].provider !== "SIMULATED")
       return { error: "payment_not_found", status: 404 };
-    // Serialize identical event IDs before locking payment/order rows.
+    const payment = payments[0];
+    // Serialize identical event IDs after securing the payment lock.
     // ON CONFLICT waits for the winning transaction and avoids a unique-key race.
     const claimed = await tx`
       INSERT INTO simulated_payment_events(
@@ -101,16 +105,6 @@ export async function handleSimulatedWebhook(req: Request, url: URL, db: DB) {
     if (prior.length) return prior[0].payload_hash === hash
       ? { replayed: true, outcome: prior[0].outcome }
       : { error: "event_id_conflict", status: 409 };
-    const payments = await tx`
-      SELECT p.id, p.order_id, p.status, p.provider, p.amount_minor, p.currency, o.status AS order_status
-      FROM payments p JOIN orders o ON o.id = p.order_id
-      WHERE p.id = ${event.paymentId} FOR UPDATE OF p, o`;
-    if (!payments.length || payments[0].provider !== "SIMULATED") {
-      // Do not commit a stranded PROCESSING event for unknown/non-sandbox payments.
-      await tx`DELETE FROM simulated_payment_events WHERE event_id = ${event.eventId}`;
-      return { error: "payment_not_found", status: 404 };
-    }
-    const payment = payments[0];
     const reservations = await tx`
       SELECT status, expires_at FROM inventory_reservations
       WHERE order_id = ${payment.order_id} FOR UPDATE`;
