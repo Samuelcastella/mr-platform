@@ -29,6 +29,20 @@ export async function ensurePaymentExceptionReviewSchema(db: DB) {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
   await db`CREATE INDEX IF NOT EXISTS idx_webhook_exception_reviews ON payment_webhook_exception_review_actions(exception_id, created_at DESC)`;
+  // A request is not a refund: it cannot debit any provider or mark payments REFUNDED.
+  // One outstanding request per payment prevents duplicate refund initiation across event IDs.
+  await db`CREATE TABLE IF NOT EXISTS payment_exception_refund_requests (
+    id BIGSERIAL PRIMARY KEY,
+    exception_id BIGINT NOT NULL UNIQUE REFERENCES payment_webhook_exceptions(id) ON DELETE RESTRICT,
+    payment_id BIGINT NOT NULL UNIQUE REFERENCES payments(id) ON DELETE RESTRICT,
+    provider_reference TEXT NOT NULL,
+    captured_amount_minor BIGINT NOT NULL CHECK (captured_amount_minor >= 0),
+    captured_currency CHAR(3) NOT NULL,
+    requested_by_user_id BIGINT NOT NULL REFERENCES staff_users(id) ON DELETE RESTRICT,
+    status TEXT NOT NULL DEFAULT 'APPROVED_NOT_SUBMITTED'
+      CHECK (status IN ('APPROVED_NOT_SUBMITTED')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
 }
 
 export async function handlePaymentExceptionReview(req: Request, url: URL, db: DB) {
@@ -66,7 +80,7 @@ export async function handlePaymentExceptionReview(req: Request, url: URL, db: D
 
   const result = await db.begin(async (tx: DB) => {
     const rows = await tx`
-      SELECT id, payment_id, order_id, code, resolution_status, reviewed_by_user_id
+      SELECT id, event_id, payment_id, order_id, code, resolution_status, reviewed_by_user_id
       FROM payment_webhook_exceptions WHERE id = ${id} FOR UPDATE`;
     if (!rows.length) return { error: "not_found", status: 404 };
     const current = rows[0];
@@ -82,6 +96,26 @@ export async function handlePaymentExceptionReview(req: Request, url: URL, db: D
       return { error: "invalid_transition", status: 409, current: current.resolution_status };
     if (action === "REQUEST_REFUND" && Number(current.reviewed_by_user_id) === actorId)
       return { error: "separate_refund_approver_required", status: 403 };
+
+    if (action === "REQUEST_REFUND") {
+      const evidence = await tx`
+        SELECT provider_reference, captured_amount_minor, captured_currency
+        FROM simulated_payment_events WHERE event_id = ${current.event_id}`;
+      if (!evidence.length || !evidence[0].provider_reference ||
+          evidence[0].captured_amount_minor == null || !evidence[0].captured_currency)
+        return { error: "capture_evidence_required", status: 409 };
+      const refundRequest = await tx`
+        INSERT INTO payment_exception_refund_requests(
+          exception_id, payment_id, provider_reference, captured_amount_minor,
+          captured_currency, requested_by_user_id
+        ) VALUES (
+          ${id}, ${current.payment_id}, ${evidence[0].provider_reference},
+          ${evidence[0].captured_amount_minor}, ${evidence[0].captured_currency}, ${actorId}
+        )
+        ON CONFLICT(payment_id) DO NOTHING RETURNING id`;
+      if (!refundRequest.length)
+        return { error: "refund_already_requested", status: 409 };
+    }
 
     await tx`
       UPDATE payment_webhook_exceptions
