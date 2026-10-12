@@ -16,6 +16,21 @@
 
 The existing `POST /v1/webhooks/payments/simulated` now invokes the adapter's verification and normalization methods before its PostgreSQL transaction. The existing exception-approval pipeline persists `payment_exception_refund_requests.status='APPROVED_NOT_SUBMITTED'`, without any gateway call.
 
+## Finance read-only execution preflight — implemented but blocked
+
+`GET /v1/internal/payments/refund-requests/:id/preflight` is available to **human finance staff** with the existing `payments.refund` permission scoped to the order's location. Anonymous, non-finance and legacy service-token callers are denied.
+
+The preflight in `services/catalog-api/refund-execution-preflight.ts` queries PostgreSQL without altering financial state or contacting PixelPay, and checks:
+1. `APPROVED_NOT_SUBMITTED` and `REFUND_REQUESTED` from the approved two-person workflow;
+2. reviewer and refund approver are distinct;
+3. the signed simulated capture reference is identical to the approved refund reference;
+4. approved amount and currency match the stored signed event and payment;
+5. order is cancelled, no `SALE` Kardex movements exist, and the underlying exception is a late captured payment.
+
+The response **always** contains `executionEnabled: false`, `providerExecutionAttempted: false`, and `providerHomologated: false` in checks. Any additional failed checks are listed as blockers. Passing local database checks is NOT gateway homologation and does not submit an external refund.
+
+Current scope is strictly the simulated signed-event schema; before adapting to PixelPay replace the simulated capture-evidence joins with the provider's verified settlement records and support approved refunds for cases other than late cancellation through a separate policy.
+
 ## Worker integration contract (future; not deployed)
 
 1. A dedicated backend worker (never the public webhook or HTTP request) loads a `payment_exception_refund_requests` row, verifies `APPROVED_NOT_SUBMITTED`, validates actor approvals and reconciles **all capture references and amounts**.
