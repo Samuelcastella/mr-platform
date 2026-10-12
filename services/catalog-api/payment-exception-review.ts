@@ -46,6 +46,25 @@ export async function ensurePaymentExceptionReviewSchema(db: DB) {
 }
 
 export async function handlePaymentExceptionReview(req: Request, url: URL, db: DB) {
+  if (url.pathname === "/v1/internal/payments/refund-requests") {
+    if (req.method !== "GET") return reply({ error: "method_not_allowed" }, 405);
+    const auth = await authorizeInternal(req, db, "payments.refund");
+    if (!auth.ok) return auth.response;
+    // This sensitive queue is for finance staff, not legacy machine tokens.
+    if (auth.actor.type !== "USER") return reply({ error: "staff_approval_required" }, 403);
+    const rows = await db`
+      SELECT r.id, r.exception_id, r.payment_id, r.provider_reference,
+             r.captured_amount_minor, r.captured_currency, r.status, r.created_at,
+             p.amount_minor AS expected_amount_minor, p.currency AS expected_currency,
+             p.status AS payment_status, o.order_number, o.status AS order_status,
+             e.code AS exception_code, r.requested_by_user_id
+      FROM payment_exception_refund_requests r
+      JOIN payments p ON p.id = r.payment_id
+      JOIN payment_webhook_exceptions e ON e.id = r.exception_id
+      JOIN orders o ON o.id = e.order_id
+      ORDER BY r.created_at DESC, r.id DESC LIMIT 100`;
+    return reply({ data: rows });
+  }
   const route = url.pathname.match(/^\/v1\/internal\/payments\/webhook-exceptions\/(\d+)\/review$/);
   if (!route) return null;
   if (req.method !== "PATCH") return reply({ error: "method_not_allowed" }, 405);
