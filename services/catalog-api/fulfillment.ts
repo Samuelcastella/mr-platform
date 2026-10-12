@@ -1,4 +1,5 @@
 import { transitionOrderInTx } from "./orders";
+import { acceptHeavyQuoteInTx } from "./heavy-quote-acceptance";
 import { auditActor, authorizeInternal, writeAuditEvent, type InternalActor } from "./auth";
 
 type DB = any;
@@ -408,6 +409,8 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
     return json({ error: "client_delivery_quote_not_allowed" }, 400);
   }
 
+  const heavyQuoteId = body?.heavyQuoteId == null ? null : Number(body.heavyQuoteId);
+  if (heavyQuoteId !== null && (!Number.isSafeInteger(heavyQuoteId) || heavyQuoteId <= 0)) return json({ error: "invalid_heavy_quote", status: 400 }, 400);
   const orderId = Number(body?.orderId);
   const orderToken = clean(body?.orderToken, 80);
   const type = clean(body?.type, 32).toUpperCase();
@@ -434,7 +437,8 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
     addressLine,
     addressReference,
     recipientName,
-    recipientPhone
+    recipientPhone,
+    heavyQuoteId
   };
   const hash = requestHash(normalized);
 
@@ -456,7 +460,7 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
     provider: "MR"
   };
 
-  if (type !== "STORE_PICKUP") {
+  if (type !== "STORE_PICKUP" && heavyQuoteId === null) {
     const zones = await db`
       SELECT shipping_minor, currency, eta_min_days, eta_max_days, provider
       FROM delivery_zones
@@ -499,6 +503,27 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
       const prior = await tx`SELECT id FROM fulfillments WHERE order_id = ${orderId} LIMIT 1`;
       if (prior.length) return { error: "fulfillment_exists", status: 409, fulfillmentId: Number(prior[0].id) };
 
+      if (heavyQuoteId !== null) {
+        if (type === "STORE_PICKUP") return { error: "heavy_quote_requires_delivery", status: 409 };
+        const quoteRows = await tx`
+          SELECT provider, department, service_type, shipping_minor, currency
+          FROM heavy_logistics_quotes WHERE id = ${heavyQuoteId} AND order_id = ${orderId}`;
+        if (!quoteRows.length) return { error: "quote_not_found", status: 404 };
+        const heavy = quoteRows[0];
+        if (heavy.department !== department || heavy.service_type !== type)
+          return { error: "heavy_quote_destination_mismatch", status: 409 };
+        const accepted = await acceptHeavyQuoteInTx(tx, orderId, heavyQuoteId, orderToken);
+        if (accepted.error) return accepted;
+        if (accepted.replayed) return { error: "heavy_quote_already_accepted", status: 409 };
+        quote = {
+          shippingMinor: Number(heavy.shipping_minor),
+          currency: String(heavy.currency),
+          etaMinDays: null,
+          etaMaxDays: null,
+          provider: String(heavy.provider)
+        };
+      }
+
       if (String(order.currency) !== quote.currency) {
         return { error: "delivery_currency_mismatch", status: 409 };
       }
@@ -509,12 +534,14 @@ async function createFulfillment(req: Request, db: DB, clean: (v: unknown, max: 
         Number(order.tax_total_minor) +
         quote.shippingMinor;
 
-      await tx`
-        UPDATE orders
-        SET shipping_total_minor = ${quote.shippingMinor},
-            grand_total_minor = ${grandTotalMinor},
-            updated_at = NOW()
-        WHERE id = ${orderId}`;
+      if (heavyQuoteId === null) {
+        await tx`
+          UPDATE orders
+          SET shipping_total_minor = ${quote.shippingMinor},
+              grand_total_minor = ${grandTotalMinor},
+              updated_at = NOW()
+          WHERE id = ${orderId}`;
+      }
 
       const token = crypto.randomUUID();
       const tracking = trackingReference();
@@ -616,6 +643,21 @@ async function transitionFulfillmentInTx(
       orderStatus: f.order_status,
       fulfillmentTarget: target
     };
+  }
+
+  // Never dispatch an unpaid prepaid order. COD is permitted only with a pending collection.
+  if (target === "DISPATCHED") {
+    const payments = await tx`
+      SELECT p.method, p.status, c.status AS collection_status
+      FROM payments p
+      LEFT JOIN cod_collections c ON c.payment_id = p.id AND c.fulfillment_id = ${id}
+      WHERE p.order_id = ${Number(f.order_id)}
+      FOR UPDATE OF p`;
+    const authorized = payments.some((p: any) =>
+      p.status === "PAID" ||
+      (p.method === "CASH_ON_DELIVERY" && p.status === "PENDING" && p.collection_status === "PENDING")
+    );
+    if (!authorized) return { error: "dispatch_payment_required", status: 409 };
   }
 
   if (orderTarget) {

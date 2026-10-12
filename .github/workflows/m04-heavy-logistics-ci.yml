@@ -1,0 +1,112 @@
+name: M04 Heavy Logistics CI
+on:
+  pull_request:
+    paths:
+      - 'services/catalog-api/heavy-logistics.ts'
+      - 'services/catalog-api/heavy-order-quote.ts'
+      - 'services/catalog-api/heavy-order-quote-repository.ts'
+      - 'services/catalog-api/heavy-order-quote-routes.ts'
+      - 'services/catalog-api/index.ts'
+      - 'services/catalog-api/checkout.ts'
+      - 'services/catalog-api/test/payment-postgres-concurrency.test.ts'
+      - 'services/catalog-api/test/checkout-cod-regression.test.ts'
+      - 'services/catalog-api/heavy-quote-acceptance.ts'
+      - 'services/catalog-api/fulfillment.ts'
+      - 'services/catalog-api/heavy-rate-repository.ts'
+      - 'services/catalog-api/test/heavy-logistics.test.ts'
+      - 'services/catalog-api/test/heavy-order-quote.test.ts'
+      - 'services/catalog-api/test/heavy-quote-acceptance.test.ts'
+      - 'services/catalog-api/test/heavy-rate-repository.test.ts'
+      - 'db/migrations/016_heavy_logistics.sql'
+      - 'db/migrations/017_heavy_logistics_quotes.sql'
+      - 'db/migrations/018_installation_jobs.sql'
+      - 'db/migrations/019_heavy_quote_lines.sql'
+      - 'scripts/test-heavy-quote-concurrency.sh'
+      - 'services/catalog-api/test/heavy-quote-postgres.integration.test.ts'
+      - '.github/workflows/m04-heavy-logistics-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/catalog-api/heavy-logistics.ts'
+      - 'services/catalog-api/heavy-order-quote.ts'
+      - 'services/catalog-api/heavy-order-quote-repository.ts'
+      - 'services/catalog-api/heavy-order-quote-routes.ts'
+      - 'services/catalog-api/index.ts'
+      - 'services/catalog-api/checkout.ts'
+      - 'services/catalog-api/test/payment-postgres-concurrency.test.ts'
+      - 'services/catalog-api/test/checkout-cod-regression.test.ts'
+      - 'services/catalog-api/heavy-quote-acceptance.ts'
+      - 'services/catalog-api/fulfillment.ts'
+      - 'services/catalog-api/heavy-rate-repository.ts'
+      - 'services/catalog-api/test/heavy-logistics.test.ts'
+      - 'services/catalog-api/test/heavy-order-quote.test.ts'
+      - 'services/catalog-api/test/heavy-quote-acceptance.test.ts'
+      - 'services/catalog-api/test/heavy-rate-repository.test.ts'
+      - 'db/migrations/016_heavy_logistics.sql'
+      - 'db/migrations/017_heavy_logistics_quotes.sql'
+      - 'db/migrations/018_installation_jobs.sql'
+      - 'db/migrations/019_heavy_quote_lines.sql'
+      - 'scripts/test-heavy-quote-concurrency.sh'
+      - 'services/catalog-api/test/heavy-quote-postgres.integration.test.ts'
+      - '.github/workflows/m04-heavy-logistics-ci.yml'
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.2.0'
+      - name: Run heavy logistics unit tests
+        run: bun test services/catalog-api/test/heavy-logistics.test.ts services/catalog-api/test/heavy-rate-repository.test.ts services/catalog-api/test/heavy-quote-acceptance.test.ts services/catalog-api/test/heavy-order-quote.test.ts services/catalog-api/test/checkout-cod-regression.test.ts
+  migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mr_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d mr_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.2.0'
+      - name: Create minimal referenced tables
+        run: |
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "CREATE TABLE product_variants(id BIGINT PRIMARY KEY); CREATE TABLE orders(id BIGINT PRIMARY KEY); CREATE TABLE fulfillments(id BIGINT PRIMARY KEY);"
+      - name: Apply migrations twice
+        run: |
+          for pass in 1 2; do
+            for version in 016_heavy_logistics 017_heavy_logistics_quotes 018_installation_jobs 019_heavy_quote_lines; do
+              psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -f "db/migrations/${version}.sql"
+            done
+          done
+      - name: Concurrent quote acceptance with real PostgreSQL sessions
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/mr_test
+        run: bash scripts/test-heavy-quote-concurrency.sh
+      - name: Actual acceptance helper concurrency and checkout regression
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/mr_test
+        run: bun test services/catalog-api/test/heavy-quote-postgres.integration.test.ts
+      - name: PostgreSQL payment confirmation concurrency and audit invariant
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/mr_test
+        run: bun test services/catalog-api/test/payment-postgres-concurrency.test.ts
+      - name: Verify profile and installation schema
+        run: |
+          psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO product_variants(id) VALUES (1); INSERT INTO orders(id) VALUES (1); INSERT INTO product_shipping_profiles(variant_id,weight_grams,length_cm,width_cm,height_cm) VALUES (1,10000,50,40,30); INSERT INTO installation_jobs(order_id,idempotency_key,service_code) VALUES (1,'ci-install-1','BASIC_INSTALL');"
+      - name: Verify invalid records are rejected
+        run: |
+          if psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO product_shipping_profiles(variant_id,weight_grams,length_cm,width_cm,height_cm) VALUES (1,-1,50,40,30);"; then exit 1; fi
+          if psql -h localhost -U test -d mr_test -v ON_ERROR_STOP=1 -c "INSERT INTO installation_jobs(order_id,idempotency_key,service_code,status) VALUES (1,'ci-invalid-install','BASIC_INSTALL','COMPLETED');"; then exit 1; fi

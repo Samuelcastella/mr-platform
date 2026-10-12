@@ -1,10 +1,13 @@
 import { handleCredit } from "./credit-routes";
+import { handleHeavyOrderQuote } from "./heavy-order-quote-routes";
 import { handleCredit as handleInternalCredit } from "./credit-internal-routes";
 import { ensureIntegrationMatrixSchema, handleIntegrationMatrix } from "./integration-matrix";
 import { SQL } from "bun";
 import { ensureRestockSchema, handleRestock } from "./restock";
 import { ensureOrdersSchema, handleOrders } from "./orders";
 import { ensureCheckoutSchema, handleCheckout } from "./checkout";
+import { ensureSimulatedWebhookSchema, handleSimulatedWebhook } from "./simulated-payment-webhook";
+import { ensurePaymentExceptionReviewSchema, handlePaymentExceptionReview } from "./payment-exception-review";
 import { ensureFulfillmentSchema, handleFulfillment } from "./fulfillment";
 import { ensureAuthSchema, handleAuth } from "./auth";
 import { ensureCustomersSchema, handleCustomers } from "./customers";
@@ -167,8 +170,10 @@ ON public_events(event_name, created_at DESC)`;
 await ensureRestockSchema(db);
 await ensureOrdersSchema(db);
 await ensureCheckoutSchema(db);
+await ensureSimulatedWebhookSchema(db);
 await ensureFulfillmentSchema(db);
 await ensureAuthSchema(db);
+await ensurePaymentExceptionReviewSchema(db);
 await ensureCustomersSchema(db);
 await ensureProcurementSchema(db);
 await ensureReturnsSchema(db);
@@ -351,8 +356,17 @@ Bun.serve({
     const orderResponse = await handleOrders(req, url, db, clean);
     if (orderResponse) return orderResponse;
 
+    const heavyOrderQuoteResponse = await handleHeavyOrderQuote(req, url, db);
+    if (heavyOrderQuoteResponse) return heavyOrderQuoteResponse;
+
     const fulfillmentResponse = await handleFulfillment(req, url, db, clean);
     if (fulfillmentResponse) return fulfillmentResponse;
+
+    const simulatedWebhookResponse = await handleSimulatedWebhook(req, url, db);
+    if (simulatedWebhookResponse) return simulatedWebhookResponse;
+
+    const exceptionReviewResponse = await handlePaymentExceptionReview(req, url, db);
+    if (exceptionReviewResponse) return exceptionReviewResponse;
 
     const checkoutResponse = await handleCheckout(req, url, db, clean);
     if (checkoutResponse) return checkoutResponse;

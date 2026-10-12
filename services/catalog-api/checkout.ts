@@ -224,6 +224,18 @@ async function createCheckout(req: Request, db: DB, clean: (v: unknown, max: num
         return { error: "checkout_exists", status: 409, checkoutId: Number(prior[0].id) };
       }
 
+      const fulfillmentRows = await tx`
+        SELECT id, type
+        FROM fulfillments
+        WHERE order_id = ${orderId}
+        LIMIT 1`;
+
+      if (paymentMethod === "CASH_ON_DELIVERY") {
+        if (!fulfillmentRows.length || fulfillmentRows[0].type === "STORE_PICKUP") {
+          return { error: "cod_requires_delivery", status: 409 };
+        }
+      }
+
       const token = crypto.randomUUID();
       const inserted = await tx`
         INSERT INTO checkout_sessions(
@@ -236,18 +248,6 @@ async function createCheckout(req: Request, db: DB, clean: (v: unknown, max: num
         )
         RETURNING id`;
       const checkoutId = Number(inserted[0].id);
-
-      const fulfillmentRows = await tx`
-        SELECT id, type
-        FROM fulfillments
-        WHERE order_id = ${orderId}
-        LIMIT 1`;
-
-      if (paymentMethod === "CASH_ON_DELIVERY") {
-        if (!fulfillmentRows.length || fulfillmentRows[0].type === "STORE_PICKUP") {
-          return { error: "cod_requires_delivery", status: 409 };
-        }
-      }
 
       const paymentRows = await tx`
         INSERT INTO payments(
@@ -306,6 +306,16 @@ async function createCheckout(req: Request, db: DB, clean: (v: unknown, max: num
             AND status = 'ACTIVE'
             AND (expires_at IS NULL OR expires_at > NOW())`;
         if (Number(activeReservations[0]?.count || 0) < 1) {
+          throw new Error("reservation_not_active");
+        }
+
+        // Every active reservation must be valid; a single expired line blocks checkout.
+        const reservationIntegrity = await tx`
+          SELECT COUNT(*)::int AS total,
+                 COUNT(*) FILTER (WHERE expires_at IS NULL OR expires_at > NOW())::int AS valid
+          FROM inventory_reservations
+          WHERE order_id = ${orderId} AND status = 'ACTIVE'`;
+        if (Number(reservationIntegrity[0]?.total || 0) !== Number(reservationIntegrity[0]?.valid || 0)) {
           throw new Error("reservation_not_active");
         }
 
