@@ -443,8 +443,6 @@ if (!webhookSecret || webhookSecret.length < 32) {
   ok(Number(lateSales[0]?.total) === 0, "pago tardío no genera salida Kardex");
   const lateOrderState = await db`SELECT status FROM orders WHERE id = ${lateOrder.id}`;
   ok(lateOrderState[0]?.status === "CANCELLED", "webhook tardío no reactiva venta");
-}
-
 
 // Governed refund requests use human staff sessions, CSRF and dual control.
 // They never execute a refund with the external provider.
@@ -648,7 +646,7 @@ ok(duplicateRefundRequest.response.status === 409 &&
 const stillOneRefundRequest = await db`
   SELECT COUNT(*)::int AS total FROM payment_exception_refund_requests WHERE payment_id = ${latePaymentId}`;
 ok(Number(stillOneRefundRequest[0]?.total) === 1, "solo existe una solicitud de reembolso por pago");
-
+}
 
 if (failures) {
   console.error(failures + " fallo(s)");
