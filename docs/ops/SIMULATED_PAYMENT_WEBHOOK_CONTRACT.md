@@ -40,7 +40,29 @@ Unknown/non-simulated payment identifiers return HTTP 404 without persisting a s
 
 ## Operations: read-only exception queue
 
-`GET /v1/internal/payments/webhook-exceptions` requires the existing internal authorization and `payments.read` permission. Defaults to unresolved `PENDING_REVIEW` exceptions; `?status=ALL` returns the latest 100 regardless of review state. Each record includes event/payment/order IDs, order and payment status, the provider capture reference, captured amount/currency and the expected payment amount/currency. No endpoint in this module approves, reactivates or refunds a disputed payment: those actions require a separate authorized reconciliation workflow.
+`GET /v1/internal/payments/webhook-exceptions` requires the existing internal authorization and `payments.read` permission. Defaults to unresolved `PENDING_REVIEW` exceptions; `?status=ALL` returns the latest 100 regardless of review state. Each record includes event/payment/order IDs, order and payment status, the provider capture reference, captured amount/currency and the expected payment amount/currency. This read-only endpoint never reactivates inventory or requests refunds.
+
+## Controlled exception resolution and refund requests
+
+`PATCH /v1/internal/payments/webhook-exceptions/:id/review` is implemented in `payment-exception-review.ts`. It requires a **logged-in human staff session**, a valid CSRF token, an `idempotency-key` of 8–128 characters, a documented reason (12–500 characters), and location-scoped authorization. Legacy machine tokens **cannot** approve review actions.
+
+```json
+{ "action": "START_REVIEW", "reason": "Investigar conciliación de captura tardía" }
+```
+
+| Current state | Action | Required permission | New state |
+|---|---|---|---|
+| `PENDING_REVIEW` | `START_REVIEW` | `payments.exceptions.review` | `IN_REVIEW` |
+| `IN_REVIEW` | `REQUEST_REVALIDATION` | `payments.exceptions.review` | `REVALIDATION_REQUESTED` |
+| `IN_REVIEW` | `REQUEST_REFUND` | `payments.refund` | `REFUND_REQUESTED` |
+
+- Finance approval for `REQUEST_REFUND` requires a **different human user from the initial reviewer**; a manager lacks the refund permission by default.
+- `payment_webhook_exception_review_actions` records an immutable-style action history with globally unique idempotency keys. The audit event `payment.webhook_exception_reviewed` is written **in the same transaction**.
+- `payment_exception_refund_requests` stores `APPROVED_NOT_SUBMITTED` requests with a unique `payment_id`, source exception, captured provider reference, captured amount/currency and approver. **There is no API request to any payment provider and no update to `payments.status`**. Multiple signed event IDs for the same payment cannot generate two approved refund requests.
+- `REQUEST_REVALIDATION` does **not** reopen an order or reservation and does not create Kardex movements; separate stock/payment revalidation is necessary.
+- Duplicate identical authorized requests return `replayed: true` without a second audit; changed request payloads using an existing idempotency key return `409 idempotency_conflict`.
+
+**Refund execution is NOT implemented.** The actual bank/gateway refund, confirmation webhook, refund amount policy, multi-capture support, settlement reconciliation, customer notification and resulting `REFUNDED` state must remain blocked until a provider-specific sandbox adapter and independent evidence are available. Never report `REFUND_REQUESTED` or `APPROVED_NOT_SUBMITTED` as money returned.
 
 ## Acceptance and outstanding work
 
