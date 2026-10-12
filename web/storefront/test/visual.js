@@ -15,7 +15,9 @@ const sizes = [{name:'mobile',width:390,height:844},{name:'tablet',width:768,hei
       const page = await browser.newPage({viewport:{width:size.width,height:size.height},deviceScaleFactor:1});
       const errors = [];
       page.on('pageerror',e=>errors.push(e.message));
-      const response = await page.goto(base, {waitUntil:'networkidle',timeout:30000});
+      const response = await page.goto(base, {waitUntil:'domcontentloaded',timeout:30000});
+      await page.locator('body').waitFor({state:'visible',timeout:10000});
+      await page.waitForTimeout(1500);
       await page.screenshot({path:path.join(output,size.name+'.png'),fullPage:true,animations:'disabled'});
       const metrics = await page.evaluate(() => ({
         title:document.title,
