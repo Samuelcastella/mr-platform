@@ -274,7 +274,7 @@ if (!webhookSecret || webhookSecret.length < 32) {
   const paymentId = Number(cashCheckout.payment.id);
   await db`UPDATE payments SET provider = 'SIMULATED' WHERE id = ${paymentId}`;
   const sendEvent = async (eventId: string, signatureOverride?: string) => {
-    const raw = JSON.stringify({ eventId, paymentId, type: "payment.succeeded" });
+    const raw = JSON.stringify({ eventId, paymentId, type: "payment.succeeded", providerReference: "ci-capture-cash-001", amountMinor: cashCheckout.amountMinor, currency: cashCheckout.currency });
     const signature = signatureOverride ?? await signSimulatedWebhook(webhookSecret, raw);
     return api("/v1/webhooks/payments/simulated", {
       method: "POST", headers: { "content-type": "application/json", "x-simulated-signature": signature }, body: raw
@@ -282,7 +282,7 @@ if (!webhookSecret || webhookSecret.length < 32) {
   };
   const successPaymentId = Number(codCheckout.payment.id);
   await db`UPDATE payments SET provider = 'SIMULATED' WHERE id = ${successPaymentId}`;
-  const successRaw = JSON.stringify({ eventId: "ci-webhook-success-001", paymentId: successPaymentId, type: "payment.succeeded" });
+  const successRaw = JSON.stringify({ eventId: "ci-webhook-success-001", paymentId: successPaymentId, type: "payment.succeeded", providerReference: "ci-capture-cod-001", amountMinor: codCheckout.amountMinor, currency: codCheckout.currency });
   const successSignature = await signSimulatedWebhook(webhookSecret, successRaw);
   const successRequest = () => api("/v1/webhooks/payments/simulated", {
     method: "POST", headers: { "content-type": "application/json", "x-simulated-signature": successSignature }, body: successRaw
@@ -298,6 +298,30 @@ if (!webhookSecret || webhookSecret.length < 32) {
   ok(Number(successHistory[0]?.total) === 1, "confirmación webhook registra historial una vez");
   const successAudit = await db`SELECT COUNT(*)::int AS total FROM audit_events WHERE correlation_id = 'ci-webhook-success-001' AND action = 'payment.webhook_confirmed'`;
   ok(Number(successAudit[0]?.total) === 1, "confirmación webhook concurrente genera una sola auditoría");
+  const signedMismatch = JSON.stringify({
+    eventId: "ci-webhook-mismatch-001", paymentId: successPaymentId, type: "payment.succeeded",
+    providerReference: "ci-capture-mismatch-001", amountMinor: codCheckout.amountMinor + 1,
+    currency: codCheckout.currency
+  });
+  const mismatchSignature = await signSimulatedWebhook(webhookSecret, signedMismatch);
+  const mismatch = await api("/v1/webhooks/payments/simulated", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-simulated-signature": mismatchSignature },
+    body: signedMismatch
+  });
+  ok(mismatch.response.status === 200 && mismatch.body.outcome === "PAYMENT_AMOUNT_MISMATCH",
+    "captura con importe distinto se pone en excepción");
+  const mismatchException = await db`
+    SELECT COUNT(*)::int AS total FROM payment_webhook_exceptions
+    WHERE event_id = 'ci-webhook-mismatch-001' AND code = 'PAYMENT_AMOUNT_MISMATCH'`;
+  ok(Number(mismatchException[0]?.total) === 1, "discrepancia de importe queda en conciliación");
+  const capturedEvidence = await db`
+    SELECT provider_reference, captured_amount_minor, captured_currency FROM simulated_payment_events
+    WHERE event_id = 'ci-webhook-success-001'`;
+  ok(capturedEvidence[0]?.provider_reference === "ci-capture-cod-001" &&
+     Number(capturedEvidence[0]?.captured_amount_minor) === codCheckout.amountMinor &&
+     String(capturedEvidence[0]?.captured_currency).trim() === codCheckout.currency,
+    "webhook conserva referencia e importe capturado para conciliación");
   const unsigned = await sendEvent("ci-webhook-invalid-001", "0".repeat(64));
   ok(unsigned.response.status === 401, "webhook simulado rechaza firma inválida");
   const [firstWebhook, replayWebhook] = await Promise.all([
@@ -305,7 +329,7 @@ if (!webhookSecret || webhookSecret.length < 32) {
   ]);
   ok(firstWebhook.response.status === 200 && replayWebhook.response.status === 200,
     "webhooks concurrentes reciben respuesta idempotente");
-  const conflictingRaw = JSON.stringify({ eventId: "ci-webhook-paid-001", paymentId: successPaymentId, type: "payment.succeeded" });
+  const conflictingRaw = JSON.stringify({ eventId: "ci-webhook-paid-001", paymentId: successPaymentId, type: "payment.succeeded", providerReference: "ci-capture-cod-001", amountMinor: codCheckout.amountMinor, currency: codCheckout.currency });
   const conflictingSignature = await signSimulatedWebhook(webhookSecret, conflictingRaw);
   const conflicting = await api("/v1/webhooks/payments/simulated", {
     method: "POST", headers: { "content-type": "application/json", "x-simulated-signature": conflictingSignature },
@@ -328,7 +352,7 @@ if (!webhookSecret || webhookSecret.length < 32) {
   // Deliberately emulate the cancelled/expired state before the asynchronous provider delivery.
   await db`UPDATE orders SET status = 'CANCELLED', cancellation_reason = 'reservation_expired' WHERE id = ${lateOrder.id}`;
   await db`UPDATE inventory_reservations SET status = 'EXPIRED', expires_at = NOW() - INTERVAL '1 minute' WHERE order_id = ${lateOrder.id}`;
-  const lateRaw = JSON.stringify({ eventId: "ci-webhook-late-001", paymentId: latePaymentId, type: "payment.succeeded" });
+  const lateRaw = JSON.stringify({ eventId: "ci-webhook-late-001", paymentId: latePaymentId, type: "payment.succeeded", providerReference: "ci-capture-late-001", amountMinor: lateCheckoutResp.body.checkout.amountMinor, currency: lateCheckoutResp.body.checkout.currency });
   const lateSignature = await signSimulatedWebhook(webhookSecret, lateRaw);
   const lateRequest = () => api("/v1/webhooks/payments/simulated", {
     method: "POST", headers: { "content-type": "application/json", "x-simulated-signature": lateSignature }, body: lateRaw
@@ -347,7 +371,7 @@ if (!webhookSecret || webhookSecret.length < 32) {
   const latePaymentHistory = await db`SELECT COUNT(*)::int AS total FROM payment_status_history WHERE payment_id = ${latePaymentId} AND actor = 'webhook:simulated'`;
   ok(Number(latePaymentHistory[0]?.total) === 0, "captura tardía no genera transición PAID");
   const unknownPaymentId = 999999999;
-  const unknownRaw = JSON.stringify({ eventId: "ci-webhook-unknown-001", paymentId: unknownPaymentId, type: "payment.succeeded" });
+  const unknownRaw = JSON.stringify({ eventId: "ci-webhook-unknown-001", paymentId: unknownPaymentId, type: "payment.succeeded", providerReference: "ci-capture-unknown-001", amountMinor: cashCheckout.amountMinor, currency: cashCheckout.currency });
   const unknownSignature = await signSimulatedWebhook(webhookSecret, unknownRaw);
   const unknown = await api("/v1/webhooks/payments/simulated", {
     method: "POST", headers: { "content-type": "application/json", "x-simulated-signature": unknownSignature },
