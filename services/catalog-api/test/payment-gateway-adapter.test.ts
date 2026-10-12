@@ -73,6 +73,13 @@ test("sandbox adapter cannot execute or falsely reconcile a refund", async () =>
   const adapter = new SimulatedPaymentGatewayAdapter(secret);
   expect(adapter.id).toBe("SIMULATED");
   expect(adapter.environment).toBe("sandbox");
+  expect(adapter.executeVoid({
+    paymentId: request.paymentId,
+    providerPaymentUuid: "P-fake-uuid",
+    orderId: "MR-ORDER-001",
+    reason: "same day release",
+    idempotencyKey: "ci-void-001"
+  })).rejects.toThrow("void_execution_disabled");
   expect(adapter.executeRefund(request)).rejects.toThrow("refund_execution_disabled");
   expect(adapter.getRefundStatus(request)).rejects.toThrow("refund_reconciliation_disabled");
 });
