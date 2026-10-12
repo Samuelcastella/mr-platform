@@ -38,6 +38,10 @@ Every event stores a signed-body hash, provider capture reference, captured amou
 
 Unknown/non-simulated payment identifiers return HTTP 404 without persisting a stranded `PROCESSING` claim.
 
+## Operations: read-only exception queue
+
+`GET /v1/internal/payments/webhook-exceptions` requires the existing internal authorization and `payments.read` permission. Defaults to unresolved `PENDING_REVIEW` exceptions; `?status=ALL` returns the latest 100 regardless of review state. Each record includes event/payment/order IDs, order and payment status, the provider capture reference, captured amount/currency and the expected payment amount/currency. No endpoint in this module approves, reactivates or refunds a disputed payment: those actions require a separate authorized reconciliation workflow.
+
 ## Acceptance and outstanding work
 
 `services/catalog-api/test/checkout.integration.ts` runs against real PostgreSQL from the general CI workflow and verifies: valid and invalid signatures, concurrent event replay, one payment transition and audit, conflicting event identifiers, late capture with exactly one exception/audit, missing payment and mismatched amount, and zero automatic `SALE` Kardex entries for a late event.
