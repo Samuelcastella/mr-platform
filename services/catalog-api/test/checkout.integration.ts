@@ -280,6 +280,19 @@ if (!webhookSecret || webhookSecret.length < 32) {
       method: "POST", headers: { "content-type": "application/json", "x-simulated-signature": signature }, body: raw
     });
   };
+  const successPaymentId = Number(codCheckout.payment.id);
+  await db`UPDATE payments SET provider = 'SIMULATED' WHERE id = ${successPaymentId}`;
+  const successRaw = JSON.stringify({ eventId: "ci-webhook-success-001", paymentId: successPaymentId, type: "payment.succeeded" });
+  const successSignature = await signSimulatedWebhook(webhookSecret, successRaw);
+  const successResponse = await api("/v1/webhooks/payments/simulated", {
+    method: "POST", headers: { "content-type": "application/json", "x-simulated-signature": successSignature }, body: successRaw
+  });
+  ok(successResponse.response.status === 200 && successResponse.body.outcome === "PAID",
+    "webhook firmado confirma pago PENDING sin ruta manual");
+  const successPayment = await db`SELECT status FROM payments WHERE id = ${successPaymentId}`;
+  ok(successPayment[0]?.status === "PAID", "confirmación webhook persiste pago PAID");
+  const successHistory = await db`SELECT COUNT(*)::int AS total FROM payment_status_history WHERE payment_id = ${successPaymentId} AND actor = 'webhook:simulated'`;
+  ok(Number(successHistory[0]?.total) === 1, "confirmación webhook registra historial una vez");
   const unsigned = await sendEvent("ci-webhook-invalid-001", "0".repeat(64));
   ok(unsigned.response.status === 401, "webhook simulado rechaza firma inválida");
   const [firstWebhook, replayWebhook] = await Promise.all([
@@ -292,10 +305,10 @@ if (!webhookSecret || webhookSecret.length < 32) {
   const paidHistory = await db`SELECT COUNT(*)::int AS total FROM payment_status_history WHERE payment_id = ${paymentId} AND actor = 'webhook:simulated'`;
   ok(Number(paidHistory[0]?.total) === 0, "pago manual previo no se vuelve a confirmar por webhook");
   // Simulate provider capture after reservation/order cancellation.
-  const latePaymentId = Number(codCheckout.payment.id);
+  const latePaymentId = Number(cashCheckout.payment.id);
   await db`UPDATE payments SET provider = 'SIMULATED' WHERE id = ${latePaymentId}`;
-  await db`UPDATE orders SET status = 'CANCELLED', cancellation_reason = 'reservation_expired' WHERE id = ${codOrder.id}`;
-  await db`UPDATE inventory_reservations SET status = 'EXPIRED', expires_at = NOW() - INTERVAL '1 minute' WHERE order_id = ${codOrder.id}`;
+  await db`UPDATE orders SET status = 'CANCELLED', cancellation_reason = 'reservation_expired' WHERE id = ${cashOrder.id}`;
+  await db`UPDATE inventory_reservations SET status = 'EXPIRED', expires_at = NOW() - INTERVAL '1 minute' WHERE order_id = ${cashOrder.id}`;
   const lateRaw = JSON.stringify({ eventId: "ci-webhook-late-001", paymentId: latePaymentId, type: "payment.succeeded" });
   const lateSignature = await signSimulatedWebhook(webhookSecret, lateRaw);
   const lateRequest = () => api("/v1/webhooks/payments/simulated", {
@@ -308,9 +321,9 @@ if (!webhookSecret || webhookSecret.length < 32) {
     "pago tardío concurrente genera excepción idempotente");
   const exceptions = await db`SELECT COUNT(*)::int AS total FROM payment_webhook_exceptions WHERE event_id = 'ci-webhook-late-001'`;
   ok(Number(exceptions[0]?.total) === 1, "pago tardío registra una excepción única");
-  const lateSales = await db`SELECT COUNT(*)::int AS total FROM inventory_movements WHERE reference = ${"order:" + codOrder.id} AND movement_type = 'SALE'`;
+  const lateSales = await db`SELECT COUNT(*)::int AS total FROM inventory_movements WHERE reference = ${"order:" + cashOrder.id} AND movement_type = 'SALE'`;
   ok(Number(lateSales[0]?.total) === 0, "pago tardío no genera salida Kardex");
-  const lateOrderState = await db`SELECT status FROM orders WHERE id = ${codOrder.id}`;
+  const lateOrderState = await db`SELECT status FROM orders WHERE id = ${cashOrder.id}`;
   ok(lateOrderState[0]?.status === "CANCELLED", "webhook tardío no reactiva venta");
 }
 
