@@ -601,6 +601,28 @@ ok(preflight?.executionEnabled === false &&
    preflight?.providerExecutionAttempted === false &&
    preflight?.blockers?.includes("providerHomologated"),
    "preflight mantiene reembolso bloqueado por falta de homologación");
+const originalRefundAmount = Number((await db`
+  SELECT captured_amount_minor FROM payment_exception_refund_requests WHERE id = ${preflightId}`)[0].captured_amount_minor);
+await db`
+  UPDATE payment_exception_refund_requests
+  SET captured_amount_minor = captured_amount_minor + 1 WHERE id = ${preflightId}`;
+const mismatchedPreflight = await api(preflightPath, { headers: { cookie: approver.cookie } });
+ok(mismatchedPreflight.response.status === 200 &&
+   mismatchedPreflight.body.preflight?.checks?.capturedAmountConsistent === false &&
+   mismatchedPreflight.body.preflight?.blockers?.includes("capturedAmountConsistent") &&
+   mismatchedPreflight.body.preflight?.executionEnabled === false,
+   "preflight bloquea captura cuyo monto aprobado fue alterado");
+await db`
+  UPDATE payment_exception_refund_requests
+  SET captured_amount_minor = ${originalRefundAmount} WHERE id = ${preflightId}`;
+await db`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${lateOrder.id}`;
+const restoredOrderPreflight = await api(preflightPath, { headers: { cookie: approver.cookie } });
+ok(restoredOrderPreflight.response.status === 200 &&
+   restoredOrderPreflight.body.preflight?.checks?.cancelledOrder === false &&
+   restoredOrderPreflight.body.preflight?.executionEnabled === false,
+   "preflight bloquea devolución si pedido vuelve a estar confirmado");
+await db`UPDATE orders SET status = 'CANCELLED' WHERE id = ${lateOrder.id}`;
+
 
 const managerRefundQueue = await api("/v1/internal/payments/refund-requests", {
   headers: { cookie: reviewer.cookie }
