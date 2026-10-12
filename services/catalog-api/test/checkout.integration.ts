@@ -306,7 +306,8 @@ if (!webhookSecret || webhookSecret.length < 32) {
   ok(Number(paidHistory[0]?.total) === 0, "pago manual previo no se vuelve a confirmar por webhook");
   // Simulate provider capture after reservation/order cancellation.
   const latePaymentId = Number(cashCheckout.payment.id);
-  await db`UPDATE payments SET provider = 'SIMULATED' WHERE id = ${latePaymentId}`;
+  // Reset the test fixture to a pending captured payment; CASH was confirmed earlier in this suite.
+  await db`UPDATE payments SET provider = 'SIMULATED', status = 'PENDING' WHERE id = ${latePaymentId}`;
   await db`UPDATE orders SET status = 'CANCELLED', cancellation_reason = 'reservation_expired' WHERE id = ${cashOrder.id}`;
   await db`UPDATE inventory_reservations SET status = 'EXPIRED', expires_at = NOW() - INTERVAL '1 minute' WHERE order_id = ${cashOrder.id}`;
   const lateRaw = JSON.stringify({ eventId: "ci-webhook-late-001", paymentId: latePaymentId, type: "payment.succeeded" });
