@@ -570,6 +570,38 @@ const pendingRefundRequests = await db`
 ok(Number(pendingRefundRequests[0]?.total) === 1 &&
    pendingRefundRequests[0]?.status === "APPROVED_NOT_SUBMITTED",
    "aprobación produce solicitud de reembolso única y sin ejecución externa");
+const approvedRefundRows = await db`
+  SELECT id FROM payment_exception_refund_requests WHERE payment_id = ${latePaymentId}`;
+const preflightId = Number(approvedRefundRows[0]?.id);
+const preflightPath = "/v1/internal/payments/refund-requests/" + preflightId + "/preflight";
+const anonymousPreflight = await api(preflightPath);
+ok(anonymousPreflight.response.status === 401, "preflight financiero requiere sesión");
+const servicePreflight = await api(preflightPath, {
+  headers: { "x-internal-key": internalKey }
+});
+ok(servicePreflight.response.status === 403, "credencial de servicio no autoriza preflight financiero");
+const reviewerPreflight = await api(preflightPath, {
+  headers: { cookie: reviewer.cookie }
+});
+ok(reviewerPreflight.response.status === 403, "revisor sin payments.refund no accede al preflight");
+const approverPreflight = await api(preflightPath, {
+  headers: { cookie: approver.cookie }
+});
+const preflight = approverPreflight.body.preflight;
+ok(approverPreflight.response.status === 200 &&
+   preflight?.checks?.approvedAndNotSubmitted === true &&
+   preflight?.checks?.independentReviewerAndApprover === true &&
+   preflight?.checks?.captureReferenceConsistent === true &&
+   preflight?.checks?.capturedAmountConsistent === true &&
+   preflight?.checks?.cancelledOrder === true &&
+   preflight?.checks?.noSaleKardexMovement === true &&
+   preflight?.checks?.exceptionIsLateCapture === true,
+   "preflight confirma doble control, captura, monto y ausencia de salida Kardex");
+ok(preflight?.executionEnabled === false &&
+   preflight?.providerExecutionAttempted === false &&
+   preflight?.blockers?.includes("providerHomologated"),
+   "preflight mantiene reembolso bloqueado por falta de homologación");
+
 const managerRefundQueue = await api("/v1/internal/payments/refund-requests", {
   headers: { cookie: reviewer.cookie }
 });
