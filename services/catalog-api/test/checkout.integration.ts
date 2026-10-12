@@ -300,6 +300,14 @@ if (!webhookSecret || webhookSecret.length < 32) {
   ]);
   ok(firstWebhook.response.status === 200 && replayWebhook.response.status === 200,
     "webhooks concurrentes reciben respuesta idempotente");
+  const conflictingRaw = JSON.stringify({ eventId: "ci-webhook-paid-001", paymentId: successPaymentId, type: "payment.succeeded" });
+  const conflictingSignature = await signSimulatedWebhook(webhookSecret, conflictingRaw);
+  const conflicting = await api("/v1/webhooks/payments/simulated", {
+    method: "POST", headers: { "content-type": "application/json", "x-simulated-signature": conflictingSignature },
+    body: conflictingRaw
+  });
+  ok(conflicting.response.status === 409 && conflicting.body.error === "event_id_conflict",
+    "mismo eventId con payload diferente rechaza conflicto");
   const eventCount = await db`SELECT COUNT(*)::int AS total FROM simulated_payment_events WHERE event_id = 'ci-webhook-paid-001'`;
   ok(Number(eventCount[0]?.total) === 1, "evento concurrente se persiste una vez");
   const paidHistory = await db`SELECT COUNT(*)::int AS total FROM payment_status_history WHERE payment_id = ${paymentId} AND actor = 'webhook:simulated'`;
