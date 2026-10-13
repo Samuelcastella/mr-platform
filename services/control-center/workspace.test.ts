@@ -27,6 +27,11 @@ test("workspace has responsive navigation and accessible controls",()=>{
   expect(source).toContain(".ws-link[hidden],.ws-group[hidden]{display:none!important}");
   expect(source).toContain(".ws-link:focus-visible");
 });
+test("keyboard users can skip navigation",()=>{
+  expect(source).toContain('<a class="ws-skip" href="#main-content">Saltar al contenido</a>');
+  expect(source).toContain('<main class="wrap" id="main-content">');
+  expect(source).toContain(".ws-skip:focus{top:8px}");
+});
 test("logout remains a CSRF-protected POST",()=>{
   expect(source).toContain('method="post" action="/logout"');
   expect(source).toContain('name="csrf" value="${esc(session.csrf)}"');
