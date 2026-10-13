@@ -1,0 +1,40 @@
+name: Storefront Responsive Visual Review
+on:
+  pull_request:
+    paths:
+      - 'web/storefront/**'
+      - '.github/workflows/storefront-visual.yml'
+  workflow_dispatch:
+jobs:
+  responsive-screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web/storefront
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run storefront tests
+        run: npm test
+      - name: Install browser test runner
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Start local storefront
+        run: |
+          PORT=3000 node server.js > /tmp/mr-storefront.log 2>&1 &
+          for i in $(seq 1 30); do if curl -fsS http://127.0.0.1:3000/health; then exit 0; fi; sleep 1; done
+          cat /tmp/mr-storefront.log
+          exit 1
+      - name: Capture responsive screenshots and validate layout
+        run: BASE_URL=http://127.0.0.1:3000 node test/visual.js
+      - name: Upload screenshots and layout report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storefront-responsive-review
+          path: web/storefront/visual-artifacts/
+          if-no-files-found: warn
