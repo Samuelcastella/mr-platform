@@ -32,6 +32,13 @@ test("keyboard users can skip navigation",()=>{
   expect(source).toContain('<main class="wrap" id="main-content">');
   expect(source).toContain(".ws-skip:focus{top:8px}");
 });
+test("module search announces results and opens navigation on mobile",()=>{
+  expect(source).toContain('id="ws-search-status" role="status" aria-live="polite"');
+  expect(source).toContain('aria-controls="ws-nav"');
+  expect(source).toContain("No se encontraron módulos");
+  expect(source).toContain("count+' módulos encontrados'");
+  expect(source).toContain("if(q&&innerWidth<=850)");
+});
 test("logout remains a CSRF-protected POST",()=>{
   expect(source).toContain('method="post" action="/logout"');
   expect(source).toContain('name="csrf" value="${esc(session.csrf)}"');
