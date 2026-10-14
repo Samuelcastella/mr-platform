@@ -31,6 +31,20 @@ The response **always** contains `executionEnabled: false`, `providerExecutionAt
 
 Current scope is strictly the simulated signed-event schema; before adapting to PixelPay replace the simulated capture-evidence joins with the provider's verified settlement records and support approved refunds for cases other than late cancellation through a separate policy.
 
+## Conciliación de estados por identificador de captura — incorporada como ensayo aislado
+
+La documentación oficial de PixelPay muestra `getStatus` mediante `StatusTransaction.payment_uuid`, ejecutado desde el backend. Este contrato no prueba la firma del callback, ni certifica reembolsos posteriores a la liquidación. Referencia: https://docs.pixelpay.com/use-case?case=sdk%2Fstatus%2Fstatus&lang=php&locale=es.
+
+`services/catalog-api/gateway-status-reconciliation.ts` añade un libro de observaciones `payment_gateway_status_observations` con hash de idempotencia por pago/observación. **No actualiza** `payments`, `orders`, `inventory_reservations` ni `inventory_movements`. Registra una auditoría solo al agregar una observación nueva.
+
+La función `reconcileSimulatedGatewayStatus` ensaya consultas con un lector inyectado `TrustedGatewayStatusReader`, usando únicamente referencias previamente recibidas en eventos HMAC simulados. Rechaza `PIXELPAY` explícitamente y solo se permite con `ALLOW_DESTRUCTIVE_TEST_DB=true` para evitar interpretar un resultado simulado como verificación bancaria. No hay consultas HTTP ni credenciales de PixelPay en esta implementación.
+
+La comparación detecta, entre otros: `PROVIDER_REFERENCE_MISMATCH`, `PAYMENT_AMOUNT_MISMATCH`, `LATE_PAYMENT_EXPIRED_RESERVATION`, `MATCHED_CAPTURE_REQUIRES_REVIEW` y `REFUND_STATUS_REQUIRES_SETTLEMENT_EVIDENCE`. Incluso una respuesta simulada `REFUNDED` **no convierte el pago en reembolsado**.
+
+El endpoint de solo lectura `GET /v1/internal/payments/provider-status-observations?paymentId=<id>` requiere sesión humana con `payments.refund` en el ámbito de ubicación del pedido. Rechaza tokens de servicio y operadores sin ese permiso. El CI ejecuta pruebas PostgreSQL de concurrencia, observaciones duplicadas, discrepancias y ausencia de movimientos `SALE`.
+
+**Pendiente para PixelPay real:** aprovisionar sandbox y SDK/endpoint configurado por el adquirente; consultar exclusivamente el `payment_uuid` guardado de forma autoritativa, validar la estructura real de `TransactionResult`, relacionar moneda/importes/referencia de transacción y conservar evidencia del estado autenticado. Luego desarrollar el adaptador real bajo otra revisión, nunca habilitar pagos con base en datos de callback sin validación.
+
 ## Worker integration contract (future; not deployed)
 
 1. A dedicated backend worker (never the public webhook or HTTP request) loads a `payment_exception_refund_requests` row, verifies `APPROVED_NOT_SUBMITTED`, validates actor approvals and reconciles **all capture references and amounts**.
