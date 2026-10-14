@@ -40,6 +40,13 @@ const PATHS: Record<QueueDomain, string> = {
   returns: "/returns",
   purchases: "/purchases"
 };
+const ANCHOR_PREFIX: Record<QueueDomain, string> = {
+  health: "incident-",
+  orders: "order-",
+  fulfillment: "fulfillment-",
+  returns: "return-",
+  purchases: "purchase-"
+};
 
 function safeHtml(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, ch =>
@@ -98,7 +105,8 @@ function addRow(
   result.push({
     key, domain, priority, title: title.slice(0, 100),
     detail: detail.slice(0, 160),
-    reason, destination: PATHS[domain], timestampMs: dateMs(date)
+    reason, destination: PATHS[domain] + "#" + ANCHOR_PREFIX[domain] + id,
+    timestampMs: dateMs(date)
   });
 }
 
