@@ -255,6 +255,7 @@ const priorityQueueStyles = `
 .wq-result-count{margin:15px 0 12px}
 .wq-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .wq-item{background:#fff;border:1px solid #ded5c8;border-radius:16px;padding:17px;min-width:0}
+.item:target{outline:3px solid #b7923b;outline-offset:2px;scroll-margin-top:100px}
 .wq-item-head{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:11px}
 .wq-priority{display:inline-flex;border-radius:999px;padding:4px 9px;font-weight:850;background:#efe9df;color:#544631}
 .wq-urgent{background:#fce9e6;color:#8e2a25}
@@ -498,7 +499,7 @@ async function ordersPage(url:URL,session:Session){
     const form=targets.length
       ?'<form method="post" action="/orders/'+Number(r.id)+'/status" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nuevo estado<select name="status">'+targets.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join("")+'</select></label><label>Motivo<input name="reason" maxlength="240" placeholder="Opcional"></label><button>Actualizar</button></form>'
       :"";
-    return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(r.channel||"WEB")+'</div><h3>'+esc(r.order_number||("#"+r.id))+'</h3><div class="meta">'+esc(r.customer_name||"Cliente sin nombre")+' · '+esc(r.customer_phone||"Sin teléfono")+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div style="margin-top:8px">'+esc(hnlMinor(r.grand_total_minor,r.currency||"HNL"))+'</div></div></div>'+form+'</article>';
+    return '<article id="order-'+Number(r.id)+'" class="item"><div class="item-head"><div><div class="eyebrow">'+esc(r.channel||"WEB")+'</div><h3>'+esc(r.order_number||("#"+r.id))+'</h3><div class="meta">'+esc(r.customer_name||"Cliente sin nombre")+' · '+esc(r.customer_phone||"Sin teléfono")+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div style="margin-top:8px">'+esc(hnlMinor(r.grand_total_minor,r.currency||"HNL"))+'</div></div></div>'+form+'</article>';
   }).join(""):'<div class="panel empty">Todavía no hay pedidos.</div>';
   return shell('<div class="eyebrow">Pedidos</div><h1>Ventas y estados de pedido</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
 }
@@ -1543,7 +1544,7 @@ async function purchasesPage(url:URL,session:Session){
       }
     }
 
-    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.poNumber)+'</h3><div class="meta">'+esc(r.supplierName)+' · Destino #'+esc(r.destinationLocationId)+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div>'+esc(hnlMinor(r.grandTotalMinor,r.currency))+'</div></div></div><div class="toolbar">'+actions.map((a:any)=>'<form method="post" action="/purchases/'+Number(r.id)+'/'+esc(a[0])+'"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button class="'+(a[0]==="cancel"?"ghost":"")+'">'+esc(a[1])+'</button></form>').join("")+'</div>'+receipt+'</article>';
+    return '<article id="purchase-'+Number(r.id)+'" class="item"><div class="item-head"><div><h3>'+esc(r.poNumber)+'</h3><div class="meta">'+esc(r.supplierName)+' · Destino #'+esc(r.destinationLocationId)+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div>'+esc(hnlMinor(r.grandTotalMinor,r.currency))+'</div></div></div><div class="toolbar">'+actions.map((a:any)=>'<form method="post" action="/purchases/'+Number(r.id)+'/'+esc(a[0])+'"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button class="'+(a[0]==="cancel"?"ghost":"")+'">'+esc(a[1])+'</button></form>').join("")+'</div>'+receipt+'</article>';
   }).join(""):'<div class="panel empty">Todavía no hay órdenes de compra.</div>';
 
   return shell('<div class="eyebrow">Compras</div><h1>Órdenes y recepción de mercadería</h1>'+opsNotice(url)+createForm+'<section class="queue">'+cards+'</section>',session);
@@ -1566,7 +1567,7 @@ async function fulfillmentPage(url:URL,session:Session){
   const cards=rows.length?rows.map((r:any)=>{
     const targets=next[String(r.status)]||[];
     const form=targets.length?'<form method="post" action="/fulfillment/'+Number(r.id)+'/status" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nuevo estado<select name="status">'+targets.map(x=>'<option>'+esc(x)+'</option>').join("")+'</select></label><label>Motivo<input name="reason" maxlength="300"></label><button>Actualizar</button></form>':"";
-    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.order_number)+'</h3><div class="meta">'+esc(r.type)+' · '+esc(r.department||"")+' · '+esc(r.municipality||"")+' · '+esc(r.provider||"Sin proveedor")+'</div></div><span class="pill">'+esc(r.status)+'</span></div>'+form+'</article>';
+    return '<article id="fulfillment-'+Number(r.id)+'" class="item"><div class="item-head"><div><h3>'+esc(r.order_number)+'</h3><div class="meta">'+esc(r.type)+' · '+esc(r.department||"")+' · '+esc(r.municipality||"")+' · '+esc(r.provider||"Sin proveedor")+'</div></div><span class="pill">'+esc(r.status)+'</span></div>'+form+'</article>';
   }).join(""):'<div class="panel empty">Todavía no hay entregas.</div>';
   return shell('<div class="eyebrow">Entregas</div><h1>Preparación y despacho</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
 }
@@ -1580,7 +1581,7 @@ async function returnsPage(url:URL,session:Session){
     let actions="";
     if(r.status==="REQUESTED")actions='<div class="toolbar"><form method="post" action="/returns/'+Number(r.id)+'/approve"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Aprobar</button></form><form method="post" action="/returns/'+Number(r.id)+'/reject" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><input name="reason" maxlength="500" placeholder="Motivo" required><button class="ghost">Rechazar</button></form></div>';
     if(r.status==="INSPECTED")actions='<form method="post" action="/returns/'+Number(r.id)+'/complete"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><button>Completar</button></form>';
-    return '<article class="item"><div class="item-head"><div><h3>'+esc(r.returnNumber)+'</h3><div class="meta">Pedido '+esc(r.orderNumber)+' · '+esc(r.requestedResolution)+' · '+esc(r.reasonCode)+'</div></div><span class="pill">'+esc(r.status)+'</span></div>'+actions+'</article>';
+    return '<article id="return-'+Number(r.id)+'" class="item"><div class="item-head"><div><h3>'+esc(r.returnNumber)+'</h3><div class="meta">Pedido '+esc(r.orderNumber)+' · '+esc(r.requestedResolution)+' · '+esc(r.reasonCode)+'</div></div><span class="pill">'+esc(r.status)+'</span></div>'+actions+'</article>';
   }).join(""):'<div class="panel empty">Todavía no hay devoluciones.</div>';
   return shell('<div class="eyebrow">Devoluciones</div><h1>Cambios y devoluciones</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
 }
@@ -1746,7 +1747,7 @@ async function healthDeskPage(url:URL,session:Session){
       }
       actions='<div class="toolbar">'+parts.join("")+'</div>';
     }
-    return '<article class="item"><div class="item-head"><div><h3>'+esc(i.incidentNumber)+'</h3>'+
+    return '<article id="incident-'+Number(i.id)+'" class="item"><div class="item-head"><div><h3>'+esc(i.incidentNumber)+'</h3>'+
       '<div class="meta">'+esc(i.incidentType)+' · '+esc(i.summary)+'</div></div>'+
       '<span class="pill '+(i.severity==="CRITICAL"?'high':'')+'">'+esc(i.status)+' · '+esc(i.severity)+'</span></div>'+
       actions+'</article>';
