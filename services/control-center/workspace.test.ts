@@ -25,6 +25,13 @@ test("every workspace navigation target has a GET route",()=>{
     expect(source.includes('url.pathname==="'+path+'"&&req.method==="GET"')).toBe(true);
   }
 });
+test("commerce and operations shortcuts link to existing modules",()=>{
+  const shortcuts=source.split('<nav class="ws-shortcuts"')[1]?.split("</nav>")[0] ?? "";
+  for(const path of ["/catalog","/orders","/inventory-adjustments","/purchases","/fulfillment","/credit"]){
+    expect(shortcuts).toContain('href="'+path+'"');
+    expect(source).toContain('url.pathname==="'+path+'"&&req.method==="GET"');
+  }
+});
 test("workspace has responsive navigation and accessible controls",()=>{
   expect(source).toContain('@media(max-width:850px)');
   expect(source).toContain('aria-controls="ws-side"');
