@@ -33,5 +33,20 @@ La página es **un mapa de navegación, no un orquestador**. La secuencia recome
 
 El workflow **Control Center Runtime CI** exige estas pruebas y el build de Bun. Las pruebas estáticas no sustituyen una inspección visual en 375/768/1280 px ni pruebas de rol extremo a extremo contra PostgreSQL; ambas siguen pendientes antes de habilitar producción.
 
+## Panel de inicio por permisos (segunda fase)
+
+El inicio `GET /` ahora antepone una vista operativa basada únicamente en APIs de consulta existentes: `/v1/internal/health-desk`, `/v1/internal/orders`, `/v1/internal/fulfillments`, `/v1/internal/returns` y `/v1/internal/procurement/purchase-orders`.
+
+- El backend del Control Center **solo solicita** un origen cuando `StaffUser.permissions` contiene el permiso de lectura requerido. Cada API mantiene sus comprobaciones de ámbito por ubicación.
+- Health Desk presenta los valores `openIncidents` y `criticalSignals` declarados en su resumen. Los demás indicadores cuentan registros con estados operativos concretos **en el listado recibido**, que puede estar paginado o limitado por alcance; no se presentan como totales globales.
+- Errores, respuestas sin datos válidos o falta de acceso se muestran como `—` con explicación: nunca se convierten en 0.
+- Los avisos son enlaces GET de revisión hacia módulos autorizados y no crean incidencias, modifican inventario, ejecutan pagos ni confirman pedidos. Los accesos rápidos se derivan del mismo catálogo de módulos y permisos del mapa.
+- El inicio se abre para todo StaffUser autenticado. Los usuarios sin `inquiries.read` reciben la vista operativa y no se consulta la bandeja; aquellos con el permiso siguen viendo el dashboard de intenciones existente debajo del resumen. Si la bandeja no responde, los indicadores disponibles siguen visibles.
+- La consulta ocurre al abrir la página. No hay suscripciones en vivo, background polling, cambios de estado ni afirmaciones sobre un proveedor bancario.
+
+Las pruebas `services/control-center/operational-overview.test.ts` verifican aislamiento por permisos, no ejecutar consultas sin autorización, conservación de fuentes saludables cuando otras fallan, valores ausentes no equivalentes a cero, estadísticas basadas en estados conocidos, acceso rápido solo GET y preservación de la bandeja heredada.
+
+Antes de desplegar aún faltan inspección visual en 375/768/1280 px y pruebas integrales con identidades y ubicaciones reales. La etiqueta «panel operativo» no implica que todas las integraciones del proyecto estén listas.
+
 ## Integración
 Este incremento se desarrolla en `feat/control-center-workflow-map` y se enviará a PR separado, sin modificar Railway mientras el despliegue previo continúe. La fusión debe seguir la aprobación de CI y revisión.
