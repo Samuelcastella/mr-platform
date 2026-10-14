@@ -4,7 +4,7 @@ import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 const expected: Record<string,string[]> = {
-  General:["/","/health-desk","/integration-matrix"],
+  General:["/","/workspace","/health-desk","/integration-matrix"],
   Comercio:["/orders","/customers","/catalog","/credit","/returns"],
   Operaciones:["/inventory-adjustments","/purchases","/fulfillment","/traceability","/quality-control"],
   Proveedores:["/suppliers","/manufacturers","/product-specifications","/production","/landed-cost","/vendor-review","/sourcing","/supplier-evaluations"],
