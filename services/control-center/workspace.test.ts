@@ -18,6 +18,13 @@ test("workspace exposes every documented module as a navigation link",()=>{
   }
   expect((nav?.match(/class="ws-link"/g)||[]).length).toBe(Object.values(expected).flat().length);
 });
+test("every workspace navigation target has a GET route",()=>{
+  const nav=source.split('<nav id="ws-nav">')[1]?.split("</nav>")[0] ?? "";
+  const paths=[...nav.matchAll(/class="ws-link" data-route="([^"]+)"/g)].map(m=>m[1]);
+  for(const path of paths){
+    expect(source.includes('url.pathname==="'+path+'"&&req.method==="GET"')).toBe(true);
+  }
+});
 test("workspace has responsive navigation and accessible controls",()=>{
   expect(source).toContain('@media(max-width:850px)');
   expect(source).toContain('aria-controls="ws-side"');
