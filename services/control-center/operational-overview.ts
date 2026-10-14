@@ -138,6 +138,7 @@ export function renderOperationalOverview(
 
   const alertMetrics = metrics.filter(metric => metric.count !== null && metric.count > 0 &&
     ["critical", "incidents", "returns", "purchases"].includes(metric.key));
+  const hasMissingSources = metrics.some(metric => metric.count === null);
   const alerts = alertMetrics.map(metric =>
     '<li><a href="' + metric.href + '"><strong>' + metric.count + '</strong> · ' +
     safeHtml(metric.label) + ' — revisar en el módulo</a></li>'
@@ -168,8 +169,10 @@ export function renderOperationalOverview(
     '<div class="ov-columns"><section class="panel" aria-labelledby="ov-alerts">' +
     '<h2 id="ov-alerts">Avisos para revisar</h2>' +
     (alerts ? '<ul class="ov-alerts">' + alerts + '</ul>' :
-      '<p class="meta">Sin avisos en los indicadores consultados. ' +
-      'Una fuente no disponible no significa que esté sin incidencias.</p>') +
+      '<p class="meta">' + (hasMissingSources ?
+        'No hay avisos confirmados en los datos disponibles. Algunas fuentes no se pudieron consultar.' :
+        'Sin avisos en los indicadores consultados.') +
+      '</p>') +
     '</section><section class="panel" aria-labelledby="ov-shortcuts">' +
     '<h2 id="ov-shortcuts">Accesos rápidos</h2>' +
     (shortcuts ? '<div class="ov-shortcuts">' + shortcuts + '</div>' :
