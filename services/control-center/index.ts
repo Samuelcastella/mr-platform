@@ -1,5 +1,6 @@
 import { integrationBaseline } from "./integration-matrix";
 import { renderWorkspaceFlowMap } from "./workspace-flow-map";
+import { loadOperationalSnapshots, renderOperationalOverview } from "./operational-overview";
 // bootstrap-ui-v2
 const API_BASE = (Bun.env.CATALOG_API_URL || "").replace(/\/+$/, "");
 const SESSION_COOKIE = "mrstaff";
@@ -219,8 +220,30 @@ const workflowStyles = `
 @media(max-width:480px){.wf-step{align-items:flex-start}.wf-action,.wf-restricted{margin-left:28px}}
 `;
 
+const overviewStyles = `
+.ov-overview{margin-bottom:30px}
+.ov-overview>h1{margin:8px 0 8px}
+.ov-overview>.meta{margin-bottom:18px;max-width:880px}
+.ov-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.ov-metric{display:grid;gap:8px;background:white;border:1px solid #ded5c8;border-radius:18px;padding:18px;color:#171513;text-decoration:none;min-width:0}
+.ov-metric:hover{border-color:#b7923b;box-shadow:0 4px 16px #00000010}
+.ov-metric:focus-visible,.ov-shortcut:focus-visible,.ov-alerts a:focus-visible,.ov-map:focus-visible{outline:3px solid #b7923b;outline-offset:3px}
+.ov-label{font-size:12px;color:#5c5043;font-weight:800}
+.ov-value{font-size:30px;font-weight:500;font-family:Georgia,serif}
+.ov-context{font-size:11px;color:#716656;line-height:1.5}
+.ov-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:14px}
+.ov-columns h2{margin:0 0 14px;font-size:21px}
+.ov-alerts{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.ov-alerts a{display:block;padding:10px 12px;border:1px solid #e6dbcc;border-radius:10px;text-decoration:none;color:#342c24;background:#fffaf1;font-size:12px;line-height:1.55}
+.ov-shortcuts{display:flex;flex-wrap:wrap;gap:8px}
+.ov-shortcut{border:1px solid #dfd5c6;border-radius:999px;padding:10px 12px;text-decoration:none;color:#342c24;background:#faf6ed;font-size:12px;font-weight:800}
+.ov-map{display:inline-block;margin-top:16px;color:#70551d;font-size:12px;font-weight:900}
+@media(max-width:1050px){.ov-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.ov-grid,.ov-columns{grid-template-columns:minmax(0,1fr)}.ov-columns h2{font-size:19px}}
+`;
+
 function shell(content:string,session:Session){
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם · Workspace</title><style>${css}</style><style>${workflowStyles}
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MR עדולם · Workspace</title><style>${css}</style><style>${workflowStyles}${overviewStyles}
 .ws-skip{position:absolute;left:12px;top:-80px;z-index:100;background:#fffdf9;color:#171513;padding:12px;border:2px solid #b7923b;border-radius:8px}.ws-skip:focus{top:8px}.ws-layout{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100vh}.ws-side{background:#171513;color:#f5eddd;padding:22px 16px;overflow-y:auto}.ws-brand{font-size:19px;font-weight:900;color:#e7cf89;padding:10px 12px 24px}.ws-brand small{display:block;color:#c4b9a6;font-size:11px;margin-top:5px;letter-spacing:.13em}.ws-group{margin:0 0 19px}.ws-group h2{font-size:10px;letter-spacing:.13em;color:#a99b85;margin:0 12px 8px}.ws-link{display:block;color:#eee4d5;text-decoration:none;border-radius:10px;padding:10px 12px;font-size:13px}.ws-link:hover,.ws-link:focus-visible,.ws-link[aria-current=page]{background:#493e2a;color:#f5d77d;outline-offset:2px}.ws-main{min-width:0}.ws-top{display:flex;align-items:center;gap:14px;justify-content:space-between;padding:14px 24px;background:#fffdf9;border-bottom:1px solid #e5dbcc}.ws-top form{margin:0}.ws-search{max-width:290px;width:100%;border:1px solid #d8cfc2;border-radius:10px;padding:10px}.ws-search-status{font-size:12px;color:#6c6255;min-width:0}.ws-menu{display:none}.ws-main .wrap{max-width:1400px;margin:auto;padding:24px}.ws-side[hidden]{display:none}.ws-link[hidden],.ws-group[hidden]{display:none!important}.ws-link:focus-visible,.ws-menu:focus-visible,.ws-search:focus-visible{outline:3px solid #b7923b;outline-offset:3px}@media(max-width:850px){.ws-layout{display:block}.ws-side{position:fixed;z-index:50;inset:0 auto 0 0;width:min(290px,86vw);box-shadow:10px 0 30px #0004}.ws-side:not(.ws-open){display:none}.ws-menu{display:inline-flex}.ws-main .wrap{padding:16px}.ws-top{padding:12px}.ws-search{max-width:180px}}@media(prefers-reduced-motion:reduce){.ws-link{transition:none}}
 </style></head><body><div class="ws-layout"><aside class="ws-side" id="ws-side" aria-label="Navegación principal"><div class="ws-brand">MR עדולם<small>CONTROL CENTER · WORKSPACE</small></div><nav id="ws-nav"><section class="ws-group"><h2>GENERAL</h2><a href="/" class="ws-link" data-route="/">Inicio</a><a href="/workspace" class="ws-link" data-route="/workspace">Mapa operativo</a><a href="/health-desk" class="ws-link" data-route="/health-desk">Health Desk</a><a href="/integration-matrix" class="ws-link" data-route="/integration-matrix">Integraciones</a></section><section class="ws-group"><h2>COMERCIO</h2><a href="/orders" class="ws-link" data-route="/orders">Pedidos</a><a href="/customers" class="ws-link" data-route="/customers">Clientes</a><a href="/catalog" class="ws-link" data-route="/catalog">Catálogo</a><a href="/credit" class="ws-link" data-route="/credit">Crédito</a><a href="/returns" class="ws-link" data-route="/returns">Devoluciones</a></section><section class="ws-group"><h2>OPERACIONES</h2><a href="/inventory-adjustments" class="ws-link" data-route="/inventory-adjustments">Inventario</a><a href="/purchases" class="ws-link" data-route="/purchases">Compras</a><a href="/fulfillment" class="ws-link" data-route="/fulfillment">Entregas</a><a href="/traceability" class="ws-link" data-route="/traceability">Trazabilidad</a><a href="/quality-control" class="ws-link" data-route="/quality-control">Calidad</a></section><section class="ws-group"><h2>PROVEEDORES Y PRODUCCIÓN</h2><a href="/suppliers" class="ws-link" data-route="/suppliers">Proveedores</a><a href="/manufacturers" class="ws-link" data-route="/manufacturers">Fabricantes</a><a href="/product-specifications" class="ws-link" data-route="/product-specifications">Especificaciones</a><a href="/production" class="ws-link" data-route="/production">Producción</a><a href="/landed-cost" class="ws-link" data-route="/landed-cost">Costeo</a><a href="/vendor-review" class="ws-link" data-route="/vendor-review">Revisión</a><a href="/sourcing" class="ws-link" data-route="/sourcing">Sourcing</a><a href="/supplier-evaluations" class="ws-link" data-route="/supplier-evaluations">Evaluaciones</a></section><section class="ws-group"><h2>INTELIGENCIA</h2><a href="/product-intelligence" class="ws-link" data-route="/product-intelligence">Inteligencia</a><a href="/assortment-decisions" class="ws-link" data-route="/assortment-decisions">Decisiones</a><a href="/economic-readiness" class="ws-link" data-route="/economic-readiness">Políticas</a></section></nav></aside><div class="ws-main"><div class="ws-top"><a class="ws-skip" href="#main-content">Saltar al contenido</a><button class="ws-menu" type="button" aria-controls="ws-side" aria-expanded="false" onclick="const side=document.getElementById('ws-side');side.classList.toggle('ws-open');this.setAttribute('aria-expanded',String(side.classList.contains('ws-open')))">☰ Menú</button><input class="ws-search" type="search" placeholder="Buscar módulo…" aria-label="Buscar módulo" aria-controls="ws-nav" oninput="const q=this.value.trim().toLocaleLowerCase();let count=0;document.querySelectorAll('.ws-link').forEach(a=>{a.hidden=!a.textContent.toLocaleLowerCase().includes(q);if(!a.hidden)count++});document.querySelectorAll('.ws-group').forEach(g=>g.hidden=![...g.querySelectorAll('.ws-link')].some(a=>!a.hidden));document.getElementById('ws-search-status').textContent=q?(count?count+' módulos encontrados':'No se encontraron módulos'):'';if(q&&innerWidth<=850){document.getElementById('ws-side').classList.add('ws-open');document.querySelector('.ws-menu').setAttribute('aria-expanded','true')}"><span id="ws-search-status" role="status" aria-live="polite" class="ws-search-status"></span><span class="user">${esc(session.actor)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Salir</button></form></div><main class="wrap" id="main-content">${content}</main></div></div><script>document.querySelectorAll('.ws-link').forEach(a=>{if(a.getAttribute('href')===location.pathname)a.setAttribute('aria-current','page')});document.addEventListener('keydown',e=>{if(e.key==='Escape'){const side=document.getElementById('ws-side');side?.classList.remove('ws-open');document.querySelector('.ws-menu')?.setAttribute('aria-expanded','false')}});</script></body></html>`;
 }
@@ -282,7 +305,22 @@ function csvCell(v:unknown){
   return /[",\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x;
 }
 
+async function operationalOverviewForSession(session:Session){
+  const permissions=Array.isArray(session.user?.permissions)
+    ? session.user.permissions.filter((permission:unknown):permission is string=>typeof permission==="string")
+    : [];
+  const snapshots=await loadOperationalSnapshots(permissions,async (path:string)=>{
+    const response=await api(path,{cookieHeader:session.cookieHeader});
+    return {ok:Boolean(response.response?.ok),body:response.body};
+  });
+  return renderOperationalOverview(permissions,snapshots);
+}
+
 async function dashboard(url:URL,session:Session){
+  const overview=await operationalOverviewForSession(session);
+  const permissions=Array.isArray(session.user?.permissions)?session.user.permissions:[];
+  if(!permissions.includes("inquiries.read"))return shell(overview,session);
+  const canManageInquiries=permissions.includes("inquiries.write");
   const query=new URLSearchParams();
   for(const key of ["status","kind","q"]){
     const value=(url.searchParams.get(key)||"").slice(0,key==="q"?120:32);
@@ -295,10 +333,10 @@ async function dashboard(url:URL,session:Session){
   );
 
   if(result.response?.status===403){
-    return shell(`<div class="panel empty"><h2>Acceso insuficiente</h2><p>Tu usuario no tiene el permiso <b>inquiries.read</b>.</p></div>`,session);
+    return shell(overview+`<div class="panel empty"><h2>Bandeja restringida</h2><p>No hay acceso a las intenciones en esta ubicación.</p></div>`,session);
   }
   if(!result.response?.ok){
-    return shell(`<div class="panel empty"><h2>Servicio no disponible</h2><p>No se pudo consultar el Commerce Core.</p></div>`,session);
+    return shell(overview+`<div class="panel empty"><h2>Intenciones no disponibles</h2><p>No se pudo consultar la bandeja.</p></div>`,session);
   }
 
   const data=result.body||{};
@@ -352,15 +390,15 @@ async function dashboard(url:URL,session:Session){
       <div class="suggest"><b>Acción sugerida:</b> ${esc(suggestedAction(r.kind))}</div>
       <details><summary class="meta">Datos estructurados</summary><pre class="meta">${esc(JSON.stringify(r.metadata||{},null,2))}</pre></details>
       ${(historyBy.get(Number(r.id))||[]).length?`<details><summary class="meta">Historial interno</summary>${(historyBy.get(Number(r.id))||[]).map((h:any)=>`<div class="meta" style="padding:6px 0;border-bottom:1px solid #eee5d9"><b>${esc(h.actor)}</b> · ${esc(labels[h.from_status]||h.from_status||"—")} → ${esc(labels[h.to_status]||h.to_status||"—")} · ${new Date(h.created_at).toLocaleString("es-HN")}${h.note?`<br>${esc(h.note)}`:""}</div>`).join("")}</details>`:""}
-      <form class="actions" method="post" action="/inquiries/${r.id}/update">
+      ${canManageInquiries?`<form class="actions" method="post" action="/inquiries/${r.id}/update">
         <input type="hidden" name="csrf" value="${esc(session.csrf)}">
         <label>Estado<select name="status">${opts([...statuses],r.status)}</select></label>
         <label>Prioridad<select name="priority">${[0,1,2,3].map(x=>`<option value="${x}" ${x===Number(r.priority)?"selected":""}>${x}</option>`).join("")}</select></label>
         <label>Asignado a<input name="assigned_to" maxlength="120" value="${esc(r.assigned_to||"")}"></label>
         <label>Notas internas<textarea name="internal_notes" maxlength="4000">${esc(r.internal_notes||"")}</textarea></label>
         <button>Guardar</button>
-      </form>
-      ${["product_request","notify","supplier","partnership"].includes(r.kind)?`<form method="post" action="/inquiries/${r.id}/opportunity" style="margin-top:10px"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Crear oportunidad</button></form>`:""}
+      </form>`:""}
+      ${canManageInquiries&&["product_request","notify","supplier","partnership"].includes(r.kind)?`<form method="post" action="/inquiries/${r.id}/opportunity" style="margin-top:10px"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Crear oportunidad</button></form>`:""}
     </article>`).join(""):`<div class="panel empty">No hay intenciones con estos filtros.</div>`;
 
   const q=(url.searchParams.get("q")||"").slice(0,120);
@@ -371,7 +409,8 @@ async function dashboard(url:URL,session:Session){
     ?`<div class="panel" style="margin-top:12px"><div class="eyebrow">Oportunidades abiertas</div>${opportunities.map((o:any)=>`<p class="meta"><b>${esc(o.title)}</b> · ${esc(o.opportunity_type)} · ${esc(o.owner||"sin asignar")}</p>`).join("")}</div>`
     :"";
 
-  return shell(`
+  return shell(overview+`
+    <section id="inquiries" aria-label="Bandeja de intenciones">
     <div class="eyebrow">Bandeja de Intenciones</div>
     <h1>Señales del mercado convertidas en trabajo.</h1>
     <p class="meta">Sesión individual StaffUser · permisos efectivos del Commerce Core.</p>
@@ -383,7 +422,7 @@ async function dashboard(url:URL,session:Session){
       <select name="status"><option value="">Todos los estados</option>${opts([...statuses],status)}</select>
       <button>Filtrar</button>
     </form>
-    <section class="queue">${items}</section>
+    <section class="queue">${items}</section></section>
   `,session);
 }
 
