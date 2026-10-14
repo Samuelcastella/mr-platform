@@ -103,7 +103,7 @@ test("operational overview is home for staff without inquiries.read and preserve
   expect(inquiries).toBeGreaterThan(fallback);
   expect(route).toBeGreaterThan(guard);
   expect(source).toContain('return shell(overview+`');
-  expect(source).toContain('class="ov-grid"');
+  expect(source).toContain('import { loadOperationalSnapshots, renderOperationalOverview } from "./operational-overview"');
   expect(source).toContain("loadOperationalSnapshots(permissions");
   expect(source).toContain("@media(max-width:650px)");
 });
