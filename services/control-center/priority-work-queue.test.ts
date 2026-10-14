@@ -63,16 +63,16 @@ test("only explicitly pending statuses are enqueued and rank precedes age",()=>{
   expect(items.some(x=>x.title==="Ya resuelto")).toBe(false);
   expect(items.some(x=>x.title==="MR-16")).toBe(false);
   expect(items.some(x=>x.title==="DEV-27")).toBe(false);
-  expect(items.every(x=>["/orders","/fulfillment","/returns","/purchases","/health-desk"].includes(x.destination))).toBe(true);
+  expect(items.every(x=>["/orders","/fulfillment","/returns","/purchases","/health-desk"].includes(x.destination.split("#")[0]))).toBe(true);
 });
 
 test("staff permissions filter both queue items and their navigation endpoints",()=>{
   const items=buildPriorityQueue(["returns.read"],snapshots);
   expect(items.map(x=>x.key)).toEqual(["returns:25","returns:26"]);
   const html=renderPriorityQueue(["returns.read"],snapshots);
-  expect(html).toContain('href="/returns"');
-  expect(html).not.toContain('href="/orders"');
-  expect(html).not.toContain('href="/purchases"');
+  expect(html).toContain('href="/returns#return-25"');
+  expect(html).not.toContain('href="/orders#order-13"');
+  expect(html).not.toContain('href="/purchases#purchase-31"');
   expect(html).not.toContain("Webhook fallando");
   expect(html).not.toContain("MR-13");
   const denied=renderPriorityQueue([],snapshots);
@@ -104,6 +104,7 @@ test("filters are GET-only, allowlisted and do not reflect untrusted parameters"
   expect(html).toContain('aria-current="page"');
   expect(html).toContain("Mostrando 1 de 1 pendientes");
   expect(html).toContain("Entrega fallida");
+  expect(html).toContain('href="/fulfillment#fulfillment-19"');
   expect(html).not.toContain("INC-006");
   const malicious=renderPriorityQueue(permissions,snapshots,{
     priority:'urgent"><script>alert(1)</script>',domain:'orders" onclick="alert(2)'
@@ -155,4 +156,5 @@ test("dedicated work queue requires existing authenticated staff session and is 
   expect(source).toContain('url.searchParams.get("domain")');
   expect(source).toContain(".wq-open:focus-visible");
   expect(source).toContain("@media(max-width:700px)");
+  expect(source).toContain(".item:target");
 });
