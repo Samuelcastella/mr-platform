@@ -133,6 +133,24 @@ test("malformed identifiers are ignored, text is escaped and rows deduplicate",(
   expect(html).not.toContain("Negative");
 });
 
+test("area filters expose only authorized operational modules",()=>{
+  const html=renderPriorityQueue(["returns.read"],snapshots);
+  expect(html).toContain('href="/work-queue?domain=returns"');
+  expect(html).not.toContain('href="/work-queue?domain=orders"');
+  expect(html).not.toContain('href="/work-queue?domain=health"');
+});
+
+test("unknown dates sort deterministically and never outrank dated work in same severity",()=>{
+  const a:OverviewSnapshots={orders:{ok:true,body:{data:[
+    {id:3,status:"CONFIRMED",order_number:"MR-3",created_at:null},
+    {id:2,status:"CONFIRMED",order_number:"MR-2",created_at:"not a date"},
+    {id:4,status:"CONFIRMED",order_number:"MR-4",created_at:"2026-10-11T09:00:00Z"}
+  ]}}};
+  const order=buildPriorityQueue(["orders.read"],a).map(item=>item.key);
+  expect(order).toEqual(["orders:4","orders:2","orders:3"]);
+  expect(buildPriorityQueue(["orders.read"],a).map(item=>item.key)).toEqual(order);
+});
+
 test("home preview limits to six and uses already fetched authorized data",()=>{
   const html=renderPriorityQueue(permissions,snapshots,{compact:true});
   expect((html.match(/class="wq-item"/g)||[]).length).toBe(6);
