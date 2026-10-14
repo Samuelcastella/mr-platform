@@ -4,6 +4,7 @@
   "private": true,
   "packageManager": "bun@1.2.0",
   "scripts": {
-    "start": "bun run index.ts"
+    "start": "bun run index.ts",
+    "test:workspace": "bun test workspace.test.ts"
   }
 }
