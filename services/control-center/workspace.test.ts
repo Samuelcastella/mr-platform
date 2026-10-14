@@ -53,6 +53,13 @@ test("module search announces results and opens navigation on mobile",()=>{
   expect(source).toContain("count+' módulos encontrados'");
   expect(source).toContain("if(q&&innerWidth<=850)");
 });
+test("order lifecycle screens expose operational handoffs",()=>{
+  expect(source).toContain('<a href="/inventory-adjustments">Consultar inventario</a>');
+  expect(source).toContain('<a href="/fulfillment">Ver entregas</a>');
+  expect(source).toContain('<a href="/returns">Gestionar devoluciones</a>');
+  expect(source).toContain('<a href="/orders">Ver pedidos</a>');
+  expect(source).toContain('<a href="/traceability">Consultar trazabilidad</a>');
+});
 test("logout remains a CSRF-protected POST",()=>{
   expect(source).toContain('method="post" action="/logout"');
   expect(source).toContain('name="csrf" value="${esc(session.csrf)}"');
