@@ -320,6 +320,7 @@ async function dashboard(url:URL,session:Session){
   const overview=await operationalOverviewForSession(session);
   const permissions=Array.isArray(session.user?.permissions)?session.user.permissions:[];
   if(!permissions.includes("inquiries.read"))return shell(overview,session);
+  const canManageInquiries=permissions.includes("inquiries.write");
   const query=new URLSearchParams();
   for(const key of ["status","kind","q"]){
     const value=(url.searchParams.get(key)||"").slice(0,key==="q"?120:32);
@@ -389,15 +390,15 @@ async function dashboard(url:URL,session:Session){
       <div class="suggest"><b>Acción sugerida:</b> ${esc(suggestedAction(r.kind))}</div>
       <details><summary class="meta">Datos estructurados</summary><pre class="meta">${esc(JSON.stringify(r.metadata||{},null,2))}</pre></details>
       ${(historyBy.get(Number(r.id))||[]).length?`<details><summary class="meta">Historial interno</summary>${(historyBy.get(Number(r.id))||[]).map((h:any)=>`<div class="meta" style="padding:6px 0;border-bottom:1px solid #eee5d9"><b>${esc(h.actor)}</b> · ${esc(labels[h.from_status]||h.from_status||"—")} → ${esc(labels[h.to_status]||h.to_status||"—")} · ${new Date(h.created_at).toLocaleString("es-HN")}${h.note?`<br>${esc(h.note)}`:""}</div>`).join("")}</details>`:""}
-      <form class="actions" method="post" action="/inquiries/${r.id}/update">
+      ${canManageInquiries?`<form class="actions" method="post" action="/inquiries/${r.id}/update">
         <input type="hidden" name="csrf" value="${esc(session.csrf)}">
         <label>Estado<select name="status">${opts([...statuses],r.status)}</select></label>
         <label>Prioridad<select name="priority">${[0,1,2,3].map(x=>`<option value="${x}" ${x===Number(r.priority)?"selected":""}>${x}</option>`).join("")}</select></label>
         <label>Asignado a<input name="assigned_to" maxlength="120" value="${esc(r.assigned_to||"")}"></label>
         <label>Notas internas<textarea name="internal_notes" maxlength="4000">${esc(r.internal_notes||"")}</textarea></label>
         <button>Guardar</button>
-      </form>
-      ${["product_request","notify","supplier","partnership"].includes(r.kind)?`<form method="post" action="/inquiries/${r.id}/opportunity" style="margin-top:10px"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Crear oportunidad</button></form>`:""}
+      </form>`:""}
+      ${canManageInquiries&&["product_request","notify","supplier","partnership"].includes(r.kind)?`<form method="post" action="/inquiries/${r.id}/opportunity" style="margin-top:10px"><input type="hidden" name="csrf" value="${esc(session.csrf)}"><button class="ghost">Crear oportunidad</button></form>`:""}
     </article>`).join(""):`<div class="panel empty">No hay intenciones con estos filtros.</div>`;
 
   const q=(url.searchParams.get("q")||"").slice(0,120);
