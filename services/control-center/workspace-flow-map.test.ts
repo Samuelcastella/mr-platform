@@ -63,7 +63,7 @@ test("workspace route is behind existing StaffUser authentication and GET only",
   expect(route).toBeGreaterThan(authGuard);
   expect(source).toContain("renderWorkspaceFlowMap(permissions,url.searchParams.get");
   expect(source).toContain('href="/workspace" class="ws-link"');
-  expect(source).toContain("aria-label=\"Filtrar flujos\"");
+  expect(renderWorkspaceFlowMap(["catalog.read"])).toContain('aria-label="Filtrar flujos"');
 });
 
 test("workflow map uses semantic steps and visible keyboard focus",()=>{
