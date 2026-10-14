@@ -403,7 +403,7 @@ async function ordersPage(url:URL,session:Session){
       :"";
     return '<article class="item"><div class="item-head"><div><div class="eyebrow">'+esc(r.channel||"WEB")+'</div><h3>'+esc(r.order_number||("#"+r.id))+'</h3><div class="meta">'+esc(r.customer_name||"Cliente sin nombre")+' · '+esc(r.customer_phone||"Sin teléfono")+'</div></div><div><span class="pill">'+esc(r.status)+'</span><div style="margin-top:8px">'+esc(hnlMinor(r.grand_total_minor,r.currency||"HNL"))+'</div></div></div>'+form+'</article>';
   }).join(""):'<div class="panel empty">Todavía no hay pedidos.</div>';
-  return shell('<div class="eyebrow">Pedidos</div><h1>Ventas y estados de pedido</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
+  return shell('<div class="eyebrow">Pedidos</div><h1>Ventas y estados de pedido</h1><p class="meta">Flujo operativo: verificar el pago y la reserva en Commerce Core antes de avanzar estados. Las transiciones se validan en el servidor.</p><p class="meta"><a href="/inventory-adjustments">Consultar inventario</a> · <a href="/fulfillment">Ver entregas</a> · <a href="/returns">Gestionar devoluciones</a></p>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
 }
 
 async function customersPage(url:URL,session:Session){
@@ -1471,7 +1471,7 @@ async function fulfillmentPage(url:URL,session:Session){
     const form=targets.length?'<form method="post" action="/fulfillment/'+Number(r.id)+'/status" class="toolbar"><input type="hidden" name="csrf" value="'+esc(session.csrf)+'"><label>Nuevo estado<select name="status">'+targets.map(x=>'<option>'+esc(x)+'</option>').join("")+'</select></label><label>Motivo<input name="reason" maxlength="300"></label><button>Actualizar</button></form>':"";
     return '<article class="item"><div class="item-head"><div><h3>'+esc(r.order_number)+'</h3><div class="meta">'+esc(r.type)+' · '+esc(r.department||"")+' · '+esc(r.municipality||"")+' · '+esc(r.provider||"Sin proveedor")+'</div></div><span class="pill">'+esc(r.status)+'</span></div>'+form+'</article>';
   }).join(""):'<div class="panel empty">Todavía no hay entregas.</div>';
-  return shell('<div class="eyebrow">Entregas</div><h1>Preparación y despacho</h1>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
+  return shell('<div class="eyebrow">Entregas</div><h1>Preparación y despacho</h1><p class="meta">Despachar únicamente pedidos confirmados por el sistema; consulta el estado de venta antes de actualizar una entrega.</p><p class="meta"><a href="/orders">Ver pedidos</a> · <a href="/traceability">Consultar trazabilidad</a> · <a href="/returns">Ver devoluciones</a></p>'+opsNotice(url)+'<section class="queue">'+cards+'</section>',session);
 }
 
 async function returnsPage(url:URL,session:Session){
