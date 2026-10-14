@@ -720,6 +720,99 @@ ok(duplicateRefundRequest.response.status === 409 &&
 const stillOneRefundRequest = await db`
   SELECT COUNT(*)::int AS total FROM payment_exception_refund_requests WHERE payment_id = ${latePaymentId}`;
 ok(Number(stillOneRefundRequest[0]?.total) === 1, "solo existe una solicitud de reembolso por pago");
+
+const { reconcileSimulatedGatewayStatus } = await import("../gateway-status-reconciliation");
+const mockCaptureAmount = Number(lateCheckoutResp.body.checkout.amountMinor);
+const mockCaptureCurrency = String(lateCheckoutResp.body.checkout.currency);
+const simulatedStatusReader = {
+  id: "SIMULATED" as const,
+  async lookupStatus(reference: string) {
+    return {
+      transactionReference: reference, status: "CAPTURED" as const,
+      amountMinor: mockCaptureAmount, currency: mockCaptureCurrency
+    };
+  }
+};
+const [observedA, observedB] = await Promise.all([
+  reconcileSimulatedGatewayStatus(db, latePaymentId, simulatedStatusReader),
+  reconcileSimulatedGatewayStatus(db, latePaymentId, simulatedStatusReader)
+]);
+ok(observedA.finding === "LATE_PAYMENT_EXPIRED_RESERVATION" &&
+   observedB.finding === "LATE_PAYMENT_EXPIRED_RESERVATION" &&
+   [observedA.replayed, observedB.replayed].filter(Boolean).length === 1,
+   "getStatus simulado concurrente registra una sola observación tardía");
+const observedRows = await db`
+  SELECT COUNT(*)::int AS total FROM payment_gateway_status_observations
+  WHERE payment_id = ${latePaymentId} AND finding = 'LATE_PAYMENT_EXPIRED_RESERVATION'`;
+ok(Number(observedRows[0]?.total) === 1,
+   "reconciliación de captura tardía se almacena idempotentemente");
+const observedAudits = await db`
+  SELECT COUNT(*)::int AS total FROM audit_events
+  WHERE action = 'payment.provider_status_observed' AND resource_id = ${String(latePaymentId)}`;
+ok(Number(observedAudits[0]?.total) === 1, "un único evento de auditoría por observación nueva");
+const tamperedStatusReader = {
+  id: "SIMULATED" as const,
+  async lookupStatus(reference: string) {
+    return {
+      transactionReference: reference, status: "CAPTURED" as const,
+      amountMinor: mockCaptureAmount + 1, currency: mockCaptureCurrency
+    };
+  }
+};
+const statusMismatch = await reconcileSimulatedGatewayStatus(db, latePaymentId, tamperedStatusReader);
+ok(statusMismatch.finding === "PAYMENT_AMOUNT_MISMATCH" && statusMismatch.replayed === false,
+   "reconciliación detecta diferencia entre importe remoto y captura firmada");
+const fakeRefundStatusReader = {
+  id: "SIMULATED" as const,
+  async lookupStatus(reference: string) {
+    return {
+      transactionReference: reference, status: "REFUNDED" as const,
+      amountMinor: mockCaptureAmount, currency: mockCaptureCurrency
+    };
+  }
+};
+const refundStatusObservation = await reconcileSimulatedGatewayStatus(db, latePaymentId, fakeRefundStatusReader);
+ok(refundStatusObservation.finding === "REFUND_STATUS_REQUIRES_SETTLEMENT_EVIDENCE",
+   "estado REFUNDED simulado exige evidencia de liquidación independiente");
+let untrustedStatusRejected = false;
+try {
+  await reconcileSimulatedGatewayStatus(db, latePaymentId, {
+    id: "PIXELPAY",
+    async lookupStatus(reference: string) {
+      return { transactionReference: reference, status: "REFUNDED", amountMinor: mockCaptureAmount, currency: mockCaptureCurrency };
+    }
+  });
+} catch (error: any) {
+  untrustedStatusRejected = String(error?.message).includes("gateway_status_homologation_required");
+}
+ok(untrustedStatusRejected, "no se aceptan estados PixelPay sin homologación del SDK");
+const statusPath = "/v1/internal/payments/provider-status-observations?paymentId=" + latePaymentId;
+const anonymousStatusList = await api(statusPath);
+ok(anonymousStatusList.response.status === 401,
+   "observaciones financieras no se exponen sin sesión");
+const statusListManager = await api(statusPath, { headers: { cookie: reviewer.cookie } });
+ok(statusListManager.response.status === 403,
+   "MANAGER sin payments.refund no consulta observaciones de conciliación");
+const statusListMachine = await api(statusPath, { headers: { "x-internal-key": internalKey } });
+ok(statusListMachine.response.status === 403,
+   "token técnico no suplanta sesión financiera para consultar observaciones");
+const statusListFinance = await api(statusPath, { headers: { cookie: approver.cookie } });
+ok(statusListFinance.response.status === 200 &&
+   Array.isArray(statusListFinance.body.data) &&
+   statusListFinance.body.data.length === 3 &&
+   statusListFinance.body.data.some((item: any) => item.finding === "PAYMENT_AMOUNT_MISMATCH") &&
+   statusListFinance.body.data.some((item: any) => item.finding === "LATE_PAYMENT_EXPIRED_RESERVATION"),
+   "finanzas puede consultar las observaciones con hallazgos y sin escribir estado");
+const statusPaymentAfter = await db`SELECT status FROM payments WHERE id = ${latePaymentId}`;
+const statusOrderAfter = await db`SELECT status FROM orders WHERE id = ${lateOrder.id}`;
+const statusSalesAfter = await db`
+  SELECT COUNT(*)::int AS total FROM inventory_movements
+  WHERE reference = ${"order:" + lateOrder.id} AND movement_type = 'SALE'`;
+ok(statusPaymentAfter[0]?.status === "PENDING" &&
+   statusOrderAfter[0]?.status === "CANCELLED" &&
+   Number(statusSalesAfter[0]?.total) === 0,
+   "ninguna observación de estado altera Payment, Order ni SALE Kardex");
+
 }
 
 if (failures) {
