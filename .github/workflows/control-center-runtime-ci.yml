@@ -26,5 +26,7 @@ jobs:
             sleep 1
           done
           curl -fsS http://127.0.0.1:3000/health
+      - name: Verify Workspace navigation and accessibility contracts
+        run: cd services/control-center && bun run test:workspace
       - name: Build Control Center
         run: bun build services/control-center/index.ts --target=bun --outfile=/tmp/control-center.js
