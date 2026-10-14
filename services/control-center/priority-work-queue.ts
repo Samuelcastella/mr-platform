@@ -188,11 +188,15 @@ export function buildPriorityQueue(
     }
   }
   const weights = { urgent: 0, high: 1, normal: 2 };
-  return items.sort((a, b) =>
-    weights[a.priority] - weights[b.priority] ||
-    (a.timestampMs === null ? 1 : b.timestampMs === null ? -1 : a.timestampMs - b.timestampMs) ||
-    a.key.localeCompare(b.key)
-  );
+  return items.sort((a, b) => {
+    const rank = weights[a.priority] - weights[b.priority];
+    if (rank !== 0) return rank;
+    // Missing dates sort last; equal/missing dates tie deterministically by key.
+    const age = a.timestampMs === null
+      ? (b.timestampMs === null ? 0 : 1)
+      : (b.timestampMs === null ? -1 : a.timestampMs - b.timestampMs);
+    return age || a.key.localeCompare(b.key);
+  });
 }
 
 export function priorityQueueCoverage(
@@ -246,7 +250,7 @@ export function renderPriorityQueue(
       (priority === p ? ' aria-current="page"' : "") + '>' +
       (p ? labels[p] : "Todas las prioridades") + '</a>').join("") +
     '</div><div class="wq-filter-group" aria-label="Área">' +
-    ([null, ...overviewSources.map(s => s.key)] as (QueueDomain | null)[]).map(d =>
+    ([null, ...overviewSources.filter(s => permissions.includes(s.permission)).map(s => s.key)] as (QueueDomain | null)[]).map(d =>
       '<a class="wq-filter" href="' + currentUrl(priority, d) + '"' +
       (domain === d ? ' aria-current="page"' : "") + '>' +
       (d ? NAMES[d] : "Todas las áreas") + '</a>').join("") +
