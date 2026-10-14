@@ -27,6 +27,6 @@ jobs:
           done
           curl -fsS http://127.0.0.1:3000/health
       - name: Test workspace navigation, permissions and workflow map
-        run: bun test services/control-center/workspace.test.ts services/control-center/workspace-flow-map.test.ts services/control-center/operational-overview.test.ts
+        run: bun test services/control-center/workspace.test.ts services/control-center/workspace-flow-map.test.ts services/control-center/operational-overview.test.ts services/control-center/priority-work-queue.test.ts
       - name: Build Control Center
         run: bun build services/control-center/index.ts --target=bun --outfile=/tmp/control-center.js
