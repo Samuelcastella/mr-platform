@@ -1,4 +1,4 @@
-import { writeAuditEvent } from "./auth";
+import { authorizeInternal, writeAuditEvent } from "./auth";
 
 type DB = any;
 
@@ -16,6 +16,35 @@ export type GatewayStatusSnapshot = Readonly<{
 export interface TrustedGatewayStatusReader {
   readonly id: "SIMULATED" | "PIXELPAY";
   lookupStatus(providerCaptureReference: string): Promise<GatewayStatusSnapshot>;
+}
+
+const reply = (body: unknown, status = 200) =>
+  Response.json(body, { status, headers: { "cache-control": "no-store" } });
+
+/** Finance-only, human-readable observations; does not initiate provider I/O. */
+export async function handleGatewayStatusObservations(req: Request, url: URL, db: DB) {
+  if (url.pathname !== "/v1/internal/payments/provider-status-observations") return null;
+  if (req.method !== "GET") return reply({ error: "method_not_allowed" }, 405);
+  const rawId = url.searchParams.get("paymentId") || "";
+  if (!/^[1-9][0-9]*$/.test(rawId)) return reply({ error: "invalid_payment_id" }, 400);
+  const paymentId = Number(rawId);
+  if (!Number.isSafeInteger(paymentId)) return reply({ error: "invalid_payment_id" }, 400);
+  const paymentRows = await db`
+    SELECT o.location_id FROM payments p JOIN orders o ON o.id = p.order_id
+    WHERE p.id = ${paymentId}`;
+  if (!paymentRows.length) return reply({ error: "not_found" }, 404);
+  const auth = await authorizeInternal(req, db, "payments.refund", {
+    locationId: Number(paymentRows[0].location_id)
+  });
+  if (!auth.ok) return auth.response;
+  if (auth.actor.type !== "USER") return reply({ error: "staff_approval_required" }, 403);
+  const rows = await db`
+    SELECT id, provider, capture_reference, observed_transaction_reference,
+           observed_status, observed_amount_minor, observed_currency, finding, created_at
+    FROM payment_gateway_status_observations
+    WHERE payment_id = ${paymentId}
+    ORDER BY created_at DESC, id DESC LIMIT 100`;
+  return reply({ paymentId, data: rows });
 }
 
 export async function ensureGatewayStatusObservationSchema(db: DB) {
@@ -162,10 +191,13 @@ export async function reconcileSimulatedGatewayStatus(
         }
       });
     }
+    const persisted = inserted.length ? null : await tx`
+      SELECT finding, observed_status FROM payment_gateway_status_observations
+      WHERE payment_id = ${paymentId} AND observation_hash = ${observationHash}`;
     return {
       replayed: inserted.length === 0,
-      finding,
-      observedStatus: observed.status,
+      finding: persisted?.[0]?.finding ?? finding,
+      observedStatus: persisted?.[0]?.observed_status ?? observed.status,
       paymentId,
       paymentStatusUnchanged: true,
       orderAndKardexUnchanged: true,
