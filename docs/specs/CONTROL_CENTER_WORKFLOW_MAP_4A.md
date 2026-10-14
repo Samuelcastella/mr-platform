@@ -42,6 +42,7 @@ El inicio `GET /` ahora antepone una vista operativa basada únicamente en APIs 
 - Errores, respuestas sin datos válidos o falta de acceso se muestran como `—` con explicación: nunca se convierten en 0.
 - Los avisos son enlaces GET de revisión hacia módulos autorizados y no crean incidencias, modifican inventario, ejecutan pagos ni confirman pedidos. Los accesos rápidos se derivan del mismo catálogo de módulos y permisos del mapa.
 - El inicio se abre para todo StaffUser autenticado. Los usuarios sin `inquiries.read` reciben la vista operativa y no se consulta la bandeja; aquellos con el permiso siguen viendo el dashboard de intenciones existente debajo del resumen. Si la bandeja no responde, los indicadores disponibles siguen visibles.
+- Los formularios de modificación y creación de oportunidades en la bandeja requieren `inquiries.write` además del acceso a la bandeja; una sesión de solo lectura nunca recibe esos botones. El backend sigue validando permisos y CSRF.
 - La consulta ocurre al abrir la página. No hay suscripciones en vivo, background polling, cambios de estado ni afirmaciones sobre un proveedor bancario.
 
 Las pruebas `services/control-center/operational-overview.test.ts` verifican aislamiento por permisos, no ejecutar consultas sin autorización, conservación de fuentes saludables cuando otras fallan, valores ausentes no equivalentes a cero, estadísticas basadas en estados conocidos, acceso rápido solo GET y preservación de la bandeja heredada.
