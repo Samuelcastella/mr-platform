@@ -106,4 +106,7 @@ test("operational overview is home for staff without inquiries.read and preserve
   expect(source).toContain('import { loadOperationalSnapshots, renderOperationalOverview } from "./operational-overview"');
   expect(source).toContain("loadOperationalSnapshots(permissions");
   expect(source).toContain("@media(max-width:650px)");
+  expect(source).toContain('const canManageInquiries=permissions.includes("inquiries.write")');
+  expect(source).toContain('${canManageInquiries?`<form class="actions"');
+  expect(source).toContain('${canManageInquiries&&["product_request"');
 });
