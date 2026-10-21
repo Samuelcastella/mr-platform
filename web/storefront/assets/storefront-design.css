@@ -80,3 +80,60 @@ main{padding:24px 16px 48px}.store-hero{grid-template-columns:1fr;gap:24px;paddi
   .mobile-nav a{transition:none}
   .mobile-nav a:active{transform:none}
 }
+
+
+/* Catalog merchandising v1 — progressive enhancement; no invented product imagery. */
+.catalog-experience{min-width:0}
+.catalog-heading{padding:12px 0 8px}
+.catalog-heading h1{font:400 clamp(32px,4.3vw,54px)/1.12 Georgia,serif;letter-spacing:-.035em;margin:12px 0 10px;max-width:20ch}
+.catalog-heading p{color:var(--muted);max-width:62ch}
+.catalog-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,245px);gap:16px;padding:20px;border:1px solid #ded2c1;border-radius:16px;background:#efe8dc;margin-bottom:20px}
+.catalog-search,.catalog-sort{display:flex;flex-direction:column;gap:8px;min-width:0}
+.catalog-search label,.catalog-sort label{font-size:13px;color:#51493e;font-weight:600}
+.catalog-search input,.catalog-sort select{display:block;width:100%;min-width:0;min-height:48px;border:1px solid #a99d8a;background:#fffdf9;border-radius:10px;padding:12px 14px;font:inherit;color:var(--ink)}
+.catalog-search input:focus-visible,.catalog-sort select:focus-visible,.catalog-categories .filter:focus-visible{outline:3px solid #96700f;outline-offset:3px}
+.catalog-categories{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 20px}
+.catalog-categories .filter{display:inline-flex;justify-content:center;align-items:center;gap:8px;min-height:44px;padding:9px 15px;border:1px solid #b7a78f;border-radius:999px;background:#f5f0e7;color:var(--ink)}
+.catalog-categories .filter small{font-size:12px;opacity:.75}
+.catalog-categories .filter[aria-pressed=true]{background:#171513;color:#fff3da;border-color:#171513}
+.catalog-results-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 0 16px}
+.catalog-results-head .results{margin:0;font-size:14px;font-weight:600}
+.catalog-currency{font-size:12px;color:var(--muted)}
+.merch-grid{align-items:stretch}
+.merch-card{display:flex;flex-direction:column;overflow:hidden;background:#fffbf5}
+.merch-card__media{position:relative;overflow:hidden}
+.merch-card__media>a{display:grid;place-items:center;text-decoration:none;isolation:isolate}
+.merch-card__media>a>img{width:100%;height:100%;object-fit:cover}
+.merch-card__placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;gap:12px;color:#766c5d;text-align:center;font-size:12px}
+.merch-card__placeholder .product-placeholder{display:block;width:38%;height:38%;max-height:160px;object-fit:contain;opacity:.38}
+.merch-card__soldout{position:absolute;top:12px;left:12px;background:#fffdf5;color:#3d3428;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:650}
+.merch-card__body{display:flex;flex-direction:column;flex:1;min-width:0}
+.merch-card__category{color:#715b33}
+.merch-card__body h3{margin:8px 0 6px}
+.merch-card__body .product-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.merch-card__variants{display:block;font-size:12px;line-height:18px;color:#6f624f}
+.merch-card__stock{min-height:auto;margin:8px 0;color:#4e604d}
+.merch-card__stock.low{color:#845128}
+.merch-card__buy{display:flex;flex-direction:column;gap:10px;align-items:stretch;margin-top:auto;padding-top:8px}
+.merch-card__price{font-size:19px;line-height:25px;white-space:normal;overflow-wrap:anywhere;color:#171513}
+.merch-card__cta{display:flex;width:100%;min-height:44px;justify-content:space-between;text-align:left;background:#171513!important;color:#fff4dd!important;border:1px solid #171513!important}
+.merch-card__cta:hover{background:#3f3423!important}
+.merch-card__cta:focus-visible{outline:3px solid #96700f;outline-offset:3px}
+@media(max-width:760px){
+ .catalog-toolbar{grid-template-columns:1fr;gap:12px;padding:14px}
+ .catalog-heading{padding-top:2px}
+ .catalog-categories{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-bottom:8px;overscroll-behavior-x:contain}
+ .catalog-categories .filter{white-space:nowrap;flex-shrink:0}
+ .catalog-currency{line-height:18px}
+ .merch-card__body{padding:12px}
+ .merch-card__price{font-size:16px;line-height:23px}
+ .merch-card__cta{font-size:12px!important;padding:10px!important;gap:4px}
+ .merch-card__soldout{font-size:11px;top:8px;left:8px}
+}
+@media(max-width:360px){
+ .merch-card__cta{font-size:11px!important}
+ .merch-card__placeholder{font-size:11px}
+}
+@media(prefers-reduced-motion:reduce){
+ .merch-card,.merch-card__cta{transition:none!important}
+}
