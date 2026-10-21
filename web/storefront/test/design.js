@@ -60,6 +60,35 @@ const run = code => vm.runInContext(code, context);
   assert.equal(run('filteredProducts().length'), 2);
   assert.equal(input.value, '');
 
+
+  // Merchandising uses only API-provided media, live variants and category names.
+  assert.match(run('cards()'), /Fotografía pendiente/);
+  assert.doesNotMatch(run('cards()'), /https:\/\/images\.unsplash/);
+  assert.match(run('catalog()'), /Buscar en la colección/);
+  assert.match(run('catalog()'), /Accesorios <small>1<\/small>/);
+  run("products[0].variants=[{id:11,sku:'CAM-M',price:350,available:1},{id:12,sku:'CAM-L',price:480,available:1}]");
+  assert.match(run('productPriceLabel(products[0])'), /^Desde /);
+  assert.equal(run('catalogPriceValue(products[0])'), 350);
+  const liveGrid={innerHTML:''},liveResults={textContent:''};
+  const originalQuery=document.querySelector;
+  document.querySelector=selector=>({
+    '#searchInput':input,'#catalog-grid':liveGrid,'#results':liveResults
+  })[selector]||null;
+  run("searchCatalog('bolso')");
+  assert.equal(run('filteredProducts().length'),1);
+  assert.match(liveGrid.innerHTML,/Bolso crema/);
+  assert.doesNotMatch(liveGrid.innerHTML,/Camisa negra/);
+  assert.match(liveResults.textContent,/1 producto/);
+  run("searchCatalog('')");
+  run("sortCatalog('price_desc')");
+  assert.equal(run('filteredProducts()[0].name'),'Bolso crema');
+  run("sortCatalog('price_asc')");
+  assert.equal(run('filteredProducts()[0].name'),'Camisa negra');
+  run("sortCatalog('available')");
+  assert.equal(run('filteredProducts().length'),2);
+  document.querySelector=originalQuery;
+  run("catalogSort='featured';catalogQuery=''");
+
   // API text is untrusted: neither names nor category values can become markup.
   run(`products[0].name='<img src=x onerror=alert(1)>';products[0].dept='Ropa" onclick="alert(1)';products[0].image='javascript:alert(1)'`);
   assert.match(run('cards()'), /&lt;img/);
