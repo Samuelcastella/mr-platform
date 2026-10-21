@@ -133,6 +133,27 @@ const run = code => vm.runInContext(code, context);
   run("sessionStorage.mrCheckout=JSON.stringify({name:'Test',phone:'9999',delivery:'Retiro en tienda',payment:'CASH'})");
   assert.match(run('reviewView()'), /L · Negro/);
 
+
+  // The real checkout code must post the customer's exact chosen variant IDs.
+  const savedCart = run('localStorage.mrCart'), postedOrders = [];
+  context.fetch = async (url, options = {}) => {
+    if (url === '/api/v1/orders') {
+      postedOrders.push(JSON.parse(options.body));
+      return { ok:true, json:async()=>({order:{id:88,token:'order-88',orderNumber:'MR-88',status:'PENDING_CONFIRMATION',createdAt:'2026-10-21T10:00:00Z'}}) };
+    }
+    if (url === '/api/v1/fulfillments')
+      return { ok:true, json:async()=>({fulfillment:{id:77,token:'ful-77',type:'STORE_PICKUP',status:'PENDING',destination:{}}}) };
+    if (url === '/api/v1/checkouts')
+      return { ok:true, json:async()=>({checkout:{id:99,token:'chk-99',orderStatus:'CONFIRMED',paymentMethod:'CASH',currency:'HNL',amountMinor:100000,payment:{status:'PENDING'}}}) };
+    return { ok:true, json:async()=>({}) };
+  };
+  await run('confirmOrder()');
+  assert.equal(postedOrders.length,1);
+  assert.deepEqual(JSON.parse(JSON.stringify(postedOrders[0].items)),
+    [{variantId:11,quantity:2},{variantId:12,quantity:1}]);
+  assert.equal(run('localStorage.mrCart'),undefined,'cart clears only after server checkout success');
+  run('localStorage.mrCart='+JSON.stringify(savedCart));
+
   // A saved exact variant that disappears from the authoritative catalog
   // becomes blocked rather than being remapped to a different SKU.
   context.fetch = async () => ({ ok: true, json: async () => ({ data: [
