@@ -70,6 +70,80 @@ const run = code => vm.runInContext(code, context);
   run("announce('Guardado')");
   assert.equal(statusNode.textContent, 'Guardado');
 
+
+  // Exact-variant purchase behavior: no product-level auto-selection.
+  context.fetch = async () => ({ ok: true, json: async () => ({ data: [
+    { id: 1, name: 'Camisa negra', category: 'Ropa', price: 320, stock: 3,
+      variants: [
+        { id: 11, sku: 'CAM-M-NEG', size: 'M', color: 'Negro', price: 320, available: 2 },
+        { id: 12, sku: 'CAM-L-NEG', size: 'L', color: 'Negro', price: 340, available: 1 },
+      ] },
+    { id: 2, name: 'Bolso crema', category: 'Accesorios', price: 500, stock: 1,
+      variants: [{ id: 21, sku: 'BOL-UNI', color: 'Crema', price: 500, available: 1 }] },
+  ] }) });
+  await run('syncCatalog()');
+  assert.match(run("productView('c1')"), /Seleccionar variante/);
+  assert.match(run("cards()"), /Elegir opciones/);
+
+  // Cart from before the rollout must require an explicit choice, even with
+  // exactly one available server-side variant.
+  run("localStorage.mrCart=JSON.stringify([{id:'c1',q:1}])");
+  assert.equal(run('cartReady()'), false);
+  assert.match(run('cartView()'), /Selecciona una variante disponible/);
+  assert.match(run('checkoutView()'), /Revisa las variantes del carrito/);
+  let requests = 0;
+  context.fetch = async () => { requests++; throw new Error('Unexpected checkout request'); };
+  await run('confirmOrder()');
+  assert.equal(requests, 0, 'legacy line cannot submit an order');
+
+  // Resolve the legacy line without silently assigning the first variant.
+  run("chooseCartVariant('c1:legacy', '11')");
+  assert.deepEqual(JSON.parse(run('JSON.stringify(cart())')), [{ id:'c1', q:1, variantId:11 }]);
+
+  // Product detail accepts explicitly selected variant and keeps distinct
+  // lines for M vs L, even if both belong to the same catalog product.
+  const variantField = { value:'12', dataset:{ productId:'c1' } };
+  const qtyField = { value:'1', innerHTML:'', disabled:false };
+  const priceField = { textContent:'' }, availabilityField = { textContent:'' }, addButton = { disabled:true };
+  document.querySelector = selector => ({
+    '#searchInput': input, '#variant': variantField, '#qty': qtyField,
+    '#variantPrice': priceField, '#variantAvailability': availabilityField,
+    '#addVariantButton': addButton,
+  })[selector] || null;
+  context.fetch = async () => ({ ok:true, json:async()=>({}) });
+  run('refreshVariantSelection()');
+  assert.equal(addButton.disabled, false);
+  assert.match(priceField.textContent, /340/);
+  run("addQty('c1')");
+  assert.deepEqual(JSON.parse(run('JSON.stringify(cart().map(x=>x.variantId))')), [11,12]);
+  assert.equal(run('cartReady()'), true);
+  assert.match(run('cartView()'), /M · Negro/);
+  assert.match(run('cartView()'), /L · Negro/);
+  assert.deepEqual(JSON.parse(run('JSON.stringify(orderItemsFromCart())')),
+    [{variantId:11,quantity:1},{variantId:12,quantity:1}]);
+
+  // Cannot increase beyond per-variant availability or merge over stock.
+  run("changeQty('c1:11',1)");
+  assert.equal(run('cart().find(x=>x.variantId===11).q'),2);
+  run("changeQty('c1:11',1)");
+  assert.equal(run('cart().find(x=>x.variantId===11).q'),2);
+  run("chooseCartVariant('c1:12','11')");
+  assert.equal(run('cart().length'),2);
+  assert.match(run('reviewView()'), /Pedido no disponible/);
+  run("sessionStorage.mrCheckout=JSON.stringify({name:'Test',phone:'9999',delivery:'Retiro en tienda',payment:'CASH'})");
+  assert.match(run('reviewView()'), /L · Negro/);
+
+  // A saved exact variant that disappears from the authoritative catalog
+  // becomes blocked rather than being remapped to a different SKU.
+  context.fetch = async () => ({ ok: true, json: async () => ({ data: [
+    { id: 1, name:'Camisa negra', category:'Ropa', price:320, stock:2,
+      variants:[{id:11,sku:'CAM-M-NEG',size:'M',color:'Negro',price:320,available:2}] },
+  ] }) });
+  await run('syncCatalog()');
+  assert.equal(run('cartReady()'), false);
+  assert.match(run('cartView()'), /Selecciona una variante disponible/);
+  assert.match(run('checkoutView()'), /Revisa las variantes del carrito/);
+
   // Journey: scroll updates, no film requests, teardown removes pending work.
   const callbacks = new Map(); let next = 0, scroll = 0, fetches = 0;
   const motion = new EventTarget(); motion.matches = false;
