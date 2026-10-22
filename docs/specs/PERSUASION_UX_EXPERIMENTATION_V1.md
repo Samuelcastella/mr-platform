@@ -16,7 +16,7 @@ Diseñar una capa de decisión de compra que reduzca dudas, comunique evidencia 
 | Superficie / archivo | Evidencia revisada | Límite |
 |---|---|---|
 | `web/storefront/index.html` | Catálogo, favoritos locales, carrito, checkout, CTAs de solicitud y avisos | Algunos flujos contienen estados de demostración/prototipo; no asumir funnel enteramente instrumentado |
-| `services/catalog-api/index.ts` | `GET /v1/products`, `POST /v1/events`, allowlist de cinco eventos | Stock agregado de variantes; no precisa disponibilidad por talla/color en este contrato |
+| `services/catalog-api/index.ts` | `GET /v1/products`, `POST /v1/events`, allowlist de cinco eventos | Ya devuelve `stock` por producto **y** `variants[]` con talla, color, `available` (inventario menos reservas); faltan timestamp/TTL explícitos y compra por variante en UI |
 | `docs/specs/INTENT_CTA_SYSTEM_V1.md` | Intenciones `buy`, `notify`, `product_request`, `support`; tracking de consultas | Intención y evento NO equivalen a conversión/venta |
 | `services/catalog-api/ai/salesAlgorithm.ts` | Puntuación candidata según similitud, coocurrencia y rango de precios | No se verificó integración en la experiencia de compra; no anunciarla como funcionalidad activa |
 | `docs/specs/M07_CUSTOMER_CRM_CORE_V1.md` | Invitados, preferencias de marketing separadas | No enlazar identidades por contacto unilateralmente |
@@ -48,7 +48,7 @@ Si un archivo, despliegue o API ha cambiado, revalidar antes de implementar. Est
 - La página debe funcionar sin recomendaciones/experimentos cuando API o datos estén ausentes.
 
 ### P1 — inventario exacto, continuidad y medición
-- Crear contrato de lectura por variante: `productId`, `variantId`, `availableToSell`, `observedAt`, `expiresAt`/TTL y `availabilityStatus`. La API existente `stock` agregado por producto no basta.
+- **Extender, no duplicar, el contrato existente por variante:** `GET /v1/products` ya incluye `variants[].id`, `size`, `color`, `available` calculado desde inventario menos reservas. Añadir o definir una proyección de `productId`, `variantId`, `availableToSell`, `observedAt`, `expiresAt`/TTL y `availabilityStatus` donde haga falta; verificar concurrencia/actualización y un flujo de selección/compra por `variantId`. El campo agregado `stock` no basta para afirmaciones por talla.
 - Mostrar escasez solo con umbral configurado y dato vigente; nunca a partir de métricas inventadas o `stock` desactualizado. Caducidad/error -> «Consulta disponibilidad».
 - Favoritos/carrito conservan una **intención reversible**. Recuperación por WhatsApp solo si el cliente la solicitó y existe base/consentimiento válido.
 - Experimentos A/B con feature flag e instrumentación minimizada; exposición real registrada una vez por sesión/variante de experimento.
@@ -65,7 +65,7 @@ Si un archivo, despliegue o API ha cambiado, revalidar antes de implementar. Est
 **No cambiar contratos existentes silenciosamente.** Registrar nueva versión, migración de base de datos y pruebas en PR independiente.
 
 ### Producto/disponibilidad
-- Stock por variante debe distinguir `availableToSell` de stock físico y reservas, aplicando la concurrencia existente del inventario.
+- El cálculo actual de `variants[].available` ya descuenta reservas (`SUM(quantity - reserved)`); revisar reglas de concurrencia y robustez para el valor realmente vendible, sin renombrar/doblar semánticas antes de migrar. Asegurar timestamp/TTL y coherencia con selección por variante.
 - Snapshot lleva fuente y caducidad; mensajes de escasez son opcionales y se desactivan si no se puede garantizar veracidad.
 - Atribuir estado al canal correcto (web/tienda/marketplace); no prometer disponibilidad omnicanal sin sincronización.
 - Evitar «X personas lo están viendo» porque el sistema no dispone de medida confiable en tiempo real.
@@ -124,7 +124,7 @@ No establecer metas de uplift hasta tener línea de base, tráfico, variación h
 ## 8. Dependencias y plan de entrega
 - **Primero (propuesta presente):** aprobar skill, spec y criterios, sin tráfico experimental ni mutaciones de esquema.
 - **PR implementación A:** mejoras de claridad de ficha, guía y CTA WhatsApp; pruebas y screenshot antes/después.
-- **PR implementación B:** contrato de disponibilidad exacta por variante y manejo de caducidad/reservas.
+- **PR implementación B:** ampliar el contrato existente `variants[].available` con frescura/TTL y asegurar selección y reserva por variante, sin recrear lectura ya existente.
 - **PR implementación C:** analítica correcta, consentimiento/privacidad, asignación de experimento y panel de resultados.
 - **PR implementación D:** dominio de reseñas verificadas, herramientas de moderación y pilotos de comunidad.
 
@@ -133,7 +133,7 @@ No establecer metas de uplift hasta tener línea de base, tráfico, variación h
 ## 9. Riesgos, hipótesis y trazabilidad
 **Verificado:** archivos y contratos citados de `main` al 2026-10-21.
 **Hipótesis:** la transparencia de ficha y disponibilidad puede reducir fricción; **no hay uplift demostrado**.
-**Pendiente de comprobar:** estado real en producción, disponibilidad por variante, permisos de fotografías, volúmenes de ventas y tráfico, canales reales de soporte, requisitos jurídicos hondureños actualizados.
+**Pendiente de comprobar:** estado real en producción, frescura/consistencia del inventario por variante publicado, permisos de fotografías, volúmenes de ventas y tráfico, canales reales de soporte, requisitos jurídicos hondureños actualizados.
 
 ### Fuentes
 - Cialdini Institute, *Influence, New and Expanded*: https://cialdini.com/books/influence
