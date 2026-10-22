@@ -3,6 +3,7 @@
 import { test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+const clientSource = readFileSync(new URL("./workspace-ui-script.ts", import.meta.url), "utf8");
 const expected: Record<string,string[]> = {
   General:["/","/workspace","/work-queue","/health-desk","/integration-matrix"],
   Comercio:["/orders","/customers","/catalog","/credit","/returns"],
@@ -23,7 +24,7 @@ test("workspace has responsive navigation and accessible controls",()=>{
   expect(source).toContain('aria-controls="ws-side"');
   expect(source).toContain('aria-expanded="false"');
   expect(source).toContain('aria-label="Buscar módulo"');
-  expect(source).toContain("e.key==='Escape'");
+  expect(clientSource).toContain('event.key === "Escape"');
   expect(source).toContain(".ws-link[hidden],.ws-group[hidden]{display:none!important}");
   expect(source).toContain(".ws-link:focus-visible");
 });
@@ -35,11 +36,26 @@ test("keyboard users can skip navigation",()=>{
 test("module search announces results and opens navigation on mobile",()=>{
   expect(source).toContain('id="ws-search-status" role="status" aria-live="polite"');
   expect(source).toContain('aria-controls="ws-nav"');
-  expect(source).toContain("No se encontraron módulos");
-  expect(source).toContain("count+' módulos encontrados'");
-  expect(source).toContain("if(q&&innerWidth<=850)");
+  expect(clientSource).toContain("No se encontraron módulos");
+  expect(clientSource).toContain('visibleCount + " módulos encontrados"');
+  expect(clientSource).toContain("if (query && isMobile())");
 });
 test("logout remains a CSRF-protected POST",()=>{
   expect(source).toContain('method="post" action="/logout"');
   expect(source).toContain('name="csrf" value="${esc(session.csrf)}"');
+});
+
+test("workspace controls execute from a same-origin script without unsafe-inline CSP",()=>{
+  expect(source).toContain("script-src 'self'");
+  expect(source).toContain('<script src="/workspace-ui.js" defer></script>');
+  expect(source).toContain('if(url.pathname==="/workspace-ui.js"&&req.method==="GET")');
+  expect(source).toContain('"content-type":"application/javascript; charset=utf-8"');
+  expect(source).not.toContain(" onclick=");
+  expect(source).not.toContain(" oninput=");
+  expect(source).not.toContain("<script>");
+  expect(clientSource).toContain('menu.addEventListener("click"');
+  expect(clientSource).toContain('search.addEventListener("input"');
+  expect(clientSource).toContain('menu.setAttribute("aria-expanded", String(open))');
+  expect(clientSource).toContain('link.setAttribute("aria-current", "page")');
+  expect(clientSource).toContain("menu.focus()");
 });

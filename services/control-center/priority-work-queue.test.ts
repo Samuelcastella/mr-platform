@@ -176,3 +176,13 @@ test("dedicated work queue requires existing authenticated staff session and is 
   expect(source).toContain("@media(max-width:700px)");
   expect(source).toContain(".item:target");
 });
+
+test("tampered domain filters cannot hide another authorized area",()=>{
+  const html=renderPriorityQueue(["returns.read"],snapshots,{domain:"orders"});
+  expect(html).toContain("Mostrando 2 de 2 pendientes");
+  expect(html).toContain('href="/returns#return-25"');
+  expect(html).toContain('href="/work-queue?domain=returns"');
+  expect(html).not.toContain('href="/work-queue?domain=orders"');
+  expect(html).not.toContain('href="/orders#order-13"');
+  expect(html).not.toContain('href="/work-queue?priority=urgent&amp;domain=orders"');
+});
