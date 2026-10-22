@@ -71,6 +71,19 @@ function moneyMinor(value: number, currency = "HNL") {
   return money(Number(value || 0) / 100, currency);
 }
 
+function publicImageUrl(value: string | null | undefined): string | null {
+  const url = String(value || "").trim();
+  // The public catalog must provide HTTPS images, not inline data or script URLs.
+  return /^https:\/\/[^\s<>"']+$/i.test(url) ? url : null;
+}
+
+function conditionLabel(value: string | null | undefined): string | null {
+  const condition = String(value || "").trim().toLowerCase();
+  if (condition === "new" || condition === "nuevo") return "Nuevo";
+  if (["used", "second_hand", "second-hand", "preowned", "segunda_mano"].includes(condition)) return "Segunda mano";
+  return null;
+}
+
 function variantLabel(variant: Pick<Variant, "size" | "color" | "sku">) {
   return [variant.color, variant.size].filter(Boolean).join(" · ") || variant.sku;
 }
@@ -135,6 +148,7 @@ export default function App() {
   const [view, setView] = useState<ViewName>("catalog");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [cart, setCart] = useState<CartLine[]>([]);
 
   const [customerName, setCustomerName] = useState("");
@@ -296,6 +310,7 @@ export default function App() {
     );
     setSelectedProduct(product);
     setSelectedVariantId(available[0]?.id ?? null);
+    setSelectedImageIndex(0);
     setOrderError(null);
     setView("detail");
   }, []);
@@ -944,11 +959,61 @@ export default function App() {
     />
   );
 
+  // Published catalog media only; unsupported/non-HTTPS URLs are intentionally omitted.
+  const detailGallery = (selectedProduct?.images || [])
+    .filter((asset) => publicImageUrl(asset.url))
+    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+  const detailPhoto = detailGallery[selectedImageIndex] || detailGallery[0] || null;
+
   const detailView = selectedProduct ? (
     <ScrollView
       contentContainerStyle={styles.screen}
       keyboardShouldPersistTaps="handled"
     >
+      <View
+        style={[
+          styles.detailPhotoCard,
+          {
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+          },
+        ]}
+      >
+        <View style={styles.detailPhotoFrame}>
+          <Image
+            source={detailPhoto
+              ? { uri: publicImageUrl(detailPhoto.url) || "" }
+              : require("./assets/icon.png")}
+            style={detailPhoto ? styles.detailPhoto : styles.detailPhotoFallback}
+            resizeMode="contain"
+            accessibilityLabel={detailPhoto?.altText || (detailPhoto ? selectedProduct.name : "Fotografía no publicada")}
+          />
+        </View>
+        {detailGallery.length > 1 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryStrip}>
+            {detailGallery.map((asset, index) => (
+              <Pressable
+                key={String(asset.id || index)}
+                accessibilityRole="button"
+                accessibilityLabel={`Ver imagen ${index + 1} de ${selectedProduct.name}`}
+                accessibilityState={{ selected: index === selectedImageIndex }}
+                onPress={() => setSelectedImageIndex(index)}
+                style={[
+                  styles.galleryThumb,
+                  { borderColor: index === selectedImageIndex ? theme.accent : theme.border },
+                ]}
+              >
+                <Image source={{ uri: publicImageUrl(asset.url) || "" }} style={styles.galleryThumbImage} resizeMode="contain" />
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+        {!detailGallery.length ? (
+          <Text style={[styles.detailMediaNote, { color: theme.muted }]}>
+            Este producto aún no tiene fotografías publicadas.
+          </Text>
+        ) : null}
+      </View>
       <View
         style={[
           styles.detailHero,
@@ -969,6 +1034,11 @@ export default function App() {
             ? `Marca: ${selectedProduct.brand}`
             : "Selecciona talla, color o SKU disponible."}
         </Text>
+        {conditionLabel(selectedProduct.defaultCondition) ? (
+          <Text style={[styles.detailMediaNote, { color: theme.muted }]}>
+            Condición publicada: {conditionLabel(selectedProduct.defaultCondition)}
+          </Text>
+        ) : null}
       </View>
 
       <Text style={[styles.sectionTitle, { color: theme.text }]}>
@@ -1043,6 +1113,52 @@ export default function App() {
           La disponibilidad se vuelve a validar al crear la orden.
         </Text>
       </View>
+
+      <View
+        style={[
+          styles.notice,
+          { backgroundColor: theme.surfaceAlt, borderColor: theme.border },
+        ]}
+      >
+        <Text style={[styles.noticeTitle, { color: theme.text }]}>
+          Orientación gratuita sobre tallas
+        </Text>
+        <Text style={[styles.noticeText, { color: theme.muted }]}>
+          Compara las medidas con una prenda que ya te quede bien. Todavía no se
+          ha publicado una tabla específica de medidas para este artículo; no
+          necesitas registrarte ni comprar para solicitar orientación.
+        </Text>
+      </View>
+      <View
+        style={[
+          styles.notice,
+          { backgroundColor: theme.surfaceAlt, borderColor: theme.border },
+        ]}
+      >
+        <Text style={[styles.noticeTitle, { color: theme.text }]}>
+          Opiniones y transparencia
+        </Text>
+        <Text style={[styles.noticeText, { color: theme.muted }]}>
+          Las opiniones verificadas aún no están habilitadas. No mostramos
+          estrellas, testimonios ni certificados ficticios.
+        </Text>
+        <Text style={[styles.noticeText, { color: theme.muted }]}>
+          Entrega y costos: selecciona un departamento en el paso de entrega.
+          Los importes y plazos se consultan a Commerce Core antes de confirmar.
+        </Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          const productUrl = STOREFRONT_URL.replace(/\/$/, "") + "/#/product/c" + selectedProduct.id;
+          void Linking.openURL(productUrl);
+        }}
+        style={[styles.secondaryButtonWide, { borderColor: theme.border }]}
+      >
+        <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
+          Consultar este producto en la tienda web
+        </Text>
+      </Pressable>
 
       <Pressable
         accessibilityRole="button"
@@ -2275,6 +2391,31 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   secondaryButtonText: { fontWeight: "800", fontSize: 15 },
+  detailPhotoCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 14,
+    marginBottom: 14,
+  },
+  detailPhotoFrame: {
+    width: "100%",
+    aspectRatio: 4 / 5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailPhoto: { width: "100%", height: "100%" },
+  detailPhotoFallback: { width: 150, height: 150 },
+  detailMediaNote: { fontSize: 13, lineHeight: 19, marginTop: 12 },
+  galleryStrip: { marginTop: 12 },
+  galleryThumb: {
+    width: 74,
+    height: 78,
+    borderWidth: 2,
+    borderRadius: 12,
+    marginRight: 9,
+    padding: 3,
+  },
+  galleryThumbImage: { width: "100%", height: "100%" },
   detailHero: {
     borderWidth: 1,
     borderRadius: 22,
