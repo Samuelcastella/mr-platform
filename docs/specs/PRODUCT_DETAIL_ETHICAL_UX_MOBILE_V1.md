@@ -2,7 +2,7 @@
 
 **Estado:** PROPUESTA EN RAMA — no publicado ni fusionado
 **Fecha:** 2026-10-21
-**Dependencias:** [SPEC-PD-ETH-001 web](PRODUCT_DETAIL_ETHICAL_UX_V1.md) (PR #143), [SKILL-PERSUASION-001](../../skills/skill-persuasion-001/SKILL.md) (PR #141), M10.1/M10.2
+**Dependencias:** [SPEC-PD-ETH-001 web](https://github.com/Samuelcastella/mr-platform/blob/feat/product-detail-ethical-ux-20261021/docs/specs/PRODUCT_DETAIL_ETHICAL_UX_V1.md) (PR #143, pendiente de integración), [SKILL-PERSUASION-001](../../skills/skill-persuasion-001/SKILL.md) (PR #141), M10.1/M10.2
 **Stack:** Expo SDK 57 + React Native, Commerce Core existente
 **Prioridad solicitada:** tercera fase, después de la ficha web y su SDD.
 
