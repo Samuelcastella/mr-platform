@@ -10,5 +10,8 @@ Aplicar auditoría de solo lectura; distinguir hechos, afirmaciones documentales
 
 SKILL.md es la fuente canónica: actualizar allí la metodología y mantener aquí únicamente el enlace y las reglas de integración.
 
+## Persuasión ética (propuesta)
+Cuando se diseñen fichas comerciales, reseñas, recomendaciones, WhatsApp, checkout o pruebas de conversión, consultar [SKILL-PERSUASION-001](skills/skill-persuasion-001/SKILL.md) y [spec SDD](docs/specs/PERSUASION_UX_EXPERIMENTATION_V1.md). La skill es un borrador v0.1.0 no validado. No inventar stock, reseñas ni promociones, y respetar consentimiento y privacidad.
+
 ## Catálogo de habilidades
 Consultar [skills/README.md](skills/README.md) para el inventario de todas las skills históricas y su estado de recuperación. No considerar instaladas las que figuran pendientes.
