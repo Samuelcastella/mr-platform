@@ -183,6 +183,7 @@ function announce(t){const node=document.getElementById('status');if(!node)retur
 }
 function validCartItem(item){const v=getCartVariant(item);return !!v&&Number.isSafeInteger(Number(item.q))&&Number(item.q)>0&&Number(v.available)>=Number(item.q)}
 function add(id){
+ if(purchaseInFlight){announce('Estamos verificando tu pedido actual.');return}
  const p=products.find(x=>x.id===id);
  if(!p)return;
  if(!Array.isArray(p.variants)||p.variants.length!==1){openProduct(id);return}
@@ -263,6 +264,7 @@ function setProductGalleryImage(index){
  document.querySelectorAll('.pd-thumb').forEach((b,n)=>b.setAttribute('aria-pressed',String(n===index)));
 }
 function addQty(id){
+ if(purchaseInFlight){announce('Estamos verificando tu pedido actual.');return}
  const p=products.find(x=>x.id===id),v=selectedDetailVariant(p);
  if(!v||Number(v.available)<=0){announce('Selecciona una opción disponible');return}
  const requested=Number(document.querySelector('#pd-qty')?.value||1);
@@ -343,6 +345,7 @@ function openRestock(id){
  overlay.querySelector('#restock-close').focus();
 }
 function changeQty(id,variantId,d){
+ if(purchaseInFlight){announce('Estamos verificando tu pedido actual.');return}
  const c=cart(),x=c.find(i=>i.id===id&&String(i.variantId||'')===String(variantId||''));
  if(!x)return;
  const v=getCartVariant(x);
@@ -351,6 +354,7 @@ function changeQty(id,variantId,d){
  save(c.filter(i=>i.q>0));render();announce('Cantidad actualizada');
 }
 function removeItem(id,variantId){
+ if(purchaseInFlight){announce('Estamos verificando tu pedido actual.');return}
  save(cart().filter(i=>!(i.id===id&&String(i.variantId||'')===String(variantId||''))));
  render();announce('Producto eliminado del carrito');
 }
@@ -385,7 +389,7 @@ const HN_DEPARTMENTS=['Atlántida','Choluteca','Colón','Comayagua','Copán','Co
 function paymentLabel(v){return ({CASH:'Efectivo',BANK_TRANSFER:'Transferencia bancaria',CASH_ON_DELIVERY:'Pago contra entrega'})[v]||v}
 function deliveryQuote(){try{return JSON.parse(sessionStorage.mrDeliveryQuote||'null')}catch{return null}}
 async function loadDeliveryOptions(){let department=document.querySelector('#department')?.value,box=document.querySelector('#deliveryQuote');if(!department){sessionStorage.removeItem('mrDeliveryQuote');if(box)box.textContent='Selecciona un departamento para consultar entrega.';return}if(box)box.textContent='Consultando tarifa y tiempo estimado…';try{let r=await fetch('/api/v1/fulfillment/options?department='+encodeURIComponent(department)),j=await r.json();if(!r.ok)throw new Error(j.error||'quote_failed');let option=(j.options||[]).find(x=>!x.quoteRequired)||(j.options||[])[0];if(!option)throw new Error('quote_missing');sessionStorage.mrDeliveryQuote=JSON.stringify(option);if(box){box.textContent=option.quoteRequired?'Cotización por confirmar para '+department+'. La compra con entrega no se confirmará hasta configurar una tarifa.':'Entrega estimada: '+option.etaMinDays+(option.etaMaxDays!==option.etaMinDays?'–'+option.etaMaxDays:'')+' días · Envío '+money(Number(option.shippingMinor||0)/100,option.currency||'HNL')}}catch{sessionStorage.removeItem('mrDeliveryQuote');if(box)box.textContent='No se pudo consultar la entrega en este momento.'}}
-function reviewOrder(){if(pendingPurchase()||legacyPurchaseKeysPresent()){announce('Hay una compra pendiente. Primero revisa su estado.');go('review');return}let name=document.querySelector('#name')?.value.trim(),phone=document.querySelector('#phone')?.value.trim(),delivery=document.querySelector('#delivery')?.value,payment=document.querySelector('#payment')?.value,address=document.querySelector('#address')?.value.trim()||'',reference=document.querySelector('#reference')?.value.trim()||'',department=document.querySelector('#department')?.value||'',municipality=document.querySelector('#municipality')?.value.trim()||'',transferReference=document.querySelector('#transferReference')?.value.trim()||'',transferNote=document.querySelector('#transferNote')?.value.trim()||'',quote=deliveryQuote(),home=delivery==='Entrega a domicilio';if(!name||!phone||!delivery||!payment||(home&&(!address||!department||!municipality))){announce('Completa los campos obligatorios');return}if(payment==='CASH_ON_DELIVERY'&&!home){announce('El pago contra entrega requiere entrega a domicilio');return}if(home&&(!quote||quote.quoteRequired)){announce('La tarifa de entrega para ese departamento todavía requiere cotización');return}sessionStorage.mrCheckout=JSON.stringify({name,phone,delivery,payment,address,reference,department,municipality,fulfillmentType:home?(quote.type||'COURIER'):'STORE_PICKUP',deliveryQuote:quote,transferReference,transferNote});go('review')}
+function reviewOrder(){if(purchaseInFlight||pendingPurchase()||legacyPurchaseKeysPresent()){announce('Hay una compra pendiente. Primero revisa su estado.');go('review');return}let name=document.querySelector('#name')?.value.trim(),phone=document.querySelector('#phone')?.value.trim(),delivery=document.querySelector('#delivery')?.value,payment=document.querySelector('#payment')?.value,address=document.querySelector('#address')?.value.trim()||'',reference=document.querySelector('#reference')?.value.trim()||'',department=document.querySelector('#department')?.value||'',municipality=document.querySelector('#municipality')?.value.trim()||'',transferReference=document.querySelector('#transferReference')?.value.trim()||'',transferNote=document.querySelector('#transferNote')?.value.trim()||'',quote=deliveryQuote(),home=delivery==='Entrega a domicilio';if(!name||!phone||!delivery||!payment||(home&&(!address||!department||!municipality))){announce('Completa los campos obligatorios');return}if(payment==='CASH_ON_DELIVERY'&&!home){announce('El pago contra entrega requiere entrega a domicilio');return}if(home&&(!quote||quote.quoteRequired)){announce('La tarifa de entrega para ese departamento todavía requiere cotización');return}sessionStorage.mrCheckout=JSON.stringify({name,phone,delivery,payment,address,reference,department,municipality,fulfillmentType:home?(quote.type||'COURIER'):'STORE_PICKUP',deliveryQuote:quote,transferReference,transferNote});go('review')}
 function deliveryFields(){let v=document.querySelector('#delivery')?.value,box=document.querySelector('#addressFields'),quote=document.querySelector('#deliveryQuote');if(!box)return;let home=v==='Entrega a domicilio';box.hidden=!home;if(!home){sessionStorage.mrDeliveryQuote=JSON.stringify({type:'STORE_PICKUP',provider:'MR',shippingMinor:0,currency:'HNL',etaMinDays:0,etaMaxDays:0,quoteRequired:false});if(quote)quote.textContent='Retiro en tienda · sin costo de envío.'}else{sessionStorage.removeItem('mrDeliveryQuote');loadDeliveryOptions()}let a=box.querySelector('#address'),m=box.querySelector('#municipality');if(a)a.required=home;if(m)m.required=home}
 function paymentFields(){let v=document.querySelector('#payment')?.value,box=document.querySelector('#transferFields');if(box)box.hidden=v!=='BANK_TRANSFER'}
 function checkoutView(){if(pendingPurchase()||legacyPurchaseKeysPresent())return pendingPurchaseView();let c=cart();if(c.some(x=>!validCartItem(x)))return '<div class="panel empty" role="alert"><h2>Revisa las variantes del carrito</h2><p>Alguna opción ya no está disponible o no ha sido seleccionada.</p><a class="pd-secondary" href="#/cart">Volver al carrito</a></div>';if(!c.length)return '<div class="panel empty"><h2>No hay productos para comprar</h2><button class="small" onclick="go(\'catalog\')">Ver catálogo</button></div>';let estimate=c.reduce((s,x)=>{let v=getCartVariant(x);return s+Number(v.price)*x.q},0),departments=HN_DEPARTMENTS.map(x=>'<option value="'+x+'">'+x+'</option>').join('');return '<section class="panel"><div class="eyebrow">Checkout</div><h2>Finalizar pedido</h2><form onsubmit="event.preventDefault();reviewOrder()"><div class="form-grid"><div class="field"><label for="name">Nombre completo</label><input id="name" required autocomplete="name"></div><div class="field"><label for="phone">Teléfono</label><input id="phone" required inputmode="tel" autocomplete="tel"></div><div class="field full"><label for="delivery">Entrega</label><select id="delivery" required onchange="deliveryFields()"><option value="">Seleccionar</option><option>Retiro en tienda</option><option>Entrega a domicilio</option></select></div><div id="addressFields" class="field full" hidden><label for="department">Departamento</label><select id="department" onchange="loadDeliveryOptions()"><option value="">Seleccionar departamento</option>'+departments+'</select><label for="municipality">Municipio / ciudad</label><input id="municipality" maxlength="120"><label for="address">Dirección de entrega</label><input id="address" autocomplete="street-address"><label for="reference">Referencia descriptiva</label><input id="reference" autocomplete="address-line2"><div id="deliveryQuote" class="delivery">Selecciona un departamento para consultar entrega.</div></div><div class="field full"><label for="payment">Método de pago</label><select id="payment" required onchange="paymentFields()"><option value="">Seleccionar</option><option value="CASH">Efectivo</option><option value="BANK_TRANSFER">Transferencia bancaria</option><option value="CASH_ON_DELIVERY">Pago contra entrega</option></select></div><div id="transferFields" class="field full" hidden><label for="transferReference">Referencia de transferencia</label><input id="transferReference" maxlength="160" placeholder="Opcional; será verificada antes de marcar el pago como recibido"><label for="transferNote">Nota</label><input id="transferNote" maxlength="500" placeholder="Opcional"></div></div><div class="summary"><div class="row"><b>Estimado del carrito</b><b>'+money(estimate)+'</b></div><p>El total final, incluyendo la tarifa configurada de entrega, se fija en el servidor.</p></div><div class="product-actions"><button type="button" class="small" onclick="go(\'cart\')">Volver al carrito</button><button class="primary" style="background:#111;color:#fff">Revisar pedido</button></div></form></section>'}
@@ -451,6 +455,7 @@ function legacyPurchaseKeysPresent(){
  return !!(sessionStorage.mrOrderIdempotency||sessionStorage.mrFulfillmentIdempotency||sessionStorage.mrCheckoutIdempotency);
 }
 function restorePendingCart(){
+ if(purchaseInFlight)return;
  const pending=pendingPurchase();
  if(!pending)return;
  localStorage.mrCart=JSON.stringify(pending.items.map(x=>({id:x.id,variantId:x.variantId,q:x.q})));
@@ -459,7 +464,7 @@ function restorePendingCart(){
 function pendingPurchaseView(){
  const p=pendingPurchase(),legacy=!p&&legacyPurchaseKeysPresent();
  if(!p&&!legacy)return '';
- const stage=p?.checkout?'Pago registrado en servidor':p?.fulfillment?'Entrega registrada; pago pendiente':p?.order?'Orden registrada; entrega pendiente':'Respuesta de orden por verificar';
+ const stage=p?.checkout?'Checkout registrado; pago por verificar':p?.fulfillment?'Entrega registrada; pago pendiente':p?.order?'Orden registrada; entrega pendiente':'Respuesta de orden por verificar';
  const reference=p?.order?.orderNumber?'<p>Número de pedido: <b>'+escapeHTML(p.order.orderNumber)+'</b></p>':'';
  return '<section class="panel" role="status" aria-live="polite"><h2>Compra pendiente de conciliación</h2>'
    +'<p>'+escapeHTML(stage)+'. Reintenta únicamente los mismos datos. Si cambiaste el carrito o tus datos, no se creará otra orden automáticamente.</p>'
