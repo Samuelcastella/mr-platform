@@ -18,6 +18,7 @@ Reconstrucción operativa a partir de contexto histórico recuperado el 2026-10-
 | 12 | [Web Architecture & Design](skill-12/SKILL.md) | Texto original restaurado; paquete ZIP complementario pendiente |
 | web-design | [Web Design](web-design/SKILL.md) | Texto original restaurado |
 | LOM-001 | [Auditoría LOM](skill-lom-001/SKILL.md) | v1.0.0 incorporada en PR |
+| PERSUASION-001 | [Persuasión ética y decisión de compra](skill-persuasion-001/SKILL.md) | Borrador original v0.1.0, pendiente de validación RED/GREEN y aprobación PR |
 
 ## Política
 No confundir reconstrucción con recuperación literal; cotejar documentos originales antes de promover a estable. Cada skill deberá incorporar VERSION, CHANGELOG, ejemplos y pruebas verificables antes de declararse instalada. AGENTS.md y CLAUDE.md enlazan a este índice.
