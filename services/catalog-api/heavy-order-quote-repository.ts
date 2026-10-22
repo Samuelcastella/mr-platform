@@ -25,7 +25,7 @@ export async function createHeavyOrderQuoteInTx(
   const lines = await tx`SELECT variant_id, quantity FROM order_items WHERE order_id = ${input.orderId} ORDER BY variant_id`;
   if (!lines.length || lines.length > 30) return { error: "invalid_order_lines", status: 409 };
   const rates = await tx`SELECT id, provider, base_minor, included_grams, additional_minor_per_kg,
-    volumetric_divisor, max_billable_grams, currency FROM carrier_heavy_rates
+    volumetric_divisor, max_billable_grams, handling_minor, minimum_minor, max_edge_cm, currency FROM carrier_heavy_rates
     WHERE department = ${input.department} AND service_type = ${input.serviceType}
       AND active = TRUE AND effective_from <= ${now}
       AND (effective_until IS NULL OR effective_until > ${now})
@@ -37,13 +37,18 @@ export async function createHeavyOrderQuoteInTx(
     additionalMinorPerKg: Number(r.additional_minor_per_kg),
     volumetricDivisor: Number(r.volumetric_divisor),
     maxBillableGrams: r.max_billable_grams == null ? null : Number(r.max_billable_grams),
+    handlingMinor: Number(r.handling_minor ?? 0),
+    minimumMinor: Number(r.minimum_minor ?? 0),
+    maxEdgeCm: r.max_edge_cm == null ? null : Number(r.max_edge_cm),
     currency: r.currency as "HNL"
   };
   const variants = lines.map((l: any) => Number(l.variant_id));
-  const profiles = await tx`SELECT variant_id, weight_grams, length_cm, width_cm, height_cm
+  const profiles = await tx`SELECT variant_id, weight_grams, length_cm, width_cm, height_cm, requires_special_handling
     FROM product_shipping_profiles WHERE variant_id = ANY(${variants})`;
   const byVariant = new Map(profiles.map((p: any) => [Number(p.variant_id), p]));
   if (byVariant.size !== variants.length) return { quoteRequired: true, reason: "shipping_profile_missing" };
+  if (profiles.some((p: any) => p.requires_special_handling === true))
+    return { quoteRequired: true, reason: "special_handling_requires_manual_quote" };
   const quoteLines = lines.map((line: any) => {
     const variantId = Number(line.variant_id), p: any = byVariant.get(variantId);
     return { variantId, quantity: Number(line.quantity), parcel: {
