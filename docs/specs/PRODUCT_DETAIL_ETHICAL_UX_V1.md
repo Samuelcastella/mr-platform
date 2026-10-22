@@ -138,3 +138,20 @@ Diagnósticos: clicks de «consultar» y carritos con `variantId` válido; no eq
 - Políticas: `docs/specs/M01_CATALOG_INVENTORY_V2_AMENDMENT.md`, `M03_CHECKOUT_PAYMENTS_V1.md`, `M07_CUSTOMER_CRM_CORE_V1.md`, `INTENT_CTA_SYSTEM_V1.md`.
 - Skill conceptual: PR #141; sin copiar texto extenso del libro original.
 - Tracking de implementación: issue #142 y PR de ficha.
+
+## 14. Conciliación de compras y errores de red — Issue #145
+
+**Estado:** implementación propuesta en PR #143; validar CI y flujo real antes de aprobar.
+
+- La clave sessionStorage **mrPurchaseAttemptV1** contiene variantes/cantidades originales, fingerprint SHA-256 del conjunto de payloads comerciales y claves de idempotencia distintas para Order, Fulfillment y Checkout.
+- Los datos de contacto y dirección siguen en la sesión **mrCheckout** existente. No se duplican en el snapshot de intento; la huella vincula los tres cuerpos completos.
+- Se persiste el intento ANTES del primer POST. Se conserva cada respuesta confirmada del servidor ANTES de pasar a la siguiente etapa.
+- Si se pierde la respuesta de Order, se reintenta la misma petición con la misma clave; si Order ya está confirmada, se omite esa etapa y se reanuda Fulfillment; si Fulfillment está confirmada, se reanuda Checkout.
+- Al recibir ID y token de Order se añaden a las referencias de seguimiento, aunque luego falle entrega o pago. La orden no se registra como pagada si Payment es PENDING.
+- Un intento pendiente presenta una pantalla explícita de conciliación y bloquea un checkout nuevo. Permite restaurar la selección original y reintentar sin cambiar el cuerpo, o abrir soporte.
+- Cambios en talla, color, cantidad, dirección o información de contacto se bloquean hasta conciliar la operación incierta. Las claves antiguas sin snapshot ligado al payload nunca se reutilizan automáticamente.
+- Al terminar se limpia la sesión del intento y el carrito, preservando referencias para seguimiento del pedido.
+
+**Prueba automatizada:** web/storefront/test/checkout-recovery.js incluye fallos después de Order, Fulfillment y Checkout; mutación de variante/contacto; doble click; reintento con stock visible modificado; claves antiguas sin fingerprint.
+
+**Límites:** la sesión de navegador no proporciona recuperación entre dispositivos; la corrección depende de las garantías de idempotencia, caducidad de claves y contrato de tokens del backend. Para deployment hacen falta pruebas de integración con retención real, accesibilidad de mensajes y revisión humana.
