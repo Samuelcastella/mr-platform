@@ -465,11 +465,13 @@ function pendingPurchaseView(){
  const p=pendingPurchase(),legacy=!p&&legacyPurchaseKeysPresent();
  if(!p&&!legacy)return '';
  const stage=p?.checkout?'Checkout registrado; pago por verificar':p?.fulfillment?'Entrega registrada; pago pendiente':p?.order?'Orden registrada; entrega pendiente':'Respuesta de orden por verificar';
+ const expired=!!p&&['reservation_not_active','order_not_checkoutable','order_not_fulfillable'].includes(p.lastError);
  const reference=p?.order?.orderNumber?'<p>Número de pedido: <b>'+escapeHTML(p.order.orderNumber)+'</b></p>':'';
  return '<section class="panel" role="status" aria-live="polite"><h2>Compra pendiente de conciliación</h2>'
    +'<p>'+escapeHTML(stage)+'. Reintenta únicamente los mismos datos. Si cambiaste el carrito o tus datos, no se creará otra orden automáticamente.</p>'
    +reference
-   +(legacy?'<p>Hay un intento anterior sin información suficiente para reanudarlo de forma segura. Consulta soporte antes de volver a comprar.</p>':
+   +(expired?'<p role="alert">La orden ya no puede continuar automáticamente: la reserva podría haber vencido o su estado cambió. Consulta el pedido con soporte; no se generará otro automáticamente.</p>':'')
+   +(legacy||expired?'<p>Hay un intento anterior sin información suficiente para reanudarlo de forma segura. Consulta soporte antes de volver a comprar.</p>':
      '<div class="product-actions"><button class="primary" onclick="confirmOrder()">Reintentar operación original</button><button class="small" onclick="restorePendingCart()">Restaurar selección original</button></div>')
    +'<p><a href="#/orders">Consultar mis pedidos</a> · <a href="#/connect">Solicitar ayuda</a></p></section>';
 }
@@ -550,7 +552,8 @@ async function confirmOrder(){
   completePurchase(p);
  }catch(err){
   const reason=String(err?.message||'');
-  if(reason==='idempotency_conflict')announce('Conflicto de intento: no se creó una segunda orden. Consulta soporte.');
+  if(['reservation_not_active','order_not_checkoutable','order_not_fulfillable'].includes(reason)){const p=pendingPurchase();if(p){p.lastError=reason;savePendingPurchase(p)}announce('La reserva puede haber vencido. Revisa el pedido y consulta soporte; no se crea otro automáticamente.');}
+  else if(reason==='idempotency_conflict')announce('Conflicto de intento: no se creó una segunda orden. Consulta soporte.');
   else if(reason==='insufficient_stock')announce('El servidor rechazó el inventario. Revisa tu operación pendiente antes de cambiar la selección.');
   else announce('No se confirmó toda la operación. Reintenta los mismos datos; no se enviará una orden nueva.');
  }finally{purchaseInFlight=false}
