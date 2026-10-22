@@ -10,5 +10,8 @@ Initial evidence-limited audit: [2026-10-11 report](docs/audit/lom/initial-audit
 
 When auditing, read the canonical SKILL.md first. Preserve source identifiers and distinguish verified facts from documentation claims and hypotheses. Start read-only; do not alter code, databases, infrastructure, or deployments as part of an audit. Do not put credentials or personal data into the repository. Proposed fixes require separate review and reproducible validation. Keep skill instructions centralized in SKILL.md rather than duplicating them here.
 
+## Persuasión ética (en propuesta)
+Para tareas de UX comercial, marketing, fichas de producto o conversión, revisar [SKILL-PERSUASION-001](skills/skill-persuasion-001/SKILL.md) y su [especificación SDD](docs/specs/PERSUASION_UX_EXPERIMENTATION_V1.md). Estado: borrador v0.1.0 pendiente de pruebas y revisión; no tratar como funcionalidad desplegada. Usar solo stock, reseñas, beneficios y afirmaciones verificables. Preservar decisión voluntaria, consentimiento y privacidad.
+
 ## Catálogo de habilidades
 Consultar [skills/README.md](skills/README.md) para el inventario de todas las skills históricas y su estado de recuperación. No considerar instaladas las que figuran pendientes.
