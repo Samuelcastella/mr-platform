@@ -26,6 +26,9 @@ jobs:
             sleep 1
           done
           curl -fsS http://127.0.0.1:3000/health
+          curl -fsS -D /tmp/workspace-headers.txt http://127.0.0.1:3000/workspace-ui.js -o /tmp/workspace-ui.js
+          grep -qi '^content-type: application/javascript' /tmp/workspace-headers.txt
+          grep -q 'menu.addEventListener("click"' /tmp/workspace-ui.js
       - name: Test workspace navigation, permissions and workflow map
         run: bun test services/control-center/workspace.test.ts services/control-center/workspace-flow-map.test.ts services/control-center/operational-overview.test.ts services/control-center/priority-work-queue.test.ts
       - name: Build Control Center
