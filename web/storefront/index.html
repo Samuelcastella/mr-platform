@@ -203,7 +203,7 @@ function cards(list=products){
  const stock=stockData(),favorites=favs();
  return '<div class="grid">'+list.map(p=>{
   const available=stock[p.id]||0,id=escapeHTML(p.id),name=escapeHTML(p.name),src=p.image?productImageURL(p.image):'';
-  return `<article class="card"><div class="photo"><a href="#/product/${encodeURIComponent(p.id)}" aria-label="Ver ${name}">${src?`<img src="${src}" alt="${name}" loading="lazy" decoding="async">`:'<img class="product-placeholder" src="/assets/monogram.svg" alt="Fotografía no disponible" loading="lazy">'}</a><button class="fav" data-product-id="${id}" aria-label="${favorites.includes(p.id)?'Quitar de favoritos':'Agregar a favoritos'}: ${name}" aria-pressed="${favorites.includes(p.id)}" onclick="toggleFav(this,this.dataset.productId)">${favorites.includes(p.id)?'♥':'♡'}</button></div><div class="body"><div class="meta">${escapeHTML(p.dept)}</div><h3><a class="product-name" href="#/product/${encodeURIComponent(p.id)}">${name}</a></h3><div class="stock ${available<=3?'low':''}">${available===0?'Agotado':available<=3?'Pocas unidades · '+available:'Disponible'}</div><div class="row"><b>${money(p.price,p.currency)}</b><button class="small" data-product-id="${id}" ${available===0?'disabled aria-disabled="true"':''} onclick="add(this.dataset.productId)">Agregar <span aria-hidden="true">+</span></button></div></div></article>`;
+  return `<article class="card"><div class="photo"><a href="#/product/${encodeURIComponent(p.id)}" aria-label="Ver ${name}">${src?`<img src="${src}" alt="${name}" loading="lazy" decoding="async">`:'<img class="product-placeholder" src="/assets/monogram.svg" alt="Fotografía no disponible" loading="lazy">'}</a><button class="fav" data-product-id="${id}" aria-label="${favorites.includes(p.id)?'Quitar de favoritos':'Agregar a favoritos'}: ${name}" aria-pressed="${favorites.includes(p.id)}" onclick="toggleFav(this,this.dataset.productId)">${favorites.includes(p.id)?'♥':'♡'}</button></div><div class="body"><div class="meta">${escapeHTML(p.dept)}</div><h3><a class="product-name" href="#/product/${encodeURIComponent(p.id)}">${name}</a></h3><div class="stock ${available<=3?'low':''}">${available===0?'Agotado':available<=3?'Pocas unidades · '+available:'Disponible'}</div><div class="row"><b>${money(p.price,p.currency)}</b><button class="small" data-product-id="${id}" ${available===0?'disabled aria-disabled="true"':''} onclick="add(this.dataset.productId)">${p.variants?.length===1?'Agregar':'Elegir opciones'} <span aria-hidden="true">+</span></button></div></div></article>`;
  }).join('')+'</div>';
 }
 function serviceIcon(kind){const paths={box:'<path d="m12 3 9 5v8l-9 5-9-5V8l9-5Z M3 8l9 5 9-5 M12 13v8 M7.5 5.5l9 5V15"/>',check:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',wallet:'<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18 M16 13h5v4h-5z M6 5V3h12v2"/>'};return '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">'+paths[kind]+'</svg>'}
@@ -248,11 +248,11 @@ function selectProductColor(color){
  const options=p.variants.filter(v=>detailColor(v)===color);
  if(!options.length)return;
  const next=options.find(v=>detailSize(v)===detailSelection.size)||options.find(v=>Number(v.available)>0)||options[0];
- detailSelection.color=color;detailSelection.size=detailSize(next);render();
+ detailSelection.color=color;detailSelection.size=detailSize(next);render();const button=[...document.querySelectorAll('.pd-option[data-color]')].find(el=>el.dataset.color===color);button?.focus();
 }
 function selectProductSize(size){
  const p=currentDetailProduct();if(!p||!p.variants.some(v=>detailColor(v)===detailSelection.color&&detailSize(v)===size))return;
- detailSelection.size=size;render();
+ detailSelection.size=size;render();const button=[...document.querySelectorAll('.pd-option[data-size]')].find(el=>el.dataset.size===size);button?.focus();
 }
 function setProductGalleryImage(index){
  const p=currentDetailProduct();if(!p)return;
