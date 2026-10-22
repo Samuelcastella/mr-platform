@@ -9,6 +9,8 @@ export type Variant = {
 };
 
 export type Product = {
+  images?: Array<{ id?: number; url: string; altText?: string | null; sortOrder?: number }>;
+  defaultCondition?: string | null;
   id: number;
   name: string;
   slug: string;
