@@ -471,7 +471,7 @@ function pendingPurchaseView(){
    +'<p>'+escapeHTML(stage)+'. Reintenta únicamente los mismos datos. Si cambiaste el carrito o tus datos, no se creará otra orden automáticamente.</p>'
    +reference
    +(expired?'<p role="alert">La orden ya no puede continuar automáticamente: la reserva podría haber vencido o su estado cambió. Consulta el pedido con soporte; no se generará otro automáticamente.</p>':'')
-   +(legacy||expired?'<p>Hay un intento anterior sin información suficiente para reanudarlo de forma segura. Consulta soporte antes de volver a comprar.</p>':
+   +(legacy?'<p>Hay un intento anterior sin información suficiente para reanudarlo de forma segura. Consulta soporte antes de volver a comprar.</p>':expired?'':
      '<div class="product-actions"><button class="primary" onclick="confirmOrder()">Reintentar operación original</button><button class="small" onclick="restorePendingCart()">Restaurar selección original</button></div>')
    +'<p><a href="#/orders">Consultar mis pedidos</a> · <a href="#/connect">Solicitar ayuda</a></p></section>';
 }
