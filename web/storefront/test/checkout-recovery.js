@@ -122,5 +122,25 @@ function fakeServer(h,{failStage=null, failCount=1, promiseOnOrder=null}={}){
   await Promise.all([h.run('confirmOrder()'),h.run('confirmOrder()')]);
   assert.deepEqual(calls.map(x=>x.stage),['order','fulfillment','checkout']);
  }
- console.log('Checkout recovery checks passed: lost Order/Fulfillment/Checkout response, immutable variants/contact, replay keys, stage resume, legacy key and double tap.');
+ // G. The backend rejects Checkout after the reservation expires (409).
+ // Do not create a new Order or offer an endless automatic retry.
+ {
+  const h=harness(),calls=[];
+  h.context.fetch=async(url,options)=>{
+   const stage=url==='/api/v1/orders'?'order':url==='/api/v1/fulfillments'?'fulfillment':url==='/api/v1/checkouts'?'checkout':null;
+   if(!stage)throw Error('bad request');
+   calls.push(stage);
+   if(stage==='checkout')return {ok:false,json:async()=>({error:'reservation_not_active'})};
+   return {ok:true,json:async()=>fixture(stage)};
+  };
+  await h.run('confirmOrder()');
+  const pending=JSON.parse(h.sessionStorage[pendingKey]);
+  assert.equal(pending.lastError,'reservation_not_active');
+  const view=h.run('reviewView()');
+  assert.match(view,/reserva podría haber vencido/);
+  assert.doesNotMatch(view,/onclick="confirmOrder\(\)"/);
+  assert.deepEqual(calls,['order','fulfillment','checkout']);
+  assert.equal(JSON.parse(h.localStorage.mrOrderRefs)[0].id,88);
+ }
+ console.log('Checkout recovery checks passed: lost Order/Fulfillment/Checkout response, immutable variants/contact, replay keys, stage resume, legacy key, expired reservation and double tap.');
 })().catch(err=>{console.error(err);process.exitCode=1});
