@@ -224,7 +224,12 @@ export function renderPriorityQueue(
 ): string {
   const compact = options.compact === true;
   const priority = selectedPriority(options.priority);
-  const domain = selectedDomain(options.domain);
+  const requestedDomain = selectedDomain(options.domain);
+  // Never activate a filter for a domain the StaffUser cannot consult.
+  // Silently ignore unauthorized/tampered filters rather than hide authorized work.
+  const domain = requestedDomain && overviewSources.some(source =>
+    source.key === requestedDomain && permissions.includes(source.permission))
+    ? requestedDomain : null;
   const max = compact ? 6 :
     Number.isSafeInteger(options.limit) && (options.limit || 0) >= 1
       ? Math.min(options.limit!, 100) : 40;
