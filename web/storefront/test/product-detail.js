@@ -43,6 +43,8 @@ assert.match(product,/Fotografía no publicada/);
 assert.match(product,/Opiniones verificadas/);
 assert.match(product,/todavía no están habilitadas/);
 assert.match(product,/Ayuda gratuita para elegir talla/);
+assert.match(product,/Condición publicada: Nuevo/);
+assert.doesNotMatch(product,/Condición publicada: new/);
 assert.doesNotMatch(product,/última oportunidad|reseñas de 5 estrellas|temporizador/i);
 assert.doesNotMatch(product,/DEMO|L 890/);
 
@@ -96,5 +98,42 @@ assert.match(safe,/&lt;img/);
  await run("estimateProductDelivery()");
  assert.match(delivery.textContent,/2–4 días/);
  assert.match(delivery.textContent,/85/);
- console.log('Product-detail regression checks passed: variant selection, cart, stock, honesty, shipping, analytics and XSS.');
+ // The selected SKU must reach the real Order API payload unchanged, not only the cart.
+ run("products[0].name='Blusa de prueba';products[0].images=[];products[0].defaultCondition='new'");
+ localStorage.mrCart=JSON.stringify([{id:'c1',variantId:22,q:1}]);
+ sessionStorage.mrCheckout=JSON.stringify({
+   name:'Cliente DEMO',phone:'0000-0000',payment:'CASH',fulfillmentType:'STORE_PICKUP',
+   delivery:'Retiro en tienda',department:'',municipality:''
+ });
+ const calls=[];
+ context.fetch=async(url,options={})=>{
+   if(url==='/api/v1/events')return {ok:true,json:async()=>({ok:true})};
+   calls.push({url,body:options.body,headers:options.headers});
+   if(url==='/api/v1/orders')return {ok:true,json:async()=>({
+     order:{id:88,orderNumber:'MR-QA-88',token:'qa-order',status:'PENDING_CONFIRMATION',currency:'HNL',createdAt:'2026-10-21T00:00:00Z'}
+   })};
+   if(url==='/api/v1/fulfillments')return {ok:true,json:async()=>({
+     fulfillment:{id:77,token:'qa-fulfillment',orderId:88,status:'PENDING',type:'STORE_PICKUP',destination:{department:null}}
+   })};
+   if(url==='/api/v1/checkouts')return {ok:true,json:async()=>({
+     checkout:{id:99,token:'qa-checkout',orderStatus:'CONFIRMED',status:'COMPLETED',amountMinor:50000,currency:'HNL',paymentMethod:'CASH',payment:{status:'PENDING'}}
+   })};
+   return {ok:false,json:async()=>({error:'unexpected-url'})};
+ };
+ await run("confirmOrder()");
+ assert.deepEqual(calls.map(c=>c.url),['/api/v1/orders','/api/v1/fulfillments','/api/v1/checkouts'],
+   'checkout creates Order, Fulfillment, then Checkout');
+ const orderRequest=JSON.parse(calls[0].body);
+ assert.deepEqual(orderRequest.items,[{variantId:22,quantity:1}],
+   'server receives exact selected Negro/M variant');
+ assert.equal(orderRequest.channel,'WEB');
+ assert.equal(orderRequest.price,undefined,'client must not assert authoritative unit price');
+ assert.equal(orderRequest.amountMinor,undefined,'client must not assert authoritative order total');
+ assert.equal(JSON.parse(sessionStorage.mrLastCheckout).payment.status,'PENDING',
+   'no premature paid claim');
+ assert.equal(localStorage.mrCart,undefined,'cart clears only after successful three-step flow');
+ run("products[0].defaultCondition='unsupported-custom-state'");
+ assert.doesNotMatch(run("productView('c1')"),/Condición publicada/,
+   'unrecognized condition must not appear as unverified commercial claim');
+ console.log('Product-detail checks passed: exact Order variant propagation, no client-authored amounts, pending payment, stock, delivery, honesty and XSS.');
 })().catch(error=>{console.error(error);process.exitCode=1});
