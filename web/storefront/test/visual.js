@@ -62,9 +62,10 @@ const sizes = [{name:'mobile',width:390,height:844},{name:'tablet',width:768,hei
         overflow:document.documentElement.scrollWidth>innerWidth+2,
         reviews:document.body.textContent.includes('opiniones verificadas todavía no están habilitadas'),
         price:document.querySelector('.pd-price')?.textContent,
+        condition:document.querySelector('.pd-info .pd-caption')?.textContent,
         estimate:document.querySelector('#pd-delivery-result')?.textContent
       }));
-      if(selected.color!=='true'||selected.size!=='true'||selected.overflow||!selected.reviews||!selected.price.includes('540')||!selected.estimate.includes('85'))throw new Error('Product detail visual/selection assertion failed: '+JSON.stringify(selected));
+      if(selected.color!=='true'||selected.size!=='true'||selected.overflow||!selected.reviews||!selected.price.includes('540')||!selected.condition.includes('Nuevo')||!selected.estimate.includes('85'))throw new Error('Product detail visual/selection assertion failed: '+JSON.stringify(selected));
       await page.locator('.pd-option[data-size="L"]').click();
       const disabled=await page.locator('.pd-primary').isDisabled();
       if(!disabled)throw new Error('Out-of-stock variant must not be purchasable');
@@ -81,6 +82,12 @@ const sizes = [{name:'mobile',width:390,height:844},{name:'tablet',width:768,hei
         location.hash='#/product/c101';
       });
       await page.locator('.pd-info').waitFor();
+      // Re-rendering the SPA resets delivery selection. Restore the selected
+      // department so screenshots actually document the quoted state.
+      await page.locator('#pd-department').selectOption('Cortés');
+      await page.waitForFunction(()=>document.querySelector('#pd-delivery-result')?.textContent.includes('2–4 días'));
+      // Toast is transient feedback, not part of the permanent product UI.
+      await page.waitForFunction(()=>document.querySelector('#status')?.hidden===true,null,{timeout:10000});
       await page.evaluate(()=>{
         const sign=document.createElement('div');
         sign.textContent='DEMO · Datos ficticios exclusivos de la prueba visual';
