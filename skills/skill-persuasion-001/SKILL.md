@@ -40,7 +40,7 @@ Usar antes de diseñar/editar mensajes de venta, fichas, catálogos, recomendaci
 ## Contratos y dependencias del repositorio
 - **Marca:** MR עדולם, siempre עדולם en hebreo; neutral respecto a categorías.
 - **Frontend:** `web/storefront/index.html`; no bloquear navegación, checkout o atención si rechazan mensajes promocionales.
-- **API:** `services/catalog-api/index.ts`: `GET /v1/products` ofrece stock agregado por producto, **no** prueba por sí mismo escasez de talla/color.
+- **API:** `services/catalog-api/index.ts`: `GET /v1/products` devuelve `stock` agregado **y** `variants[]` con `id`, talla, color y `available` (calculado restando reservas). Ese `available` no incluye `observedAt`/TTL ni garantiza sincronía en todos los canales; la compra web todavía no selecciona una variante exacta. Para afirmar «última unidad en talla M» exigir señal reciente y comprobable, además del contrato de selección de variante.
 - **Señales:** `docs/specs/INTENT_CTA_SYSTEM_V1.md`: eventos públicos permitidos `page_view`, `cta_click`, `intent_submit`, `add_to_cart`, `checkout_start`. Ampliaciones requieren migración y pruebas; no enviar contacto o texto libre a eventos.
 - **CRM:** `docs/specs/M07_CUSTOMER_CRM_CORE_V1.md`: invitado permitido y marketing consent separado, nunca implícito.
 - **Checkout:** `docs/specs/M03_CHECKOUT_PAYMENTS_V1.md`: importe calculado en servidor, nunca cambiarlo por experimentos de persuasión.
