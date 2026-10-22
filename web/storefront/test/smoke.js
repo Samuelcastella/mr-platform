@@ -15,6 +15,7 @@ const get = (p, o) => fetch(base + p, o);
     const html = await home.text();
     ok(home.status === 200 && /text\/html/.test(home.headers.get('content-type')), 'GET / → 200 html');
     ok(/<title>MR עדולם/.test(html), 'título de marca');
+    ok(html.includes('/assets/product-detail.css?v=1'), 'ficha de producto carga hoja CSS');
     ok(/<meta name="description"/.test(html) && /og:image/.test(html), 'meta description y Open Graph');
     ok(home.headers.get('x-content-type-options') === 'nosniff' && /default-src 'self'/.test(home.headers.get('content-security-policy') || ''), 'cabeceras de seguridad (nosniff + CSP)');
     ok((await get('/assets/storefront-design.css?v=2')).headers.get('content-type') === 'text/css; charset=utf-8', 'hoja de estilos servida con MIME CSS bajo nosniff');
