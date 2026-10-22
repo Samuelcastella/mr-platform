@@ -90,6 +90,31 @@ const safe=run("productView('c1')");
 assert.doesNotMatch(safe,/<img src=x|src=\"javascript:/);
 assert.match(safe,/&lt;img/);
 
+// Buyer-supplied strings must not become executable markup on the review screen.
+localStorage.mrCart=JSON.stringify([{id:'c1',variantId:22,q:1}]);
+sessionStorage.mrCheckout=JSON.stringify({
+ name:'<img src=x onerror=alert(1)>',
+ phone:'<svg onload=alert(1)>',
+ delivery:'Entrega a domicilio',
+ payment:'BANK_TRANSFER',
+ department:'<b>Copán</b>',
+ municipality:'</p><script>alert(1)</script>',
+ address:'<img src=x onerror=alert(2)>',
+ reference:'</p><iframe src=x></iframe>',
+ transferReference:'<svg onload=alert(3)>',
+ deliveryQuote:{shippingMinor:8500,currency:'HNL',etaMinDays:2,etaMaxDays:4}
+});
+const review=run("reviewView()");
+assert.doesNotMatch(review,/<img[^>]*onerror|<script|<svg[^>]*onload|<iframe/i,
+  'review must never render unsafe buyer input as markup');
+assert.match(review,/&lt;img src=x onerror=alert\(1\)&gt;/,
+  'review safely encodes free-form name and address');
+assert.match(review,/&lt;script&gt;alert\(1\)&lt;\/script&gt;/,
+  'review encodes municipality and other address text');
+assert.match(review,/&lt;svg onload=alert\(3\)&gt;/,
+  'review safely encodes bank reference');
+
+
 (async()=>{
  context.fetch=async()=>({ok:true,json:async()=>({options:[{quoteRequired:true}]})});
  await run("estimateProductDelivery()");
