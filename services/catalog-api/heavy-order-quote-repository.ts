@@ -37,8 +37,8 @@ export async function createHeavyOrderQuoteInTx(
     additionalMinorPerKg: Number(r.additional_minor_per_kg),
     volumetricDivisor: Number(r.volumetric_divisor),
     maxBillableGrams: r.max_billable_grams == null ? null : Number(r.max_billable_grams),
-    handlingMinor: Number(r.handling_minor),
-    minimumMinor: Number(r.minimum_minor),
+    handlingMinor: Number(r.handling_minor ?? 0),
+    minimumMinor: Number(r.minimum_minor ?? 0),
     maxEdgeCm: r.max_edge_cm == null ? null : Number(r.max_edge_cm),
     currency: r.currency as "HNL"
   };
