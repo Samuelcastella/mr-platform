@@ -161,7 +161,7 @@ header a:focus-visible,header button:focus-visible{outline:3px solid var(--gold2
 .cta-ribbon{display:flex;align-items:center;justify-content:space-between;gap:18px;background:#171513;color:#fff;border-radius:22px;padding:22px 24px;margin-top:28px}.cta-ribbon h3{font:400 25px Georgia,serif;margin:0 0 5px}.cta-ribbon p{margin:0;color:#d2c9bb;font-size:13px}.cta-ribbon .actions-row{display:flex;gap:9px;flex-wrap:wrap}
 @media(max-width:900px){.intent-hero,.intent-form-wrap{grid-template-columns:1fr}.intent-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.intent-grid{grid-template-columns:1fr}.intent-hero{padding:24px}.intent-orbit{min-height:220px}.cta-ribbon{align-items:flex-start;flex-direction:column}}
- .restock-overlay{position:fixed;inset:0;background:#000a;z-index:100;display:grid;place-items:center;padding:16px}.restock-modal{background:#fff;color:#171513;border-radius:22px;max-width:480px;width:100%;max-height:90vh;overflow:auto;padding:26px;box-shadow:0 25px 90px #0006}.restock-modal h2{font-family:Georgia,serif}.restock-modal label{display:block;font-weight:700;margin-top:12px}.restock-modal input,.restock-modal select{width:100%;padding:12px;border:1px solid #8c8172;border-radius:9px;margin-top:5px}.restock-modal .primary{background:#111;color:white;width:100%;margin-top:15px}.restock-modal .close{float:right}.restock-modal .consent{display:flex;gap:8px;align-items:start;font-size:12px}.restock-modal .consent input{width:auto} </style><link rel="stylesheet" href="/assets/storefront-design.css?v=2"></head><body><a class="skip" href="#app" onclick="event.preventDefault();document.getElementById('app').focus()">Saltar al contenido principal</a><div class="utility"><span class="u-left"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg> Envíos a Honduras <i aria-hidden="true">⌄</i></span><span class="u-mid"><b>Nuevos productos</b><b>Compra sencilla</b><b>Atención personalizada</b></span><span class="u-right">Honduras (HNL) <i aria-hidden="true">⌄</i> <em>ES <i aria-hidden="true">⌄</i></em></span></div><header><div class="top"><a class="brand brand-signature" id="brand" href="#/" aria-label="MR עדולם, inicio"><img class="crown" src="/assets/logo-gold.png" alt="" width="92" height="167"></a><form class="search" role="search" aria-label="Buscar productos" onsubmit="searchProducts(event)"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><input id="searchInput" type="search" autocomplete="off" placeholder="Buscar productos, marcas y más…" aria-label="Buscar en el catálogo"></form><div class="actions"><button class="act" onclick="announce('Favoritos guardados: '+favs().length)" aria-label="Favoritos"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 20s-7-4.4-9-9.2C1.7 7.6 3.8 4.5 7 4.5c2 0 3.4 1 5 3 1.6-2 3-3 5-3 3.2 0 5.3 3.1 4 6.3-2 4.8-9 9.2-9 9.2Z"/></svg><span>Favoritos</span></button><button class="act" onclick="go('account')" aria-label="Abrir cuenta"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.2 4-6 8-6s7 1.8 8 6"/></svg><span>Mi cuenta</span></button><button class="act cartbtn" onclick="go('cart')" aria-label="Abrir carrito"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.2 11h10.6L20.5 7H6.5"/><circle cx="9" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></svg><b id="count" aria-live="polite">0</b><span>Carrito</span></button></div></div><nav aria-label="Navegación principal"><a href="#/">Inicio</a><a href="#/catalog">Catálogo</a><a href="#/brand">El mundo MR עדולם</a><a href="#/orders">Mis pedidos</a><a href="#/connect">Contacto</a></nav></header><main id="app" tabindex="-1"><noscript>Activa JavaScript para ver la tienda de MR עדולם.</noscript></main><nav class="mobile-nav" aria-label="Navegación móvil"><a href="#/"><b>⌂</b><span>Inicio</span></a><a href="#/catalog"><b>⌕</b><span>Catálogo</span></a><a href="#/brand"><b aria-hidden="true">✦</b><span>Marca</span></a><a href="#/account"><b>♙</b><span>Cuenta</span></a><a href="#/cart"><b>▣</b><span>Carrito</span></a></nav><div id="status" class="status" role="status" aria-live="polite" hidden></div><script>
+ .restock-overlay{position:fixed;inset:0;background:#000a;z-index:100;display:grid;place-items:center;padding:16px}.restock-modal{background:#fff;color:#171513;border-radius:22px;max-width:480px;width:100%;max-height:90vh;overflow:auto;padding:26px;box-shadow:0 25px 90px #0006}.restock-modal h2{font-family:Georgia,serif}.restock-modal label{display:block;font-weight:700;margin-top:12px}.restock-modal input,.restock-modal select{width:100%;padding:12px;border:1px solid #8c8172;border-radius:9px;margin-top:5px}.restock-modal .primary{background:#111;color:white;width:100%;margin-top:15px}.restock-modal .close{float:right}.restock-modal .consent{display:flex;gap:8px;align-items:start;font-size:12px}.restock-modal .consent input{width:auto} </style><link rel="stylesheet" href="/assets/storefront-design.css?v=2"><link rel="stylesheet" href="/assets/product-detail.css?v=1"></head><body><a class="skip" href="#app" onclick="event.preventDefault();document.getElementById('app').focus()">Saltar al contenido principal</a><div class="utility"><span class="u-left"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg> Envíos a Honduras <i aria-hidden="true">⌄</i></span><span class="u-mid"><b>Nuevos productos</b><b>Compra sencilla</b><b>Atención personalizada</b></span><span class="u-right">Honduras (HNL) <i aria-hidden="true">⌄</i> <em>ES <i aria-hidden="true">⌄</i></em></span></div><header><div class="top"><a class="brand brand-signature" id="brand" href="#/" aria-label="MR עדולם, inicio"><img class="crown" src="/assets/logo-gold.png" alt="" width="92" height="167"></a><form class="search" role="search" aria-label="Buscar productos" onsubmit="searchProducts(event)"><span aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><input id="searchInput" type="search" autocomplete="off" placeholder="Buscar productos, marcas y más…" aria-label="Buscar en el catálogo"></form><div class="actions"><button class="act" onclick="announce('Favoritos guardados: '+favs().length)" aria-label="Favoritos"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 20s-7-4.4-9-9.2C1.7 7.6 3.8 4.5 7 4.5c2 0 3.4 1 5 3 1.6-2 3-3 5-3 3.2 0 5.3 3.1 4 6.3-2 4.8-9 9.2-9 9.2Z"/></svg><span>Favoritos</span></button><button class="act" onclick="go('account')" aria-label="Abrir cuenta"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.2 4-6 8-6s7 1.8 8 6"/></svg><span>Mi cuenta</span></button><button class="act cartbtn" onclick="go('cart')" aria-label="Abrir carrito"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.2 11h10.6L20.5 7H6.5"/><circle cx="9" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></svg><b id="count" aria-live="polite">0</b><span>Carrito</span></button></div></div><nav aria-label="Navegación principal"><a href="#/">Inicio</a><a href="#/catalog">Catálogo</a><a href="#/brand">El mundo MR עדולם</a><a href="#/orders">Mis pedidos</a><a href="#/connect">Contacto</a></nav></header><main id="app" tabindex="-1"><noscript>Activa JavaScript para ver la tienda de MR עדולם.</noscript></main><nav class="mobile-nav" aria-label="Navegación móvil"><a href="#/"><b>⌂</b><span>Inicio</span></a><a href="#/catalog"><b>⌕</b><span>Catálogo</span></a><a href="#/brand"><b aria-hidden="true">✦</b><span>Marca</span></a><a href="#/account"><b>♙</b><span>Cuenta</span></a><a href="#/cart"><b>▣</b><span>Carrito</span></a></nav><div id="status" class="status" role="status" aria-live="polite" hidden></div><script>
 const products=[];
 let catalogState='loading',catalogQuery='',catalogCategory='Todos';
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -169,12 +169,29 @@ function productImageURL(value){try{const url=new URL(value,location.origin);ret
 function openCategory(value){catalogCategory=value;catalogQuery='';if(location.hash==='#/catalog')render();else go('catalog')}
 function filteredProducts(){return products.filter(p=>(catalogCategory==='Todos'||p.dept===catalogCategory)&&(!catalogQuery||(p.name+' '+p.dept).toLocaleLowerCase('es').includes(catalogQuery)))}
 const authoritativeStock={};
-const money=(n,c='HNL')=>new Intl.NumberFormat('es-HN',{style:'currency',currency:c,currencyDisplay:'narrowSymbol',minimumFractionDigits:0,maximumFractionDigits:2}).format(Number(n)||0),cart=()=>{try{const c=JSON.parse(localStorage.mrCart||'[]');return Array.isArray(c)?c.filter(x=>products.some(p=>p.id===x.id)):[]}catch{return[]}},save=c=>{localStorage.mrCart=JSON.stringify(c);count()},go=x=>location.hash='#/'+x;
+const money=(n,c='HNL')=>new Intl.NumberFormat('es-HN',{style:'currency',currency:c,currencyDisplay:'narrowSymbol',minimumFractionDigits:0,maximumFractionDigits:2}).format(Number(n)||0),cart=()=>{try{const c=JSON.parse(localStorage.mrCart||'[]');return Array.isArray(c)?c.filter(x=>products.some(p=>p.id===x.id)&&Number.isSafeInteger(Number(x.q))&&Number(x.q)>0):[]}catch{return[]}},save=c=>{localStorage.mrCart=JSON.stringify(c);count()},go=x=>location.hash='#/'+x;
 const favs=()=>JSON.parse(localStorage.mrFavs||'[]');function toggleFav(btn,id){let f=favs(),on=f.includes(id);f=on?f.filter(x=>x!==id):f.concat(id);localStorage.mrFavs=JSON.stringify(f);btn.setAttribute('aria-pressed',String(!on));btn.setAttribute('aria-label',!on?'Quitar de favoritos':'Agregar a favoritos');btn.textContent=!on?'♥':'♡';announce(!on?'Guardado en favoritos':'Eliminado de favoritos')}
 function searchProducts(e){e.preventDefault();catalogQuery=(document.querySelector('#searchInput')?.value||'').trim().toLocaleLowerCase('es');catalogCategory='Todos';if(location.hash==='#/catalog')render();else go('catalog')}
 function resetCatalog(){catalogQuery='';catalogCategory='Todos';const input=document.querySelector('#searchInput');if(input)input.value='';render()}
 function count(){let e=document.querySelector('#count');if(e)e.textContent=cart().reduce((a,x)=>a+x.q,0)}
-function announce(t){const node=document.getElementById('status');if(!node)return;node.textContent=t;node.hidden=false;clearTimeout(window.st);window.st=setTimeout(()=>node.hidden=true,2200)}function add(id){let s=stockData(),c=cart(),x=c.find(v=>v.id===id),q=x?x.q:0;if((s[id]||0)<=q){announce('No hay más unidades disponibles');return}x?x.q++:c.push({id,q:1});save(c);trackEvent('add_to_cart',{productId:id});announce('Producto agregado al carrito')}
+function announce(t){const node=document.getElementById('status');if(!node)return;node.textContent=t;node.hidden=false;clearTimeout(window.st);window.st=setTimeout(()=>node.hidden=true,2200)}function getCartVariant(item){
+ const p=products.find(x=>x.id===item.id);
+ if(!p||!Array.isArray(p.variants))return null;
+ const id=Number(item.variantId);
+ const v=Number.isSafeInteger(id)&&id>0?p.variants.find(x=>Number(x.id)===id):p.variants.length===1?p.variants[0]:null;
+ return v||null;
+}
+function validCartItem(item){const v=getCartVariant(item);return !!v&&Number.isSafeInteger(Number(item.q))&&Number(item.q)>0&&Number(v.available)>=Number(item.q)}
+function add(id){
+ if(purchaseInFlight){announce('Estamos verificando tu pedido actual.');return}
+ const p=products.find(x=>x.id===id);
+ if(!p)return;
+ if(!Array.isArray(p.variants)||p.variants.length!==1){openProduct(id);return}
+ const v=p.variants[0],c=cart(),current=c.find(x=>x.id===id&&Number(getCartVariant(x)?.id)===Number(v.id));
+ if(Number(v.available||0)<=(current?.q||0)){announce('No hay más unidades disponibles; consulta este producto');return}
+ if(current)current.q++;else c.push({id,variantId:Number(v.id),q:1});
+ save(c);trackEvent('add_to_cart',{productId:id});announce('Producto agregado al carrito');
+}
 function openProduct(id){location.hash='#/product/'+id}
 function catalogEmpty(filtered=false){
  if(catalogState==='loading')return '<div role="status" aria-live="polite"><p class="loading-label">Cargando productos…</p><div class="catalog-skeleton" aria-hidden="true"><i></i><i></i><i></i><i></i></div></div>';
@@ -187,7 +204,7 @@ function cards(list=products){
  const stock=stockData(),favorites=favs();
  return '<div class="grid">'+list.map(p=>{
   const available=stock[p.id]||0,id=escapeHTML(p.id),name=escapeHTML(p.name),src=p.image?productImageURL(p.image):'';
-  return `<article class="card"><div class="photo"><a href="#/product/${encodeURIComponent(p.id)}" aria-label="Ver ${name}">${src?`<img src="${src}" alt="${name}" loading="lazy" decoding="async">`:'<img class="product-placeholder" src="/assets/monogram.svg" alt="Fotografía no disponible" loading="lazy">'}</a><button class="fav" data-product-id="${id}" aria-label="${favorites.includes(p.id)?'Quitar de favoritos':'Agregar a favoritos'}: ${name}" aria-pressed="${favorites.includes(p.id)}" onclick="toggleFav(this,this.dataset.productId)">${favorites.includes(p.id)?'♥':'♡'}</button></div><div class="body"><div class="meta">${escapeHTML(p.dept)}</div><h3><a class="product-name" href="#/product/${encodeURIComponent(p.id)}">${name}</a></h3><div class="stock ${available<=3?'low':''}">${available===0?'Agotado':available<=3?'Pocas unidades · '+available:'Disponible'}</div><div class="row"><b>${money(p.price,p.currency)}</b><button class="small" data-product-id="${id}" ${available===0?'disabled aria-disabled="true"':''} onclick="add(this.dataset.productId)">Agregar <span aria-hidden="true">+</span></button></div></div></article>`;
+  return `<article class="card"><div class="photo"><a href="#/product/${encodeURIComponent(p.id)}" aria-label="Ver ${name}">${src?`<img src="${src}" alt="${name}" loading="lazy" decoding="async">`:'<img class="product-placeholder" src="/assets/monogram.svg" alt="Fotografía no disponible" loading="lazy">'}</a><button class="fav" data-product-id="${id}" aria-label="${favorites.includes(p.id)?'Quitar de favoritos':'Agregar a favoritos'}: ${name}" aria-pressed="${favorites.includes(p.id)}" onclick="toggleFav(this,this.dataset.productId)">${favorites.includes(p.id)?'♥':'♡'}</button></div><div class="body"><div class="meta">${escapeHTML(p.dept)}</div><h3><a class="product-name" href="#/product/${encodeURIComponent(p.id)}">${name}</a></h3><div class="stock ${available<=3?'low':''}">${available===0?'Agotado':available<=3?'Pocas unidades · '+available:'Disponible'}</div><div class="row"><b>${money(p.price,p.currency)}</b><button class="small" data-product-id="${id}" ${available===0?'disabled aria-disabled="true"':''} onclick="add(this.dataset.productId)">${p.variants?.length===1?'Agregar':'Elegir opciones'} <span aria-hidden="true">+</span></button></div></div></article>`;
  }).join('')+'</div>';
 }
 function serviceIcon(kind){const paths={box:'<path d="m12 3 9 5v8l-9 5-9-5V8l9-5Z M3 8l9 5 9-5 M12 13v8 M7.5 5.5l9 5V15"/>',check:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',wallet:'<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18 M16 13h5v4h-5z M6 5V3h12v2"/>'};return '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">'+paths[kind]+'</svg>'}
@@ -218,8 +235,96 @@ function catalog(){
  return '<section><div class="commerce-head"><div><div class="kicker">La selección MR עדולם</div><h1 style="font:400 36px/40px Georgia,serif;margin:16px 0">Explora el catálogo</h1><p>Encuentra tu próximo favorito.</p></div></div><div class="filters" aria-label="Filtrar productos">'+cats.map(x=>`<button class="filter" aria-pressed="${x===catalogCategory}" data-category="${escapeHTML(x)}" onclick="filterProducts(this,this.dataset.category)">${escapeHTML(x)}</button>`).join('')+'</div><p class="results" id="results" role="status">'+(catalogState==='loading'?'Cargando…':list.length+' productos'+(catalogQuery?' para “'+escapeHTML(catalogQuery)+'”':''))+'</p><div id="catalog-grid">'+cards(list)+'</div></section>';
 }
 function filterProducts(btn,cat){catalogCategory=cat;render();document.querySelectorAll('.filter').forEach(x=>{if(x.dataset.category===cat)x.focus()});announce('Filtro '+cat+' aplicado')}
-function addQty(id){let q=Math.max(1,Number(document.querySelector('#qty')?.value||1)),s=stockData(),c=cart(),x=c.find(v=>v.id===id),available=Math.max(0,(s[id]||0)-(x?x.q:0));if(!available){announce('Producto agotado o máximo disponible alcanzado');return}q=Math.min(q,available);x?x.q+=q:c.push({id,q});save(c);announce(q+' '+(q===1?'unidad agregada':'unidades agregadas')+' al carrito')}
-function productView(id){let p=products.find(x=>x.id===id),s=stockData(),available=s[id]||0;if(!p)return simple('Producto no encontrado','Este producto no está disponible.');let opts=Array.from({length:Math.min(5,available)},(_,i)=>'<option>'+(i+1)+'</option>').join(''),variants=Array.isArray(p.variants)?p.variants:[],variantHtml=variants.length?'<div class="delivery"><b>Variantes publicadas</b>'+variants.map(v=>'<span style="display:block;margin-top:6px">'+([v.size,v.color].filter(Boolean).join(' · ')||'Variante')+(v.sku?' · SKU '+v.sku:'')+' · '+money(v.price,v.currency||p.currency)+' · '+(v.available||0)+' disponibles</span>').join('')+'</div>':'';return '<section class="panel"><button class="small" onclick="go(\'catalog\')">← Volver al catálogo</button><div class="photo" style="max-width:440px;margin:20px 0;border-radius:22px">'+(p.image?'<img src="'+p.image+'" alt="'+p.name+'">':p.icon)+'</div><div class="meta">'+p.dept+'</div><h2>'+p.name+'</h2><p class="price"><b>'+money(p.price,p.currency)+'</b></p><p class="stock '+(available<=3?'low':'')+'">'+(available===0?'Agotado':available<=3?'Pocas unidades · '+available:'Disponible · '+available+' unidades')+'</p>'+variantHtml+'<p>Disponibilidad sincronizada con el catálogo central. La selección exacta de variante se incorporará al flujo de compra server-side.</p><div class="product-actions"><label for="qty"><b>Cantidad</b></label><select id="qty" class="qty" aria-label="Cantidad" '+(available===0?'disabled':'')+'>'+opts+'</select><button class="primary" style="background:#111;color:#fff" '+(available===0?'disabled aria-disabled="true"':'')+' onclick="addQty(\''+p.id+'\')">'+(available===0?'Agotado':'Agregar al carrito')+'</button></div><div class="delivery"><b>Entrega en Honduras</b><span>Opciones de entrega y retiro se calcularán al confirmar el pedido.</span></div><div class="product-help"><button class="small" onclick="openIntentFromProduct(\'product_request\')">Consultar o solicitar</button><button class="small" onclick="openRestock(\''+p.id+'\')">Avisarme cuando esté disponible</button><button class="small" onclick="openIntentFromProduct(\'support\')">Necesito ayuda</button></div></section>'}
+const detailSelection={productId:null,color:'',size:''};
+let productEtaRequest=0;
+const detailColor=v=>v.color||'No especificado';
+const detailSize=v=>v.size||'Única';
+function currentDetailProduct(){let id=(location.hash.split('/')[2]||'');return products.find(p=>p.id===id)}
+function selectedDetailVariant(p){
+ if(!p||!Array.isArray(p.variants))return null;
+ return p.variants.find(v=>detailColor(v)===detailSelection.color&&detailSize(v)===detailSelection.size)||null;
+}
+function selectProductColor(color){
+ const p=currentDetailProduct();if(!p)return;
+ const options=p.variants.filter(v=>detailColor(v)===color);
+ if(!options.length)return;
+ const next=options.find(v=>detailSize(v)===detailSelection.size)||options.find(v=>Number(v.available)>0)||options[0];
+ detailSelection.color=color;detailSelection.size=detailSize(next);render();const button=[...document.querySelectorAll('.pd-option[data-color]')].find(el=>el.dataset.color===color);button?.focus();
+}
+function selectProductSize(size){
+ const p=currentDetailProduct();if(!p||!p.variants.some(v=>detailColor(v)===detailSelection.color&&detailSize(v)===size))return;
+ detailSelection.size=size;render();const button=[...document.querySelectorAll('.pd-option[data-size]')].find(el=>el.dataset.size===size);button?.focus();
+}
+function setProductGalleryImage(index){
+ const p=currentDetailProduct();if(!p)return;
+ const images=(p.images||[]).filter(i=>i&&productImageURL(i.url));
+ const item=images[index];if(!item)return;
+ const img=document.querySelector('#pd-main-image');if(!img)return;
+ img.src=new URL(item.url,location.origin).href;img.alt=item.altText||p.name;
+ document.querySelectorAll('.pd-thumb').forEach((b,n)=>b.setAttribute('aria-pressed',String(n===index)));
+}
+function addQty(id){
+ if(purchaseInFlight){announce('Estamos verificando tu pedido actual.');return}
+ const p=products.find(x=>x.id===id),v=selectedDetailVariant(p);
+ if(!v||Number(v.available)<=0){announce('Selecciona una opción disponible');return}
+ const requested=Number(document.querySelector('#pd-qty')?.value||1);
+ if(!Number.isSafeInteger(requested)||requested<1)return;
+ const c=cart(),existing=c.find(x=>x.id===id&&Number(getCartVariant(x)?.id)===Number(v.id));
+ if((existing?.q||0)+requested>Number(v.available)){announce('La cantidad supera la disponibilidad actual. Actualiza la ficha.');return}
+ if(existing)existing.q+=requested;else c.push({id,variantId:Number(v.id),q:requested});
+ save(c);trackEvent('add_to_cart',{productId:id});announce('Variante seleccionada agregada al carrito');
+}
+async function estimateProductDelivery(){
+ const box=document.querySelector('#pd-delivery-result'),select=document.querySelector('#pd-department');
+ if(!box||!select)return;
+ const department=select.value,request=++productEtaRequest;
+ if(!department){box.textContent='Selecciona un departamento para consultar una estimación real del servicio.';return}
+ box.textContent='Consultando cobertura y tiempos estimados…';
+ try{
+  const response=await fetch('/api/v1/fulfillment/options?department='+encodeURIComponent(department));
+  if(!response.ok)throw new Error('delivery-unavailable');
+  const data=await response.json();if(request!==productEtaRequest)return;
+  const option=(data.options||[]).find(o=>!o.quoteRequired)||(data.options||[])[0];
+  if(!option||option.quoteRequired){box.textContent='Cotización por confirmar. Solicita asesoría antes de comprar.';return}
+  const min=Number(option.etaMinDays),max=Number(option.etaMaxDays),fee=Number(option.shippingMinor);
+  if(!Number.isFinite(min)||!Number.isFinite(max)||min<0||max<min||!Number.isFinite(fee)||fee<0){box.textContent='No hay una estimación verificable para esta zona.';return}
+  box.textContent='Estimación del servicio: '+min+(max===min?'':'–'+max)+' días · Envío estimado: '+money(fee/100,option.currency||'HNL')+'. Total definitivo en checkout.';
+ }catch{if(request===productEtaRequest)box.textContent='No fue posible consultar la entrega. Puedes solicitar ayuda o intentarlo más tarde.'}
+}
+function productView(id){
+ const p=products.find(x=>x.id===id);
+ if(!p)return simple('Producto no encontrado','Este producto no está disponible en el catálogo.');
+ const variants=Array.isArray(p.variants)?p.variants:[];
+ if(detailSelection.productId!==p.id){
+  const initial=variants.find(v=>Number(v.available)>0)||variants[0]||null;
+  detailSelection.productId=p.id;detailSelection.color=initial?detailColor(initial):'';detailSelection.size=initial?detailSize(initial):'';
+ }
+ const conditionCode=String(p.defaultCondition||'').trim().toLowerCase();
+ const publicCondition=['new','nuevo'].includes(conditionCode)?'Nuevo':['used','second_hand','second-hand','preowned','segunda_mano'].includes(conditionCode)?'Segunda mano':null;
+ const selected=selectedDetailVariant(p),available=selected?Math.max(0,Number(selected.available)||0):0;
+ const cartQty=cart().filter(x=>x.id===p.id&&Number(getCartVariant(x)?.id)===Number(selected?.id)).reduce((sum,x)=>sum+Number(x.q),0);
+ const possible=Math.max(0,available-cartQty),qtyOptions=Array.from({length:Math.min(5,possible)},(_,i)=>'<option value="'+(i+1)+'">'+(i+1)+'</option>').join('');
+ const rawImages=(p.images||[]).filter(x=>x&&productImageURL(x.url));
+ const imageSrc=rawImages[0]?productImageURL(rawImages[0].url):'/assets/monogram.svg';
+ const imgAlt=rawImages[0]?escapeHTML(rawImages[0].altText||p.name):'Fotografía no publicada';
+ const thumbs=rawImages.length>1?'<div class="pd-thumbs" role="group" aria-label="Imágenes del producto">'+rawImages.map((im,i)=>'<button class="pd-thumb" type="button" aria-label="Ver imagen '+(i+1)+'" aria-pressed="'+String(i===0)+'" onclick="setProductGalleryImage('+i+')"><img src="'+productImageURL(im.url)+'" alt="" loading="lazy"></button>').join('')+'</div>':'';
+ const colors=[...new Set(variants.map(detailColor))];
+ const sizes=[...new Set(variants.filter(v=>detailColor(v)===detailSelection.color).map(detailSize))];
+ const colorsHTML=colors.map(color=>'<button type="button" class="pd-option" data-color="'+escapeHTML(color)+'" aria-pressed="'+String(color===detailSelection.color)+'" onclick="selectProductColor(this.dataset.color)">'+escapeHTML(color)+'</button>').join('');
+ const sizesHTML=sizes.map(size=>{const v=variants.find(v=>detailColor(v)===detailSelection.color&&detailSize(v)===size);return '<button type="button" class="pd-option" data-size="'+escapeHTML(size)+'" data-unavailable="'+String(!v||Number(v.available)<=0)+'" aria-pressed="'+String(size===detailSelection.size)+'" onclick="selectProductSize(this.dataset.size)">'+escapeHTML(size)+(v&&Number(v.available)<=0?' · agotada':'')+'</button>'}).join('');
+ const availLabel=!selected?'Consulta la disponibilidad':available===0?'Variante agotada en el catálogo':'Disponible según catálogo';
+ const availNote=!selected?'Aún no hay variantes publicadas. Consulta antes de comprar.':available===0?'Selecciona otra talla o color; también puedes solicitar un aviso.':'Cantidad informada: '+available+' unidad(es). Se comprobará al crear el pedido; no constituye una reserva.';
+ const price=selected?money(selected.price,selected.currency||p.currency):money(p.price,p.currency);
+ const header='<a class="pd-back" href="#/catalog">← Volver al catálogo</a>';
+ const main='<section class="pd-layout" aria-label="Ficha de producto"><div class="pd-gallery"><div class="pd-hero-img"><img id="pd-main-image" class="'+(rawImages.length?'':'pd-placeholder')+'" src="'+imageSrc+'" alt="'+imgAlt+'"></div>'+thumbs+(rawImages.length?'':'<p class="pd-caption">Este producto aún no tiene fotografía publicada.</p>')+'</div><div class="pd-info"><div class="pd-kicker">MR עדולם · '+escapeHTML(p.dept)+'</div><h1>'+escapeHTML(p.name)+'</h1>'+(publicCondition?'<p class="pd-caption">Condición publicada: '+publicCondition+'</p>':'')+'<div class="pd-price">'+escapeHTML(price)+'</div><p class="pd-price-note">Precio de catálogo para la opción mostrada. El servidor confirma el importe final, los impuestos aplicables y el envío en checkout.</p><div class="pd-availability" data-state="'+(!selected?'unknown':available?'ok':'out')+'" role="status"><strong>'+availLabel+'</strong><span>'+availNote+'</span></div>';
+ const options='<fieldset class="pd-fieldset"><legend>Color</legend><div class="pd-options">'+(colorsHTML||'<p>No hay colores publicados.</p>')+'</div></fieldset><fieldset class="pd-fieldset"><legend>Talla o variante</legend><div class="pd-options">'+(sizesHTML||'<p>Consulta disponibilidad de variantes.</p>')+'</div></fieldset>';
+ const actions='<div class="pd-order"><label for="pd-qty">Cantidad<select id="pd-qty" '+(possible===0?'disabled':'')+'>'+qtyOptions+'</select></label><button class="pd-primary" type="button" '+(possible===0?'disabled':'')+' data-product-id="'+escapeHTML(p.id)+'" onclick="addQty(this.dataset.productId)">Agregar variante al carrito</button></div><p class="pd-caption">Elegir no reserva inventario. Puedes comprar como invitado y consultar sin obligación.</p>';
+ const guidance='<details class="pd-guide"><summary>Ayuda gratuita para elegir talla</summary><p>Compara las medidas de una prenda que ya te queda bien con la información del artículo. No hay tabla específica de medidas publicada para este producto; consúltanos si necesitas orientación. No requiere registro ni compra.</p></details>';
+ const delivery='<div class="pd-delivery"><label for="pd-department">Consultar entrega en Honduras</label><select id="pd-department" onchange="estimateProductDelivery()"><option value="">Selecciona departamento</option>'+HN_DEPARTMENTS.map(name=>'<option value="'+escapeHTML(name)+'">'+escapeHTML(name)+'</option>').join('')+'</select><div class="pd-delivery-result" id="pd-delivery-result" role="status" aria-live="polite">Selecciona un departamento para consultar una estimación del servicio.</div></div>';
+ const help='<div class="pd-help"><button type="button" class="pd-secondary" onclick="openIntentFromProduct(\'product_request\')">Consultar producto o talla</button>'+(variants.some(v=>Number(v.available)<=0)?'<button type="button" class="pd-secondary" data-product-id="'+escapeHTML(p.id)+'" onclick="openRestock(this.dataset.productId)">Solicitar aviso de reposición</button>':'')+'<button type="button" class="pd-secondary" onclick="openIntentFromProduct(\'support\')">Solicitar ayuda</button></div></div></section>';
+ const lower='<div class="pd-lower"><section class="pd-section"><h2>Información antes de comprar</h2><p>Revisa el nombre, la condición cuando esté publicada, el precio y la talla o variante seleccionada. Si necesitas medidas, composición o cuidados no publicados, solicita asesoría antes de confirmar la compra.</p>'+guidance+'<p><a href="#/connect">Consultar con MR עדולם</a></p></section><section class="pd-section"><h2>Opiniones verificadas</h2><p>Las opiniones verificadas todavía no están habilitadas en esta plataforma. No mostramos valoraciones ni testimonios inventados.</p><h2>Envío y pago</h2><p>Consulta el departamento para una estimación. El total de entrega y pedido se confirma en el servidor. Puedes solicitar ayuda sin aceptar mensajes promocionales.</p></section></div>';
+ return header+main+options+actions+delivery+help+lower;
+}
 function openRestock(id){
  const p=products.find(x=>x.id===id);if(!p)return;
  const variants=(p.variants||[]).filter(v=>Number(v.available)===0);
@@ -239,22 +344,220 @@ function openRestock(id){
  try{const r=await fetch('/api/v1/restock/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({productId:Number(String(p.id).slice(1)),variantId:Number(sel.value),name:overlay.querySelector('#restock-name').value,channel:channel.value,phone:overlay.querySelector('#restock-phone')?.value,email:overlay.querySelector('#restock-email')?.value,consent:overlay.querySelector('#restock-consent').checked})});if(!r.ok)throw new Error(r.status===409?'La variante ya está disponible. Actualiza el catálogo.':'No pudimos registrar el aviso. Intenta nuevamente.');dialog.innerHTML='<h2>Solicitud registrada</h2><p>Te avisaremos cuando vuelva a estar disponible.</p><button class="primary" id="restock-done">Cerrar</button>';dialog.querySelector('#restock-done').onclick=close;}catch(err){error.textContent=err.message;button.disabled=false}};
  overlay.querySelector('#restock-close').focus();
 }
-function changeQty(id,d){let c=cart(),x=c.find(v=>v.id===id),s=stockData();if(!x)return;if(d>0&&x.q>=(s[id]||0)){announce('Máximo disponible alcanzado');return}x.q+=d;if(x.q<=0)c=c.filter(v=>v.id!==id);save(c);render();announce(d>0?'Cantidad aumentada':'Cantidad actualizada')}function removeItem(id){save(cart().filter(x=>x.id!==id));render();announce('Producto eliminado del carrito')}
-function cartView(){let c=cart();if(!c.length)return '<div class="panel empty"><h2>Tu carrito está vacío</h2><button class="primary" style="background:#111;color:white" onclick="go(\'catalog\')">Ver catálogo</button></div>';let t=0;return '<div class="panel"><h2>Carrito</h2>'+c.map(x=>{let p=products.find(y=>y.id===x.id);t+=p.price*x.q;return '<div class="row cart-line"><div><b>'+p.name+'</b><div class="meta">'+money(p.price)+' c/u</div></div><div class="cart-controls" aria-label="Cantidad de '+p.name+'"><button onclick="changeQty(\''+p.id+'\',-1)" aria-label="Disminuir cantidad">−</button><b>'+x.q+'</b><button onclick="changeQty(\''+p.id+'\',1)" aria-label="Aumentar cantidad">+</button><button onclick="removeItem(\''+p.id+'\')" aria-label="Eliminar '+p.name+'">×</button></div><b>'+money(p.price*x.q)+'</b></div>'}).join('')+'<div class="checkout"><div><div class="meta">Subtotal</div><h2>'+money(t)+'</h2></div><button class="primary" style="background:#111;color:#fff" onclick="go(\'checkout\')">Continuar compra</button></div></div>'}
+function changeQty(id,variantId,d){
+ if(purchaseInFlight){announce('Estamos verificando tu pedido actual.');return}
+ const c=cart(),x=c.find(i=>i.id===id&&String(i.variantId||'')===String(variantId||''));
+ if(!x)return;
+ const v=getCartVariant(x);
+ if(d>0&&(!v||x.q+d>Number(v.available))){announce('No hay disponibilidad suficiente de esta variante');return}
+ x.q+=d;
+ save(c.filter(i=>i.q>0));render();announce('Cantidad actualizada');
+}
+function removeItem(id,variantId){
+ if(purchaseInFlight){announce('Estamos verificando tu pedido actual.');return}
+ save(cart().filter(i=>!(i.id===id&&String(i.variantId||'')===String(variantId||''))));
+ render();announce('Producto eliminado del carrito');
+}
+function cartView(){
+ if(pendingPurchase()||legacyPurchaseKeysPresent())return pendingPurchaseView();
+ const c=cart();if(!c.length)return '<div class="panel empty"><h2>Tu carrito está vacío</h2><button class="primary" style="background:#111;color:white" onclick="go(\'catalog\')">Ver catálogo</button></div>';
+ let total=0,ready=true;
+ const rows=c.map(item=>{
+  const p=products.find(x=>x.id===item.id),v=getCartVariant(item),valid=validCartItem(item);
+  if(!p)return '';
+  if(!valid)ready=false;
+  const unit=v?Number(v.price):Number(p.price)||0;
+  if(valid)total+=unit*Number(item.q);
+  const name=escapeHTML(p.name),id=escapeHTML(p.id),vid=escapeHTML(item.variantId||'');
+  const option=v?[v.size,v.color].filter(Boolean).join(' · ')||'Variante única':'Variante sin confirmar';
+  return '<div class="row cart-line"><div><b>'+name+'</b><p class="pd-variant-line">'+escapeHTML(option)+'</p><div class="meta">'+money(unit,v?.currency||p.currency)+' c/u</div>'
+   +(!valid?'<div class="pd-cart-unresolved" role="alert">Variante sin verificar o inventario insuficiente. <a href="#/product/'+encodeURIComponent(p.id)+'">Elegir variante disponible</a></div>':'')
+   +'</div><div class="cart-controls" aria-label="Cantidad de '+name+'">'
+   +'<button data-pid="'+id+'" data-vid="'+vid+'" onclick="changeQty(this.dataset.pid,this.dataset.vid,-1)" aria-label="Disminuir cantidad">−</button>'
+   +'<b>'+Number(item.q)+'</b>'
+   +'<button data-pid="'+id+'" data-vid="'+vid+'" '+(!valid||item.q>=Number(v?.available)?'disabled':'')+' onclick="changeQty(this.dataset.pid,this.dataset.vid,1)" aria-label="Aumentar cantidad">+</button>'
+   +'<button data-pid="'+id+'" data-vid="'+vid+'" onclick="removeItem(this.dataset.pid,this.dataset.vid)" aria-label="Eliminar '+name+'">×</button></div>'
+   +'<b>'+(valid?money(unit*item.q,v?.currency||p.currency):'Por confirmar')+'</b></div>';
+ }).join('');
+ return '<div class="panel"><h2>Carrito</h2>'+rows
+  +'<div class="checkout"><div><div class="meta">Subtotal estimado de variantes verificadas</div><h2>'+money(total)+'</h2>'
+  +'<p class="pd-price-note">El importe final y el envío se calculan en el servidor.</p></div>'
+  +(ready?'<button class="primary" style="background:#111;color:#fff" onclick="go(\'checkout\')">Continuar compra</button>':'<p role="alert">Revisa las opciones señaladas antes de continuar al pago.</p>')
+  +'</div></div>';
+}
 const HN_DEPARTMENTS=['Atlántida','Choluteca','Colón','Comayagua','Copán','Cortés','El Paraíso','Francisco Morazán','Gracias a Dios','Intibucá','Islas de la Bahía','La Paz','Lempira','Ocotepeque','Olancho','Santa Bárbara','Valle','Yoro'];
 function paymentLabel(v){return ({CASH:'Efectivo',BANK_TRANSFER:'Transferencia bancaria',CASH_ON_DELIVERY:'Pago contra entrega'})[v]||v}
 function deliveryQuote(){try{return JSON.parse(sessionStorage.mrDeliveryQuote||'null')}catch{return null}}
 async function loadDeliveryOptions(){let department=document.querySelector('#department')?.value,box=document.querySelector('#deliveryQuote');if(!department){sessionStorage.removeItem('mrDeliveryQuote');if(box)box.textContent='Selecciona un departamento para consultar entrega.';return}if(box)box.textContent='Consultando tarifa y tiempo estimado…';try{let r=await fetch('/api/v1/fulfillment/options?department='+encodeURIComponent(department)),j=await r.json();if(!r.ok)throw new Error(j.error||'quote_failed');let option=(j.options||[]).find(x=>!x.quoteRequired)||(j.options||[])[0];if(!option)throw new Error('quote_missing');sessionStorage.mrDeliveryQuote=JSON.stringify(option);if(box){box.textContent=option.quoteRequired?'Cotización por confirmar para '+department+'. La compra con entrega no se confirmará hasta configurar una tarifa.':'Entrega estimada: '+option.etaMinDays+(option.etaMaxDays!==option.etaMinDays?'–'+option.etaMaxDays:'')+' días · Envío '+money(Number(option.shippingMinor||0)/100,option.currency||'HNL')}}catch{sessionStorage.removeItem('mrDeliveryQuote');if(box)box.textContent='No se pudo consultar la entrega en este momento.'}}
-function reviewOrder(){let name=document.querySelector('#name')?.value.trim(),phone=document.querySelector('#phone')?.value.trim(),delivery=document.querySelector('#delivery')?.value,payment=document.querySelector('#payment')?.value,address=document.querySelector('#address')?.value.trim()||'',reference=document.querySelector('#reference')?.value.trim()||'',department=document.querySelector('#department')?.value||'',municipality=document.querySelector('#municipality')?.value.trim()||'',transferReference=document.querySelector('#transferReference')?.value.trim()||'',transferNote=document.querySelector('#transferNote')?.value.trim()||'',quote=deliveryQuote(),home=delivery==='Entrega a domicilio';if(!name||!phone||!delivery||!payment||(home&&(!address||!department||!municipality))){announce('Completa los campos obligatorios');return}if(payment==='CASH_ON_DELIVERY'&&!home){announce('El pago contra entrega requiere entrega a domicilio');return}if(home&&(!quote||quote.quoteRequired)){announce('La tarifa de entrega para ese departamento todavía requiere cotización');return}sessionStorage.mrCheckout=JSON.stringify({name,phone,delivery,payment,address,reference,department,municipality,fulfillmentType:home?(quote.type||'COURIER'):'STORE_PICKUP',deliveryQuote:quote,transferReference,transferNote});go('review')}
+function reviewOrder(){if(purchaseInFlight||pendingPurchase()||legacyPurchaseKeysPresent()){announce('Hay una compra pendiente. Primero revisa su estado.');go('review');return}let name=document.querySelector('#name')?.value.trim(),phone=document.querySelector('#phone')?.value.trim(),delivery=document.querySelector('#delivery')?.value,payment=document.querySelector('#payment')?.value,address=document.querySelector('#address')?.value.trim()||'',reference=document.querySelector('#reference')?.value.trim()||'',department=document.querySelector('#department')?.value||'',municipality=document.querySelector('#municipality')?.value.trim()||'',transferReference=document.querySelector('#transferReference')?.value.trim()||'',transferNote=document.querySelector('#transferNote')?.value.trim()||'',quote=deliveryQuote(),home=delivery==='Entrega a domicilio';if(!name||!phone||!delivery||!payment||(home&&(!address||!department||!municipality))){announce('Completa los campos obligatorios');return}if(payment==='CASH_ON_DELIVERY'&&!home){announce('El pago contra entrega requiere entrega a domicilio');return}if(home&&(!quote||quote.quoteRequired)){announce('La tarifa de entrega para ese departamento todavía requiere cotización');return}sessionStorage.mrCheckout=JSON.stringify({name,phone,delivery,payment,address,reference,department,municipality,fulfillmentType:home?(quote.type||'COURIER'):'STORE_PICKUP',deliveryQuote:quote,transferReference,transferNote});go('review')}
 function deliveryFields(){let v=document.querySelector('#delivery')?.value,box=document.querySelector('#addressFields'),quote=document.querySelector('#deliveryQuote');if(!box)return;let home=v==='Entrega a domicilio';box.hidden=!home;if(!home){sessionStorage.mrDeliveryQuote=JSON.stringify({type:'STORE_PICKUP',provider:'MR',shippingMinor:0,currency:'HNL',etaMinDays:0,etaMaxDays:0,quoteRequired:false});if(quote)quote.textContent='Retiro en tienda · sin costo de envío.'}else{sessionStorage.removeItem('mrDeliveryQuote');loadDeliveryOptions()}let a=box.querySelector('#address'),m=box.querySelector('#municipality');if(a)a.required=home;if(m)m.required=home}
 function paymentFields(){let v=document.querySelector('#payment')?.value,box=document.querySelector('#transferFields');if(box)box.hidden=v!=='BANK_TRANSFER'}
-function checkoutView(){trackEvent('checkout_start',{});let c=cart();if(!c.length)return '<div class="panel empty"><h2>No hay productos para comprar</h2><button class="small" onclick="go(\'catalog\')">Ver catálogo</button></div>';let estimate=c.reduce((s,x)=>{let p=products.find(y=>y.id===x.id);return s+p.price*x.q},0),departments=HN_DEPARTMENTS.map(x=>'<option value="'+x+'">'+x+'</option>').join('');return '<section class="panel"><div class="eyebrow">Checkout</div><h2>Finalizar pedido</h2><form onsubmit="event.preventDefault();reviewOrder()"><div class="form-grid"><div class="field"><label for="name">Nombre completo</label><input id="name" required autocomplete="name"></div><div class="field"><label for="phone">Teléfono</label><input id="phone" required inputmode="tel" autocomplete="tel"></div><div class="field full"><label for="delivery">Entrega</label><select id="delivery" required onchange="deliveryFields()"><option value="">Seleccionar</option><option>Retiro en tienda</option><option>Entrega a domicilio</option></select></div><div id="addressFields" class="field full" hidden><label for="department">Departamento</label><select id="department" onchange="loadDeliveryOptions()"><option value="">Seleccionar departamento</option>'+departments+'</select><label for="municipality">Municipio / ciudad</label><input id="municipality" maxlength="120"><label for="address">Dirección de entrega</label><input id="address" autocomplete="street-address"><label for="reference">Referencia descriptiva</label><input id="reference" autocomplete="address-line2"><div id="deliveryQuote" class="delivery">Selecciona un departamento para consultar entrega.</div></div><div class="field full"><label for="payment">Método de pago</label><select id="payment" required onchange="paymentFields()"><option value="">Seleccionar</option><option value="CASH">Efectivo</option><option value="BANK_TRANSFER">Transferencia bancaria</option><option value="CASH_ON_DELIVERY">Pago contra entrega</option></select></div><div id="transferFields" class="field full" hidden><label for="transferReference">Referencia de transferencia</label><input id="transferReference" maxlength="160" placeholder="Opcional; será verificada antes de marcar el pago como recibido"><label for="transferNote">Nota</label><input id="transferNote" maxlength="500" placeholder="Opcional"></div></div><div class="summary"><div class="row"><b>Estimado del carrito</b><b>'+money(estimate)+'</b></div><p>El total final, incluyendo la tarifa configurada de entrega, se fija en el servidor.</p></div><div class="product-actions"><button type="button" class="small" onclick="go(\'cart\')">Volver al carrito</button><button class="primary" style="background:#111;color:#fff">Revisar pedido</button></div></form></section>'}
-function reviewView(){let d;try{d=JSON.parse(sessionStorage.mrCheckout||'null')}catch{};let c=cart();if(!d||!c.length)return '<div class="panel empty"><h2>Pedido no disponible</h2><button class="small" onclick="go(\'checkout\')">Volver al checkout</button></div>';let estimate=0,lines=c.map(x=>{let p=products.find(y=>y.id===x.id);estimate+=p.price*x.q;return '<div class="row cart-line"><span>'+p.name+' × '+x.q+'</span><b>'+money(p.price*x.q)+'</b></div>'}).join(''),q=d.deliveryQuote||{};return '<section class="panel"><div class="eyebrow">Revisión</div><h2>Confirma tu pedido</h2><p><b>'+d.name+'</b> · '+d.phone+'</p><p>Entrega: '+d.delivery+(d.department?' · '+d.department+' · '+d.municipality:'')+' · Pago: '+paymentLabel(d.payment)+'</p>'+(d.address?'<p><b>Dirección:</b> '+d.address+(d.reference?' · '+d.reference:'')+'</p>':'')+(d.delivery==='Entrega a domicilio'?'<p><b>Envío configurado:</b> '+money(Number(q.shippingMinor||0)/100,q.currency||'HNL')+' · '+q.etaMinDays+(q.etaMaxDays!==q.etaMinDays?'–'+q.etaMaxDays:'')+' días estimados</p>':'<p><b>Retiro en tienda</b> · sin costo de envío</p>')+(d.payment==='BANK_TRANSFER'&&d.transferReference?'<p><b>Referencia informada:</b> '+d.transferReference+' <small>(pendiente de verificación)</small></p>':'')+lines+'<div class="checkout"><div><div class="meta">Estimado visual de productos</div><h2>'+money(estimate)+'</h2><p>La orden, envío y pago se fijan en el servidor.</p></div><button class="primary" style="background:#111;color:#fff" onclick="confirmOrder()">Crear orden, entrega y checkout</button></div></section>'}
+function checkoutView(){if(pendingPurchase()||legacyPurchaseKeysPresent())return pendingPurchaseView();let c=cart();if(c.some(x=>!validCartItem(x)))return '<div class="panel empty" role="alert"><h2>Revisa las variantes del carrito</h2><p>Alguna opción ya no está disponible o no ha sido seleccionada.</p><a class="pd-secondary" href="#/cart">Volver al carrito</a></div>';if(!c.length)return '<div class="panel empty"><h2>No hay productos para comprar</h2><button class="small" onclick="go(\'catalog\')">Ver catálogo</button></div>';let estimate=c.reduce((s,x)=>{let v=getCartVariant(x);return s+Number(v.price)*x.q},0),departments=HN_DEPARTMENTS.map(x=>'<option value="'+x+'">'+x+'</option>').join('');return '<section class="panel"><div class="eyebrow">Checkout</div><h2>Finalizar pedido</h2><form onsubmit="event.preventDefault();reviewOrder()"><div class="form-grid"><div class="field"><label for="name">Nombre completo</label><input id="name" required autocomplete="name"></div><div class="field"><label for="phone">Teléfono</label><input id="phone" required inputmode="tel" autocomplete="tel"></div><div class="field full"><label for="delivery">Entrega</label><select id="delivery" required onchange="deliveryFields()"><option value="">Seleccionar</option><option>Retiro en tienda</option><option>Entrega a domicilio</option></select></div><div id="addressFields" class="field full" hidden><label for="department">Departamento</label><select id="department" onchange="loadDeliveryOptions()"><option value="">Seleccionar departamento</option>'+departments+'</select><label for="municipality">Municipio / ciudad</label><input id="municipality" maxlength="120"><label for="address">Dirección de entrega</label><input id="address" autocomplete="street-address"><label for="reference">Referencia descriptiva</label><input id="reference" autocomplete="address-line2"><div id="deliveryQuote" class="delivery">Selecciona un departamento para consultar entrega.</div></div><div class="field full"><label for="payment">Método de pago</label><select id="payment" required onchange="paymentFields()"><option value="">Seleccionar</option><option value="CASH">Efectivo</option><option value="BANK_TRANSFER">Transferencia bancaria</option><option value="CASH_ON_DELIVERY">Pago contra entrega</option></select></div><div id="transferFields" class="field full" hidden><label for="transferReference">Referencia de transferencia</label><input id="transferReference" maxlength="160" placeholder="Opcional; será verificada antes de marcar el pago como recibido"><label for="transferNote">Nota</label><input id="transferNote" maxlength="500" placeholder="Opcional"></div></div><div class="summary"><div class="row"><b>Estimado del carrito</b><b>'+money(estimate)+'</b></div><p>El total final, incluyendo la tarifa configurada de entrega, se fija en el servidor.</p></div><div class="product-actions"><button type="button" class="small" onclick="go(\'cart\')">Volver al carrito</button><button class="primary" style="background:#111;color:#fff">Revisar pedido</button></div></form></section>'}
+function reviewView(){
+ if(pendingPurchase()||legacyPurchaseKeysPresent())return pendingPurchaseView();
+ let d;
+ try{d=JSON.parse(sessionStorage.mrCheckout||'null')}catch{d=null}
+ const c=cart();
+ if(!d||!c.length)return '<div class="panel empty"><h2>Pedido no disponible</h2><button class="small" onclick="go(\'checkout\')">Volver al checkout</button></div>';
+ if(c.some(x=>!validCartItem(x)))return '<div class="panel empty" role="alert"><h2>Revisa las variantes del carrito</h2><a href="#/cart">Volver al carrito</a></div>';
+ let estimate=0;
+ const lines=c.map(x=>{
+  const p=products.find(y=>y.id===x.id),v=getCartVariant(x),subtotal=Number(v.price)*x.q;
+  estimate+=subtotal;
+  return '<div class="row cart-line"><span>'+escapeHTML(p.name)+' · '+escapeHTML([v.size,v.color].filter(Boolean).join(' / ')||'Variante única')+' × '+x.q+'</span><b>'+money(subtotal,v.currency||p.currency)+'</b></div>';
+ }).join('');
+ const q=d.deliveryQuote||{};
+ const customer='<p><b>'+escapeHTML(d.name)+'</b> · '+escapeHTML(d.phone)+'</p>';
+ const handoff='<p>Entrega: '+escapeHTML(d.delivery)+(d.department?' · '+escapeHTML(d.department)+' · '+escapeHTML(d.municipality):'')+' · Pago: '+escapeHTML(paymentLabel(d.payment))+'</p>';
+ const address=d.address?'<p><b>Dirección:</b> '+escapeHTML(d.address)+(d.reference?' · '+escapeHTML(d.reference):'')+'</p>':'';
+ const delivery=d.delivery==='Entrega a domicilio'
+  ?'<p><b>Envío configurado:</b> '+money(Number(q.shippingMinor||0)/100,q.currency||'HNL')+' · '+escapeHTML(q.etaMinDays)+(q.etaMaxDays!==q.etaMinDays?'–'+escapeHTML(q.etaMaxDays):'')+' días estimados</p>'
+  :'<p><b>Retiro en tienda</b> · sin costo de envío</p>';
+ const transfer=d.payment==='BANK_TRANSFER'&&d.transferReference
+  ?'<p><b>Referencia informada:</b> '+escapeHTML(d.transferReference)+' <small>(pendiente de verificación)</small></p>'
+  :'';
+ return '<section class="panel"><div class="eyebrow">Revisión</div><h2>Confirma tu pedido</h2>'
+  +customer+handoff+address+delivery+transfer+lines
+  +'<div class="checkout"><div><div class="meta">Estimado visual de productos</div><h2>'+money(estimate)+'</h2><p>La orden, envío y pago se fijan en el servidor.</p></div><button class="primary" style="background:#111;color:#fff" onclick="confirmOrder()">Crear orden, entrega y checkout</button></div></section>';
+}
 function successView(){let o,co,ff;try{o=JSON.parse(sessionStorage.mrLastOrder||'null');co=JSON.parse(sessionStorage.mrLastCheckout||'null');ff=JSON.parse(sessionStorage.mrLastFulfillment||'null')}catch{};if(!o)return '<div class="panel empty"><h2>Pedido confirmado</h2><button class="small" onclick="go(\'orders\')">Ver pedidos</button></div>';return '<section class="panel empty"><div class="eyebrow">Confirmación</div><h2>¡Pedido recibido!</h2><p>Tu número de pedido es <b>'+(o.orderNumber||o.id)+'</b>.</p><p>Orden: <span class="badge">'+(co?.orderStatus||o.status)+'</span></p>'+(co?'<p>Pago: <b>'+paymentLabel(co.paymentMethod)+'</b> · <span class="badge">'+(co.payment?.status||'PENDING')+'</span></p>':'')+(ff?'<p>Entrega: <b>'+ff.type+'</b> · <span class="badge">'+ff.status+'</span></p><p>'+(ff.destination?.department?ff.destination.department+' · ':'')+(ff.quote?.etaMaxDays!=null?'estimado '+ff.quote.etaMinDays+(ff.quote.etaMaxDays!==ff.quote.etaMinDays?'–'+ff.quote.etaMaxDays:'')+' días':'seguimiento disponible')+'</p>':'')+'<p>Orden, pago y entrega mantienen estados independientes.</p><div class="product-actions" style="justify-content:center"><button class="primary" style="background:#111;color:#fff" onclick="go(\'orders\')">Seguir pedido</button><button class="small" onclick="go(\'catalog\')">Seguir comprando</button></div></section>'}
 function orderRefs(){try{const r=JSON.parse(localStorage.mrOrderRefs||'[]');return Array.isArray(r)?r:[]}catch{return[]}}
 function saveOrderRefs(r){localStorage.mrOrderRefs=JSON.stringify(r.slice(0,50))}
-function resolveVariantId(item){if(Number.isSafeInteger(Number(item.variantId))&&Number(item.variantId)>0)return Number(item.variantId);let p=products.find(x=>x.id===item.id);if(!p||!Array.isArray(p.variants))return null;let v=p.variants.find(x=>(x.available||0)>=item.q)||p.variants.find(x=>(x.available||0)>0)||p.variants[0];return v?Number(v.id):null}
-async function confirmOrder(){let d={};try{d=JSON.parse(sessionStorage.mrCheckout||'{}')}catch{};let items=cart(),payloadItems=items.map(x=>({variantId:resolveVariantId(x),quantity:x.q}));if(!items.length||payloadItems.some(x=>!x.variantId)){announce('No se pudo resolver una variante disponible. Revisa el carrito.');go('cart');return}let orderKey=sessionStorage.mrOrderIdempotency;if(!orderKey){orderKey=(crypto.randomUUID?crypto.randomUUID():'mr-order-'+Date.now());sessionStorage.mrOrderIdempotency=orderKey}let fulfillmentKey=sessionStorage.mrFulfillmentIdempotency;if(!fulfillmentKey){fulfillmentKey=(crypto.randomUUID?crypto.randomUUID():'mr-fulfillment-'+Date.now());sessionStorage.mrFulfillmentIdempotency=fulfillmentKey}let checkoutKey=sessionStorage.mrCheckoutIdempotency;if(!checkoutKey){checkoutKey=(crypto.randomUUID?crypto.randomUUID():'mr-checkout-'+Date.now());sessionStorage.mrCheckoutIdempotency=checkoutKey}announce('Registrando orden, entrega y checkout…');try{let r=await fetch('/api/v1/orders',{method:'POST',headers:{'content-type':'application/json','idempotency-key':orderKey},body:JSON.stringify({channel:'WEB',customer:{name:d.name||null,phone:d.phone||null},items:payloadItems})}),j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'order_failed');let o=j.order;let fr=await fetch('/api/v1/fulfillments',{method:'POST',headers:{'content-type':'application/json','idempotency-key':fulfillmentKey},body:JSON.stringify({orderId:o.id,orderToken:o.token,type:d.fulfillmentType||'STORE_PICKUP',department:d.department||null,municipality:d.municipality||null,addressLine:d.address||null,addressReference:d.reference||null,recipientName:d.name||null,recipientPhone:d.phone||null})}),fj=await fr.json().catch(()=>({}));if(!fr.ok)throw new Error(fj.error||'fulfillment_failed');let ff=fj.fulfillment;let cr=await fetch('/api/v1/checkouts',{method:'POST',headers:{'content-type':'application/json','idempotency-key':checkoutKey},body:JSON.stringify({orderId:o.id,orderToken:o.token,paymentMethod:d.payment,evidence:{reference:d.transferReference||null,note:d.transferNote||null}})}),cj=await cr.json().catch(()=>({}));if(!cr.ok)throw new Error(cj.error||'checkout_failed');let co=cj.checkout;o.status=co.orderStatus;let refs=orderRefs().filter(x=>String(x.id)!==String(o.id));refs.unshift({id:o.id,token:o.token,orderNumber:o.orderNumber,status:co.orderStatus,createdAt:o.createdAt,grandTotalMinor:co.amountMinor,currency:co.currency,checkoutId:co.id,checkoutToken:co.token,paymentMethod:co.paymentMethod,paymentStatus:co.payment?.status||'PENDING',fulfillmentId:ff.id,fulfillmentToken:ff.token,fulfillmentStatus:ff.status,fulfillmentType:ff.type,department:ff.destination?.department||null});saveOrderRefs(refs);sessionStorage.mrLastOrder=JSON.stringify(o);sessionStorage.mrLastCheckout=JSON.stringify(co);sessionStorage.mrLastFulfillment=JSON.stringify(ff);localStorage.removeItem('mrCart');sessionStorage.removeItem('mrCheckout');sessionStorage.removeItem('mrDeliveryQuote');sessionStorage.removeItem('mrOrderIdempotency');sessionStorage.removeItem('mrFulfillmentIdempotency');sessionStorage.removeItem('mrCheckoutIdempotency');count();announce('Pedido '+(o.orderNumber||o.id)+' confirmado');setTimeout(()=>go('success'),350)}catch(e){announce('No se pudo completar la orden. Puedes reintentar sin duplicar la operación.')}}
+function resolveVariantId(item){const v=getCartVariant(item);return validCartItem(item)?Number(v.id):null}
+// A purchase attempt is a recoverable 3-stage transaction, not a single network call.
+// Only the cart variant IDs/quantities, SHA-256 fingerprint and public response refs
+// are persisted in the attempt; customer fields remain in existing mrCheckout session.
+let purchaseInFlight=false;
+const PURCHASE_ATTEMPT_KEY='mrPurchaseAttemptV1';
+function pendingPurchase(){
+ try{
+  const x=JSON.parse(sessionStorage[PURCHASE_ATTEMPT_KEY]||'null');
+  return x&&x.v===1&&Array.isArray(x.items)&&typeof x.fingerprint==='string'&&x.keys?.order&&x.keys?.fulfillment&&x.keys?.checkout?x:null;
+ }catch{return null}
+}
+function savePendingPurchase(value){sessionStorage[PURCHASE_ATTEMPT_KEY]=JSON.stringify(value)}
+function purchaseCartItems(){
+ try{const c=JSON.parse(localStorage.mrCart||'[]');return Array.isArray(c)?c.map(x=>({id:String(x.id),variantId:Number(x.variantId),q:Number(x.q)})):[]}catch{return[]}
+}
+function purchasePayloads(items,d){
+ const order={channel:'WEB',customer:{name:d.name||null,phone:d.phone||null},items:items.map(x=>({variantId:Number(x.variantId),quantity:Number(x.q)}))};
+ const fulfillment={type:d.fulfillmentType||'STORE_PICKUP',department:d.department||null,municipality:d.municipality||null,addressLine:d.address||null,addressReference:d.reference||null,recipientName:d.name||null,recipientPhone:d.phone||null};
+ const checkout={paymentMethod:d.payment,evidence:{reference:d.transferReference||null,note:d.transferNote||null}};
+ return {order,fulfillment,checkout};
+}
+async function purchaseFingerprint(items,d){
+ if(!crypto.subtle||typeof TextEncoder!=='function')throw new Error('fingerprint_unavailable');
+ const bytes=new TextEncoder().encode(JSON.stringify({items,payload:purchasePayloads(items,d)}));
+ const digest=await crypto.subtle.digest('SHA-256',bytes);
+ return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
+}
+function legacyPurchaseKeysPresent(){
+ return !!(sessionStorage.mrOrderIdempotency||sessionStorage.mrFulfillmentIdempotency||sessionStorage.mrCheckoutIdempotency);
+}
+function restorePendingCart(){
+ if(purchaseInFlight)return;
+ const pending=pendingPurchase();
+ if(!pending)return;
+ localStorage.mrCart=JSON.stringify(pending.items.map(x=>({id:x.id,variantId:x.variantId,q:x.q})));
+ count();render();announce('Selección original restaurada; el pedido todavía requiere verificación.');
+}
+function pendingPurchaseView(){
+ const p=pendingPurchase(),legacy=!p&&legacyPurchaseKeysPresent();
+ if(!p&&!legacy)return '';
+ const stage=p?.checkout?'Checkout registrado; pago por verificar':p?.fulfillment?'Entrega registrada; pago pendiente':p?.order?'Orden registrada; entrega pendiente':'Respuesta de orden por verificar';
+ const expired=!!p&&['reservation_not_active','order_not_checkoutable','order_not_fulfillable'].includes(p.lastError);
+ const reference=p?.order?.orderNumber?'<p>Número de pedido: <b>'+escapeHTML(p.order.orderNumber)+'</b></p>':'';
+ return '<section class="panel" role="status" aria-live="polite"><h2>Compra pendiente de conciliación</h2>'
+   +'<p>'+escapeHTML(stage)+'. Reintenta únicamente los mismos datos. Si cambiaste el carrito o tus datos, no se creará otra orden automáticamente.</p>'
+   +reference
+   +(expired?'<p role="alert">La orden ya no puede continuar automáticamente: la reserva podría haber vencido o su estado cambió. Consulta el pedido con soporte; no se generará otro automáticamente.</p>':'')
+   +(legacy?'<p>Hay un intento anterior sin información suficiente para reanudarlo de forma segura. Consulta soporte antes de volver a comprar.</p>':expired?'':
+     '<div class="product-actions"><button class="primary" onclick="confirmOrder()">Reintentar operación original</button><button class="small" onclick="restorePendingCart()">Restaurar selección original</button></div>')
+   +'<p><a href="#/orders">Consultar mis pedidos</a> · <a href="#/connect">Solicitar ayuda</a></p></section>';
+}
+function rememberPendingOrder(o){
+ if(!o?.id||!o?.token)return;
+ const previous=orderRefs().filter(x=>String(x.id)!==String(o.id));
+ previous.unshift({id:o.id,token:o.token,orderNumber:o.orderNumber,status:o.status||'PENDING_CONFIRMATION',createdAt:o.createdAt});
+ saveOrderRefs(previous);
+}
+function completePurchase(p){
+ const o=p.order,ff=p.fulfillment,co=p.checkout;
+ if(!o||!ff||!co)throw new Error('purchase_not_complete');
+ o.status=co.orderStatus||o.status;
+ const refs=orderRefs().filter(x=>String(x.id)!==String(o.id));
+ refs.unshift({id:o.id,token:o.token,orderNumber:o.orderNumber,status:o.status,createdAt:o.createdAt,grandTotalMinor:co.amountMinor,currency:co.currency,checkoutId:co.id,checkoutToken:co.token,paymentMethod:co.paymentMethod,paymentStatus:co.payment?.status||'PENDING',fulfillmentId:ff.id,fulfillmentToken:ff.token,fulfillmentStatus:ff.status,fulfillmentType:ff.type,department:ff.destination?.department||null});
+ saveOrderRefs(refs);
+ sessionStorage.mrLastOrder=JSON.stringify(o);sessionStorage.mrLastCheckout=JSON.stringify(co);sessionStorage.mrLastFulfillment=JSON.stringify(ff);
+ localStorage.removeItem('mrCart');sessionStorage.removeItem('mrCheckout');sessionStorage.removeItem('mrDeliveryQuote');
+ sessionStorage.removeItem(PURCHASE_ATTEMPT_KEY);
+ sessionStorage.removeItem('mrOrderIdempotency');sessionStorage.removeItem('mrFulfillmentIdempotency');sessionStorage.removeItem('mrCheckoutIdempotency');
+ count();announce('Pedido '+(o.orderNumber||o.id)+' registrado; verifica el estado de pago.');setTimeout(()=>go('success'),350);
+}
+async function postPurchaseStep(url,key,body){
+ const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json','idempotency-key':key},body:JSON.stringify(body)});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(String(data.error||'step_failed'));
+ return data;
+}
+async function confirmOrder(){
+ if(purchaseInFlight)return;
+ purchaseInFlight=true;
+ try{
+  let d;
+  try{d=JSON.parse(sessionStorage.mrCheckout||'null')}catch{d=null}
+  if(!d){announce('Los datos del pedido no están disponibles. Solicita ayuda para reconciliarlo.');return}
+  let p=pendingPurchase();
+  if(!p&&legacyPurchaseKeysPresent()){
+   announce('Hay un intento anterior sin verificar. Consulta soporte antes de crear otro pedido.');return;
+  }
+  const current=purchaseCartItems();
+  if(p){
+   // The first payload remains immutable across uncertain network outcomes.
+   if(JSON.stringify(current)!==JSON.stringify(p.items)){
+    announce('El carrito cambió respecto al pedido pendiente. Restáuralo antes de reintentar.');return;
+   }
+  }else{
+   if(!current.length||current.some(x=>!Number.isSafeInteger(x.variantId)||x.variantId<=0||!Number.isSafeInteger(x.q)||x.q<1||!validCartItem(x))){
+    announce('Revisa la disponibilidad y la variante exacta antes de confirmar.');go('cart');return;
+   }
+  }
+  const fingerprint=await purchaseFingerprint(current,d);
+  if(p&&p.fingerprint!==fingerprint){
+   announce('Cambiaste datos de una operación incierta. Consulta soporte antes de continuar.');return;
+  }
+  if(!p){
+   const opKey=prefix=>(crypto.randomUUID?crypto.randomUUID():prefix+'-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+   p={v:1,fingerprint,items:current,keys:{order:opKey('mr-order'),fulfillment:opKey('mr-fulfillment'),checkout:opKey('mr-checkout')},order:null,fulfillment:null,checkout:null};
+   // Persist BEFORE first POST so a lost response always has a retry key.
+   savePendingPurchase(p);
+  }
+  const payloads=purchasePayloads(p.items,d);
+  announce('Verificando la operación sin duplicar órdenes…');
+  if(!p.order){
+   const result=await postPurchaseStep('/api/v1/orders',p.keys.order,payloads.order);
+   if(!result.order?.id||!result.order?.token)throw new Error('order_reference_missing');
+   p.order=result.order;savePendingPurchase(p);rememberPendingOrder(p.order);
+  }
+  if(!p.fulfillment){
+   const result=await postPurchaseStep('/api/v1/fulfillments',p.keys.fulfillment,{orderId:p.order.id,orderToken:p.order.token,...payloads.fulfillment});
+   if(!result.fulfillment?.id||!result.fulfillment?.token)throw new Error('fulfillment_reference_missing');
+   p.fulfillment=result.fulfillment;savePendingPurchase(p);
+  }
+  if(!p.checkout){
+   const result=await postPurchaseStep('/api/v1/checkouts',p.keys.checkout,{orderId:p.order.id,orderToken:p.order.token,...payloads.checkout});
+   if(!result.checkout?.id||!result.checkout?.token)throw new Error('checkout_reference_missing');
+   p.checkout=result.checkout;savePendingPurchase(p);
+  }
+  completePurchase(p);
+ }catch(err){
+  const reason=String(err?.message||'');
+  if(['reservation_not_active','order_not_checkoutable','order_not_fulfillable'].includes(reason)){const p=pendingPurchase();if(p){p.lastError=reason;savePendingPurchase(p)}announce('La reserva puede haber vencido. Revisa el pedido y consulta soporte; no se crea otro automáticamente.');}
+  else if(reason==='idempotency_conflict')announce('Conflicto de intento: no se creó una segunda orden. Consulta soporte.');
+  else if(reason==='insufficient_stock')announce('El servidor rechazó el inventario. Revisa tu operación pendiente antes de cambiar la selección.');
+  else announce('No se confirmó toda la operación. Reintenta los mismos datos; no se enviará una orden nueva.');
+ }finally{purchaseInFlight=false}
+}
 function ordersView(){let refs=orderRefs();setTimeout(()=>refreshOrders(),0);if(!refs.length)return '<div class="panel empty"><h2>Aún no tienes pedidos</h2><p>Cuando confirmes una compra aparecerá aquí.</p><button class="small" onclick="go(\'catalog\')">Explorar catálogo</button></div>';return '<section><div class="head"><div><div class="eyebrow">Pedidos</div><h2>Seguimiento de compras</h2><p>Consulta aquí el estado de tu pedido, pago y entrega.</p></div><button class="small" onclick="refreshOrders(true)">Actualizar</button></div>'+refs.map(o=>'<article class="panel" style="margin-bottom:14px"><div class="row"><div><div class="meta">Pedido</div><h3 style="margin:4px 0">'+(o.orderNumber||('#'+o.id))+'</h3></div><span class="badge">'+(o.status||'Consultando…')+'</span></div><p>'+(o.createdAt?new Date(o.createdAt).toLocaleDateString('es-HN',{year:'numeric',month:'short',day:'numeric'}):'')+'</p><div class="row"><span>'+(o.paymentMethod?paymentLabel(o.paymentMethod)+' · Pago '+(o.paymentStatus||'PENDING'):'Pago por consultar')+'</span><b>'+(o.grandTotalMinor!=null?money(Number(o.grandTotalMinor)/100,o.currency||'HNL'):'—')+'</b></div><p><b>Entrega:</b> '+(o.fulfillmentStatus||'Por consultar')+(o.department?' · '+o.department:'')+'</p></article>').join('')+'</section>'}
 async function refreshOrders(verbose=false){let refs=orderRefs();if(!refs.length)return;let changed=false;await Promise.all(refs.map(async x=>{try{let r=await fetch('/api/v1/orders/'+encodeURIComponent(x.id)+'?token='+encodeURIComponent(x.token));if(r.ok){let j=await r.json();if(j.order){x.status=j.order.status;x.orderNumber=j.order.orderNumber;x.createdAt=j.order.createdAt;changed=true}}if(x.checkoutId&&x.checkoutToken){let cr=await fetch('/api/v1/checkouts/'+encodeURIComponent(x.checkoutId)+'?token='+encodeURIComponent(x.checkoutToken));if(cr.ok){let cj=await cr.json(),co=cj.checkout;if(co){x.grandTotalMinor=co.amountMinor;x.currency=co.currency;x.paymentMethod=co.paymentMethod;x.paymentStatus=co.payment?.status||x.paymentStatus;changed=true}}}if(x.fulfillmentId&&x.fulfillmentToken){let fr=await fetch('/api/v1/fulfillments/'+encodeURIComponent(x.fulfillmentId)+'?token='+encodeURIComponent(x.fulfillmentToken));if(fr.ok){let fj=await fr.json(),ff=fj.fulfillment;if(ff){x.fulfillmentStatus=ff.status;x.fulfillmentType=ff.type;x.department=ff.destination?.department||x.department;changed=true}}}}catch{}}));if(changed){saveOrderRefs(refs);if((location.hash||'').includes('/orders'))render()}if(verbose)announce(changed?'Pedidos actualizados':'No se pudieron actualizar los pedidos')}
 function toggleOrder(i,b){}
@@ -307,10 +610,10 @@ function requestsView(){let list=requestsStore();if(!list.length)return '<sectio
 async function refreshRequests(){let list=requestsStore();if(!list.length)return;announce('Actualizando solicitudes');await Promise.all(list.map(async x=>{try{let r=await fetch('/api/v1/inquiries/'+encodeURIComponent(x.id)+'?token='+encodeURIComponent(x.token));if(!r.ok)return;let j=await r.json();if(j.inquiry){x.status=j.inquiry.status;x.updatedAt=j.inquiry.updatedAt||x.updatedAt}}catch{}}));saveRequests(list);render();announce('Solicitudes actualizadas')}
 function marketView(){return '<section><div class="head"><div><div class="eyebrow">Más productos</div><h2>Explora la selección</h2><p>Productos publicados y disponibles en MR עדולם.</p></div></div>'+cards(products)+'</section>'}
 function simple(title,text){return '<div class="panel"><h2>'+title+'</h2><p>'+text+'</p></div>'}
-function syncNav(p){document.querySelectorAll('nav a').forEach(a=>{a.removeAttribute('aria-current');let h=a.getAttribute('href')||'';if((!p&&h==='#/')||(p&&h==='#/'+p))a.setAttribute('aria-current','page')})}function render(){count();let p=location.hash.startsWith('#/')?location.hash.slice(2):'';const changed=app.dataset.route!==p;window.mrJourney?.unmount();crownHook();app.innerHTML=!p?home():p==='catalog'?catalog():p.startsWith('product/')?productView(p.split('/')[1]):p==='cart'?cartView():p==='checkout'?checkoutView():p==='review'?reviewView():p==='success'?successView():p==='market'?marketView():p==='brand'?brandView():p==='connect'?intentView():p==='requests'?requestsView():p==='orders'?ordersView():accountView();app.dataset.route=p;syncNav(p);crownMount();window.mrJourney?.mount(app);if(changed){window.scrollTo({top:0,behavior:'instant'});app.focus({preventScroll:true})}let route=p||'home';if(sessionStorage.mrLastTrackedRoute!==route){sessionStorage.mrLastTrackedRoute=route;trackEvent('page_view',{route})}}
+function syncNav(p){document.querySelectorAll('nav a').forEach(a=>{a.removeAttribute('aria-current');let h=a.getAttribute('href')||'';if((!p&&h==='#/')||(p&&h==='#/'+p))a.setAttribute('aria-current','page')})}function render(){count();let p=location.hash.startsWith('#/')?location.hash.slice(2):'';const changed=app.dataset.route!==p;window.mrJourney?.unmount();crownHook();app.innerHTML=!p?home():p==='catalog'?catalog():p.startsWith('product/')?productView(p.split('/')[1]):p==='cart'?cartView():p==='checkout'?checkoutView():p==='review'?reviewView():p==='success'?successView():p==='market'?marketView():p==='brand'?brandView():p==='connect'?intentView():p==='requests'?requestsView():p==='orders'?ordersView():accountView();app.dataset.route=p;syncNav(p);crownMount();window.mrJourney?.mount(app);if(changed&&p==='checkout'&&cart().length&&cart().every(validCartItem))trackEvent('checkout_start',{});if(changed){window.scrollTo({top:0,behavior:'instant'});app.focus({preventScroll:true})}let route=p||'home';if(sessionStorage.mrLastTrackedRoute!==route){sessionStorage.mrLastTrackedRoute=route;trackEvent('page_view',{route})}}
 let crownOff=null,crownReady=null;
 function crownHook(){if(crownOff){crownOff();crownOff=null}if(crownReady){removeEventListener('mrcrown:ready',crownReady);crownReady=null}}
 function crownMount(){const box=document.querySelector('#crown3d');if(!box)return;box.addEventListener('pointerdown',()=>box.classList.add('touched'),{once:true});const mount=()=>{crownReady=null;if(box.isConnected)crownOff=window.mrCrown.mount(box,{base:'/assets/'})};if(window.mrCrown)mount();else{crownReady=mount;addEventListener('mrcrown:ready',mount,{once:true})}}
-async function syncCatalog(){catalogState='loading';render();try{const r=await fetch('/api/v1/products?status=active');if(!r.ok)throw new Error('catalog_'+r.status);const j=await r.json(),d=Array.isArray(j.data)?j.data:[],list=d.map(x=>({id:'c'+x.id,name:x.name,dept:x.category||'Otros',price:Number(x.price)||0,currency:x.currency||'HNL',stock:Math.max(0,Number(x.stock)||0),image:Array.isArray(x.images)&&x.images[0]?x.images[0].url||'':"",images:Array.isArray(x.images)?x.images:[],variants:Array.isArray(x.variants)?x.variants.map(v=>({id:v.id,sku:v.sku||'',barcode:v.barcode||'',size:v.size||'',color:v.color||'',price:Number(v.price)||0,currency:v.currency||x.currency||'HNL',available:Math.max(0,Number(v.available)||0)})):[],icon:'🛍️'}));catalogState='ready';products.splice(0,products.length,...list);Object.keys(authoritativeStock).forEach(k=>delete authoritativeStock[k]);list.forEach(p=>authoritativeStock[p.id]=p.stock);const ids=new Set(list.map(p=>p.id));save(cart().filter(x=>ids.has(x.id)));render()}catch{catalogState='error';products.splice(0,products.length);Object.keys(authoritativeStock).forEach(k=>delete authoritativeStock[k]);render();announce('Catálogo temporalmente no disponible')}}
+async function syncCatalog(){catalogState='loading';render();try{const r=await fetch('/api/v1/products?status=active');if(!r.ok)throw new Error('catalog_'+r.status);const j=await r.json(),d=Array.isArray(j.data)?j.data:[],list=d.map(x=>({id:'c'+x.id,name:x.name,dept:x.category||'Otros',price:Number(x.price)||0,currency:x.currency||'HNL',stock:Math.max(0,Number(x.stock)||0),image:Array.isArray(x.images)&&x.images[0]?x.images[0].url||'':"",images:Array.isArray(x.images)?x.images:[],defaultCondition:x.defaultCondition||'',variants:Array.isArray(x.variants)?x.variants.map(v=>({id:v.id,sku:v.sku||'',barcode:v.barcode||'',size:v.size||'',color:v.color||'',price:Number(v.price)||0,currency:v.currency||x.currency||'HNL',available:Math.max(0,Number(v.available)||0)})):[],icon:'🛍️'}));catalogState='ready';products.splice(0,products.length,...list);Object.keys(authoritativeStock).forEach(k=>delete authoritativeStock[k]);list.forEach(p=>authoritativeStock[p.id]=p.stock);const ids=new Set(list.map(p=>p.id));if(!pendingPurchase()&&!legacyPurchaseKeysPresent())save(cart().filter(x=>ids.has(x.id)));else count();render()}catch{catalogState='error';products.splice(0,products.length);Object.keys(authoritativeStock).forEach(k=>delete authoritativeStock[k]);render();announce('Catálogo temporalmente no disponible')}}
 brand.onclick=()=>{brand.classList.remove('spin');void brand.offsetWidth;brand.classList.add('spin')};brand.ontransitionend=()=>brand.classList.remove('spin');addEventListener('hashchange',render);render();syncCatalog();
-</script><script src="/assets/brand-journey.js?v=1" defer></script><script type="module" src="/crown3d.js"></script><footer class="footer-main"><div><h3>MR עדולם</h3><p>Compra productos seleccionados en Honduras.</p></div><div><h4>Comprar</h4><a href="#/catalog">Catálogo</a><a href="#/cart">Carrito</a><a href="#/orders">Mis pedidos</a></div><div><h4>Ayuda</h4><a href="#/account">Mi cuenta</a><a href="#/connect">Contacto</a><a href="#/brand">Sobre MR עדולם</a></div><div><h4>Tienda</h4><p>Precios en HNL.<br>Disponibilidad actualizada.</p></div></footer></body></html>
+</script><script src="/assets/brand-journey.js?v=1" defer></script><script type="module" src="/crown3d.js"></script><footer class="footer-main"><div><h3>MR עדולם</h3><p>Compra productos seleccionados en Honduras.</p></div><div><h4>Comprar</h4><a href="#/catalog">Catálogo</a><a href="#/cart">Carrito</a><a href="#/orders">Mis pedidos</a></div><div><h4>Ayuda</h4><a href="#/account">Mi cuenta</a><a href="#/connect">Contacto</a><a href="#/brand">Sobre MR עדולם</a></div><div><h4>Tienda</h4><p>Precios en HNL.<br>Inventario sujeto a confirmación al crear el pedido.</p></div></footer></body></html>
