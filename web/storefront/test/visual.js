@@ -48,8 +48,10 @@ const sizes = [{name:'mobile',width:390,height:844},{name:'tablet',width:768,hei
         status:200,contentType:'application/json',
         body:JSON.stringify({options:[{quoteRequired:false,etaMinDays:2,etaMaxDays:4,shippingMinor:8500,currency:'HNL'}]})
       }));
-      await page.goto(base+'/#/product/c101',{waitUntil:'domcontentloaded',timeout:30000});
-      await page.waitForFunction(()=>!!document.querySelector('.pd-info')?.textContent.includes('Blusa DEMO'),{timeout:10000});
+      await page.goto(base+'/index.html?visual-qa='+encodeURIComponent(size.name)+'#/product/c101',{waitUntil:'domcontentloaded',timeout:30000});
+      // Changing only #hash is same-document navigation and does not invoke syncCatalog().
+      // A distinct URL forces a document load so the mock API is consumed before assertions.
+      await page.waitForFunction(()=>!!document.querySelector('.pd-info')?.textContent.includes('Blusa DEMO'),null,{timeout:12000});
       await page.locator('.pd-option[data-color="Negro"]').click();
       await page.locator('.pd-option[data-size="M"]').click();
       await page.locator('#pd-department').selectOption('Cortés');
