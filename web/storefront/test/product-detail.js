@@ -21,7 +21,7 @@ const document={
 let events=[];
 const context=vm.createContext({
  document,localStorage,sessionStorage,app,
- console, URL, Intl,
+ console, URL, Intl, TextEncoder,
  location:{hash:'#/product/c1',origin:'https://mr.example'},
  window:{scrollTo(){},setTimeout(){}},
  setTimeout(){},clearTimeout(){},
