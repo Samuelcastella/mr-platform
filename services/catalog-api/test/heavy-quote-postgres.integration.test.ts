@@ -57,5 +57,20 @@ test("real acceptance function serializes competing transactions and preserves p
   expect(blocked.error).toBe("checkout_started");
   const paid = await db`SELECT shipping_total_minor FROM m04_acceptance_integration.orders WHERE id=2`;
   expect(Number(paid[0].shipping_total_minor)).toBe(0);
+  // Duplicate snapshot rows must never cover an omitted variant, even if total shipping matches.
+  await db`INSERT INTO m04_acceptance_integration.orders(id,public_token,status,currency,subtotal_minor,discount_total_minor,tax_total_minor)
+    VALUES(3,'duplicate-token','PENDING_CONFIRMATION','HNL',10000,0,0)`;
+  await db`INSERT INTO m04_acceptance_integration.order_items VALUES(3,3,1),(3,4,1)`;
+  await db`INSERT INTO m04_acceptance_integration.heavy_logistics_quotes VALUES
+    (40,3,3,'DRAFT','HNL',1000,NOW()+interval '1 hour',NULL)`;
+  await db`INSERT INTO m04_acceptance_integration.heavy_logistics_quote_lines VALUES
+    (40,3,1,400),(40,3,1,600)`;
+  const duplicate = await db.begin(async tx => {
+    await tx`SET LOCAL search_path TO m04_acceptance_integration`;
+    return acceptHeavyQuoteInTx(tx,3,40,"duplicate-token");
+  });
+  expect(duplicate.error).toBe("heavy_quote_order_coverage_required");
+  const unchanged = await db`SELECT shipping_total_minor FROM m04_acceptance_integration.orders WHERE id=3`;
+  expect(Number(unchanged[0].shipping_total_minor)).toBe(0);
   await db`DROP SCHEMA m04_acceptance_integration CASCADE`;
 });
