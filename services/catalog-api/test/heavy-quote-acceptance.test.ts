@@ -76,6 +76,16 @@ test("accepts matching multi-line snapshot with exact shipping sum", async () =>
   expect((await acceptHeavyQuoteInTx(tx, 1, 7, "token")).accepted).toBe(true);
   expect(writes).toHaveLength(2);
 });
+test("rejects duplicate snapshot variants even when line count and shipping sum match", async () => {
+  const { tx, writes } = mockTx({
+    lines: [{ variant_id: 3, quantity: 1 }, { variant_id: 4, quantity: 1 }],
+    snapshots: [{ variant_id: 3, quantity: 1, shipping_minor: 1200 },
+                { variant_id: 3, quantity: 1, shipping_minor: 800 }]
+  });
+  expect((await acceptHeavyQuoteInTx(tx, 1, 7, "token")).error).toBe("heavy_quote_order_coverage_required");
+  expect(writes).toHaveLength(0);
+});
+
 test("rejects stale quantities and tampered consolidated totals", async () => {
   for (const snapshots of [
     [{ variant_id: 3, quantity: 1, shipping_minor: 2000 }],
