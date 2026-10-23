@@ -25,15 +25,19 @@ export async function acceptHeavyQuoteInTx(tx: DB, orderId: number, quoteId: num
       ordered.set(variant, (ordered.get(variant) || 0) + quantity);
     }
     let sum = 0;
+    const coveredVariants = new Set<number>();
     if (snapshots.length !== ordered.size) return { error: "heavy_quote_order_coverage_required", status: 409 };
     for (const snapshot of snapshots) {
       const variant = Number(snapshot.variant_id), quantity = Number(snapshot.quantity);
       const price = Number(snapshot.shipping_minor);
-      if (ordered.get(variant) !== quantity || !Number.isSafeInteger(price) || price < 0)
+      if (coveredVariants.has(variant) || ordered.get(variant) !== quantity || !Number.isSafeInteger(price) || price < 0)
         return { error: "heavy_quote_order_coverage_required", status: 409 };
+      coveredVariants.add(variant);
       sum += price;
       if (!Number.isSafeInteger(sum)) return { error: "invalid_amount", status: 409 };
     }
+    if (coveredVariants.size !== ordered.size)
+      return { error: "heavy_quote_order_coverage_required", status: 409 };
     if (sum !== Number(quote.shipping_minor)) return { error: "heavy_quote_total_mismatch", status: 409 };
   } else if (lines.length !== 1 || Number(lines[0].quantity) !== 1 ||
              Number(lines[0].variant_id) !== Number(quote.variant_id)) {
