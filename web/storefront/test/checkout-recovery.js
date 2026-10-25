@@ -5,13 +5,22 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const source=html.match(/<script>([\s\S]*?)<\/script>/)[1].split('brand.onclick=')[0];
 const pendingKey='mrPurchaseAttemptV1';
-function harness(){
+function lockManager(){
+ let busy=false;
+ return {async request(name,options,callback){
+  if(busy)return callback(null);
+  busy=true;
+  try{return await callback({name})}finally{busy=false}
+ }};
+}
+function harness({sharedStorage=null,sharedLocks=null}={}){
  const storage=()=>({removeItem(key){delete this[key]}});
- const localStorage=storage(),sessionStorage=storage();
+ const localStorage=sharedStorage||storage(),sessionStorage=storage();
+ const navigator={locks:sharedLocks||lockManager()};
  const status={hidden:true,textContent:''},app={dataset:{},innerHTML:'',focus(){}};
  const document={querySelector(){return null},querySelectorAll(){return []},getElementById(id){return id==='status'?status:null}};
  const context=vm.createContext({
-  console,URL,Intl,TextEncoder,document,localStorage,sessionStorage,app,
+  console,URL,Intl,TextEncoder,document,localStorage,sessionStorage,navigator,app,
   location:{hash:'#/review',origin:'https://qa.example'},crypto:require('node:crypto').webcrypto,
   window:{scrollTo(){},setTimeout(){}},setTimeout(){},clearTimeout(){},
   addEventListener(){},removeEventListener(){},fetch:async()=>{throw Error('unexpected request')}
@@ -158,6 +167,54 @@ function fakeServer(h,{failStage=null, failCount=1, promiseOnOrder=null}={}){
   await h.run('confirmOrder()');
   assert.equal(calls.length,1,'blocked conflict must not produce another POST');
   assert.ok(h.sessionStorage[pendingKey],'pending purchase remains for support');
+ }
+ // I. Another tab and a reopened tab cannot silently start a new Order after lost response.
+ {
+  const shared={removeItem(key){delete this[key]}},locks=lockManager();
+  const a=harness({sharedStorage:shared,sharedLocks:locks}),callsA=fakeServer(a,{failStage:'order'});
+  await a.run('confirmOrder()');
+  assert.equal(callsA.length,1);
+  assert.ok(shared.mrPurchaseGuardV1,'only a non-sensitive attempt identifier is shared');
+  assert.doesNotMatch(shared.mrPurchaseGuardV1,/Cliente|phone|token|address/i);
+  const b=harness({sharedStorage:shared,sharedLocks:locks}),callsB=fakeServer(b);
+  assert.match(b.run('reviewView()'),/Compra pendiente de conciliación/);
+  await b.run('confirmOrder()');
+  assert.equal(callsB.length,0,'second tab must not create new Order');
+  const reopened=harness({sharedStorage:shared,sharedLocks:locks}),callsReopen=fakeServer(reopened);
+  await reopened.run('confirmOrder()');
+  assert.equal(callsReopen.length,0,'reopened tab without original session must not create Order');
+ }
+ // J. Concurrent tabs share an exclusive browser lock, preventing simultaneous POST.
+ {
+  const shared={removeItem(key){delete this[key]}},locks=lockManager();
+  let signalEntered,releaseRequest;
+  const entered=new Promise(resolve=>signalEntered=resolve),gate=new Promise(resolve=>releaseRequest=resolve);
+  const a=harness({sharedStorage:shared,sharedLocks:locks});
+  fakeServer(a,{failStage:'order',promiseOnOrder:()=>{signalEntered();return gate}});
+  const first=a.run('confirmOrder()');
+  await entered;
+  const b=harness({sharedStorage:shared,sharedLocks:locks}),callsB=fakeServer(b);
+  await b.run('confirmOrder()');
+  assert.equal(callsB.length,0,'lock unavailable must fail closed');
+  releaseRequest();
+  await first;
+  assert.ok(shared.mrPurchaseGuardV1,'network failure preserves the guard');
+ }
+ // K. Browser without a reliable lock refuses write instead of risking concurrency.
+ {
+  const h=harness(),calls=fakeServer(h);
+  h.context.navigator.locks=null;
+  await h.run('confirmOrder()');
+  assert.equal(calls.length,0);
+  assert.equal(h.sessionStorage[pendingKey],undefined);
+ }
+ // L. Successful checkout releases shared guard only after all stages complete.
+ {
+  const shared={removeItem(key){delete this[key]}},locks=lockManager();
+  const h=harness({sharedStorage:shared,sharedLocks:locks}),calls=fakeServer(h);
+  await h.run('confirmOrder()');
+  assert.deepEqual(calls.map(x=>x.stage),['order','fulfillment','checkout']);
+  assert.equal(shared.mrPurchaseGuardV1,undefined,'guard cleared on confirmed three-step success');
  }
  console.log('Checkout recovery checks passed: lost Order/Fulfillment/Checkout response, immutable variants/contact, replay keys, stage resume, legacy key, expired reservation and double tap.');
 })().catch(err=>{console.error(err);process.exitCode=1});
