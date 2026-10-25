@@ -154,7 +154,7 @@ function fakeServer(h,{failStage=null, failCount=1, promiseOnOrder=null}={}){
   const pending=JSON.parse(h.sessionStorage[pendingKey]);
   assert.equal(pending.lastError,'idempotency_conflict');
   assert.match(h.run('reviewView()'),/conflicto de intento/);
-  assert.doesNotMatch(h.run('reviewView()'),/onclick="confirmOrder\\(\\)"/);
+  assert.equal(h.run('reviewView()').includes('onclick="confirmOrder()"'),false,'conflicted attempt must not show retry button');
   await h.run('confirmOrder()');
   assert.equal(calls.length,1,'blocked conflict must not produce another POST');
   assert.ok(h.sessionStorage[pendingKey],'pending purchase remains for support');
