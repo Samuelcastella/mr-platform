@@ -1,0 +1,14 @@
+interface:
+  display_name: PostgreSQL para MR עדולם
+  short_description: PostgreSQL, pruebas y entornos para MR עדולם
+  default_prompt: Usa $mr-postgresql para revisar PostgreSQL de MR עדולם y preparar
+    migraciones y pruebas para el entorno solicitado.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true
