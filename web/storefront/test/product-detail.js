@@ -22,6 +22,7 @@ let events=[];
 const context=vm.createContext({
  document,localStorage,sessionStorage,app,
  console, URL, Intl, TextEncoder,
+ navigator:{locks:{request:async(name,options,callback)=>callback({name})}},
  location:{hash:'#/product/c1',origin:'https://mr.example'},
  window:{scrollTo(){},setTimeout(){}},
  setTimeout(){},clearTimeout(){},
