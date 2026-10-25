@@ -429,6 +429,23 @@ function resolveVariantId(item){const v=getCartVariant(item);return validCartIte
 // are persisted in the attempt; customer fields remain in existing mrCheckout session.
 let purchaseInFlight=false;
 const PURCHASE_ATTEMPT_KEY='mrPurchaseAttemptV1';
+const SHARED_PURCHASE_GUARD_KEY='mrPurchaseGuardV1';
+function sharedPurchaseGuard(){
+ try{
+  const raw=localStorage[SHARED_PURCHASE_GUARD_KEY];
+  if(!raw)return null;
+  const guard=JSON.parse(raw);
+  return guard&&guard.v===1&&typeof guard.id==='string'&&guard.id.length>=8?guard:{id:'invalid'};
+ }catch{return {id:'invalid'}}
+}
+function saveSharedPurchaseGuard(p){
+ const guard=JSON.stringify({v:1,id:p.id});
+ localStorage[SHARED_PURCHASE_GUARD_KEY]=guard;
+ if(localStorage[SHARED_PURCHASE_GUARD_KEY]!==guard)throw Error('purchase_guard_unavailable');
+}
+function clearSharedPurchaseGuard(p){
+ if(sharedPurchaseGuard()?.id===p.id)localStorage.removeItem(SHARED_PURCHASE_GUARD_KEY);
+}
 function pendingPurchase(){
  try{
   const x=JSON.parse(sessionStorage[PURCHASE_ATTEMPT_KEY]||'null');
@@ -452,7 +469,7 @@ async function purchaseFingerprint(items,d){
  return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
 }
 function legacyPurchaseKeysPresent(){
- return !!(sessionStorage.mrOrderIdempotency||sessionStorage.mrFulfillmentIdempotency||sessionStorage.mrCheckoutIdempotency);
+ return !!(sessionStorage.mrOrderIdempotency||sessionStorage.mrFulfillmentIdempotency||sessionStorage.mrCheckoutIdempotency||(!pendingPurchase()&&sharedPurchaseGuard()));
 }
 function restorePendingCart(){
  if(purchaseInFlight)return;
@@ -463,6 +480,7 @@ function restorePendingCart(){
 }
 function pendingPurchaseView(){
  const p=pendingPurchase(),legacy=!p&&legacyPurchaseKeysPresent();
+ const guard=sharedPurchaseGuard(),otherTab=!!p&&(!p.id||!guard||guard.id!==p.id);
  if(!p&&!legacy)return '';
  const stage=p?.checkout?'Checkout registrado; pago por verificar':p?.fulfillment?'Entrega registrada; pago pendiente':p?.order?'Orden registrada; entrega pendiente':'Respuesta de orden por verificar';
  const expired=!!p&&['reservation_not_active','order_not_checkoutable','order_not_fulfillable'].includes(p.lastError);
@@ -473,7 +491,8 @@ function pendingPurchaseView(){
    +reference
    +(expired?'<p role="alert">La orden ya no puede continuar automáticamente: la reserva podría haber vencido o su estado cambió. Consulta el pedido con soporte; no se generará otro automáticamente.</p>':'')
    +(conflicted?'<p role="alert">El servidor detectó un conflicto de intento. No vuelvas a enviar esta compra hasta revisar su estado con soporte.</p>':'')
-   +(legacy?'<p>Hay un intento anterior sin información suficiente para reanudarlo de forma segura. Consulta soporte antes de volver a comprar.</p>':(expired||conflicted)?'':
+   +(otherTab?'<p role="alert">Esta compra no tiene una referencia local válida para continuar. Consulta soporte antes de volver a comprar.</p>':'')
+   +(legacy?'<p>Hay una compra pendiente en otra pestaña o un intento anterior sin información recuperable. Consulta su estado antes de volver a comprar.</p>':(expired||conflicted||otherTab)?'':
      '<div class="product-actions"><button class="primary" onclick="confirmOrder()">Reintentar operación original</button><button class="small" onclick="restorePendingCart()">Restaurar selección original</button></div>')
    +'<p><a href="#/orders">Consultar mis pedidos</a> · <a href="#/connect">Solicitar ayuda</a></p></section>';
 }
@@ -494,6 +513,7 @@ function completePurchase(p){
  localStorage.removeItem('mrCart');sessionStorage.removeItem('mrCheckout');sessionStorage.removeItem('mrDeliveryQuote');
  sessionStorage.removeItem(PURCHASE_ATTEMPT_KEY);
  sessionStorage.removeItem('mrOrderIdempotency');sessionStorage.removeItem('mrFulfillmentIdempotency');sessionStorage.removeItem('mrCheckoutIdempotency');
+ clearSharedPurchaseGuard(p);
  count();announce('Pedido '+(o.orderNumber||o.id)+' registrado; verifica el estado de pago.');setTimeout(()=>go('success'),350);
 }
 async function postPurchaseStep(url,key,body){
@@ -504,12 +524,30 @@ async function postPurchaseStep(url,key,body){
 }
 async function confirmOrder(){
  if(purchaseInFlight)return;
+ const locks=typeof navigator!=='undefined'?navigator.locks:null;
+ if(!locks?.request){announce('Este navegador no permite coordinar el pedido entre pestañas. Solicita ayuda antes de confirmar.');return}
  purchaseInFlight=true;
+ try{
+  await locks.request('mr-adulam-checkout-v1',{mode:'exclusive',ifAvailable:true},async lock=>{
+   if(!lock){announce('Otra pestaña está verificando una compra. Espera y consulta su estado antes de continuar.');return}
+   await confirmOrderLocked();
+  });
+ }catch{announce('No pudimos coordinar de forma segura el pedido. Consulta soporte antes de reintentar.')}
+ finally{purchaseInFlight=false}
+}
+async function confirmOrderLocked(){
  try{
   let d;
   try{d=JSON.parse(sessionStorage.mrCheckout||'null')}catch{d=null}
   if(!d){announce('Los datos del pedido no están disponibles. Solicita ayuda para reconciliarlo.');return}
   let p=pendingPurchase();
+  const guard=sharedPurchaseGuard();
+  if(p&&(!p.id||!guard||guard.id!==p.id)){
+   announce('El intento pendiente no coincide con la referencia compartida. Consulta soporte antes de continuar.');return;
+  }
+  if(!p&&guard){
+   announce('Existe una compra pendiente en otra pestaña o sesión. Consulta su estado antes de continuar.');return;
+  }
   if(p?.lastError==='idempotency_conflict'){
    announce('Hay un conflicto de intento pendiente. Consulta el estado del pedido con soporte antes de continuar.');return;
   }
@@ -533,9 +571,10 @@ async function confirmOrder(){
   }
   if(!p){
    const opKey=prefix=>(crypto.randomUUID?crypto.randomUUID():prefix+'-'+Date.now()+'-'+Math.random().toString(36).slice(2));
-   p={v:1,fingerprint,items:current,keys:{order:opKey('mr-order'),fulfillment:opKey('mr-fulfillment'),checkout:opKey('mr-checkout')},order:null,fulfillment:null,checkout:null};
-   // Persist BEFORE first POST so a lost response always has a retry key.
+   p={v:1,id:opKey('mr-intent'),fingerprint,items:current,keys:{order:opKey('mr-order'),fulfillment:opKey('mr-fulfillment'),checkout:opKey('mr-checkout')},order:null,fulfillment:null,checkout:null};
+   // Persist in the tab and fence other tabs BEFORE the first POST. No PII or tokens in shared storage.
    savePendingPurchase(p);
+   saveSharedPurchaseGuard(p);
   }
   const payloads=purchasePayloads(p.items,d);
   announce('Verificando la operación sin duplicar órdenes…');
@@ -564,7 +603,7 @@ async function confirmOrder(){
   }
   else if(reason==='insufficient_stock')announce('El servidor rechazó el inventario. Revisa tu operación pendiente antes de cambiar la selección.');
   else announce('No se confirmó toda la operación. Reintenta los mismos datos; no se enviará una orden nueva.');
- }finally{purchaseInFlight=false}
+ }
 }
 function ordersView(){let refs=orderRefs();setTimeout(()=>refreshOrders(),0);if(!refs.length)return '<div class="panel empty"><h2>Aún no tienes pedidos</h2><p>Cuando confirmes una compra aparecerá aquí.</p><button class="small" onclick="go(\'catalog\')">Explorar catálogo</button></div>';return '<section><div class="head"><div><div class="eyebrow">Pedidos</div><h2>Seguimiento de compras</h2><p>Consulta aquí el estado de tu pedido, pago y entrega.</p></div><button class="small" onclick="refreshOrders(true)">Actualizar</button></div>'+refs.map(o=>'<article class="panel" style="margin-bottom:14px"><div class="row"><div><div class="meta">Pedido</div><h3 style="margin:4px 0">'+(o.orderNumber||('#'+o.id))+'</h3></div><span class="badge">'+(o.status||'Consultando…')+'</span></div><p>'+(o.createdAt?new Date(o.createdAt).toLocaleDateString('es-HN',{year:'numeric',month:'short',day:'numeric'}):'')+'</p><div class="row"><span>'+(o.paymentMethod?paymentLabel(o.paymentMethod)+' · Pago '+(o.paymentStatus||'PENDING'):'Pago por consultar')+'</span><b>'+(o.grandTotalMinor!=null?money(Number(o.grandTotalMinor)/100,o.currency||'HNL'):'—')+'</b></div><p><b>Entrega:</b> '+(o.fulfillmentStatus||'Por consultar')+(o.department?' · '+o.department:'')+'</p></article>').join('')+'</section>'}
 async function refreshOrders(verbose=false){let refs=orderRefs();if(!refs.length)return;let changed=false;await Promise.all(refs.map(async x=>{try{let r=await fetch('/api/v1/orders/'+encodeURIComponent(x.id)+'?token='+encodeURIComponent(x.token));if(r.ok){let j=await r.json();if(j.order){x.status=j.order.status;x.orderNumber=j.order.orderNumber;x.createdAt=j.order.createdAt;changed=true}}if(x.checkoutId&&x.checkoutToken){let cr=await fetch('/api/v1/checkouts/'+encodeURIComponent(x.checkoutId)+'?token='+encodeURIComponent(x.checkoutToken));if(cr.ok){let cj=await cr.json(),co=cj.checkout;if(co){x.grandTotalMinor=co.amountMinor;x.currency=co.currency;x.paymentMethod=co.paymentMethod;x.paymentStatus=co.payment?.status||x.paymentStatus;changed=true}}}if(x.fulfillmentId&&x.fulfillmentToken){let fr=await fetch('/api/v1/fulfillments/'+encodeURIComponent(x.fulfillmentId)+'?token='+encodeURIComponent(x.fulfillmentToken));if(fr.ok){let fj=await fr.json(),ff=fj.fulfillment;if(ff){x.fulfillmentStatus=ff.status;x.fulfillmentType=ff.type;x.department=ff.destination?.department||x.department;changed=true}}}}catch{}}));if(changed){saveOrderRefs(refs);if((location.hash||'').includes('/orders'))render()}if(verbose)announce(changed?'Pedidos actualizados':'No se pudieron actualizar los pedidos')}
