@@ -466,12 +466,14 @@ function pendingPurchaseView(){
  if(!p&&!legacy)return '';
  const stage=p?.checkout?'Checkout registrado; pago por verificar':p?.fulfillment?'Entrega registrada; pago pendiente':p?.order?'Orden registrada; entrega pendiente':'Respuesta de orden por verificar';
  const expired=!!p&&['reservation_not_active','order_not_checkoutable','order_not_fulfillable'].includes(p.lastError);
+ const conflicted=!!p&&p.lastError==='idempotency_conflict';
  const reference=p?.order?.orderNumber?'<p>Número de pedido: <b>'+escapeHTML(p.order.orderNumber)+'</b></p>':'';
  return '<section class="panel" role="status" aria-live="polite"><h2>Compra pendiente de conciliación</h2>'
    +'<p>'+escapeHTML(stage)+'. Reintenta únicamente los mismos datos. Si cambiaste el carrito o tus datos, no se creará otra orden automáticamente.</p>'
    +reference
    +(expired?'<p role="alert">La orden ya no puede continuar automáticamente: la reserva podría haber vencido o su estado cambió. Consulta el pedido con soporte; no se generará otro automáticamente.</p>':'')
-   +(legacy?'<p>Hay un intento anterior sin información suficiente para reanudarlo de forma segura. Consulta soporte antes de volver a comprar.</p>':expired?'':
+   +(conflicted?'<p role="alert">El servidor detectó un conflicto de intento. No vuelvas a enviar esta compra hasta revisar su estado con soporte.</p>':'')
+   +(legacy?'<p>Hay un intento anterior sin información suficiente para reanudarlo de forma segura. Consulta soporte antes de volver a comprar.</p>':(expired||conflicted)?'':
      '<div class="product-actions"><button class="primary" onclick="confirmOrder()">Reintentar operación original</button><button class="small" onclick="restorePendingCart()">Restaurar selección original</button></div>')
    +'<p><a href="#/orders">Consultar mis pedidos</a> · <a href="#/connect">Solicitar ayuda</a></p></section>';
 }
@@ -508,6 +510,9 @@ async function confirmOrder(){
   try{d=JSON.parse(sessionStorage.mrCheckout||'null')}catch{d=null}
   if(!d){announce('Los datos del pedido no están disponibles. Solicita ayuda para reconciliarlo.');return}
   let p=pendingPurchase();
+  if(p?.lastError==='idempotency_conflict'){
+   announce('Hay un conflicto de intento pendiente. Consulta el estado del pedido con soporte antes de continuar.');return;
+  }
   if(!p&&legacyPurchaseKeysPresent()){
    announce('Hay un intento anterior sin verificar. Consulta soporte antes de crear otro pedido.');return;
   }
@@ -553,7 +558,10 @@ async function confirmOrder(){
  }catch(err){
   const reason=String(err?.message||'');
   if(['reservation_not_active','order_not_checkoutable','order_not_fulfillable'].includes(reason)){const p=pendingPurchase();if(p){p.lastError=reason;savePendingPurchase(p)}announce('La reserva puede haber vencido. Revisa el pedido y consulta soporte; no se crea otro automáticamente.');}
-  else if(reason==='idempotency_conflict')announce('Conflicto de intento: no se creó una segunda orden. Consulta soporte.');
+  else if(reason==='idempotency_conflict'){
+   const p=pendingPurchase();if(p){p.lastError=reason;savePendingPurchase(p)}
+   announce('El servidor detectó un conflicto de intento. Comprueba el pedido con soporte antes de volver a intentar.');
+  }
   else if(reason==='insufficient_stock')announce('El servidor rechazó el inventario. Revisa tu operación pendiente antes de cambiar la selección.');
   else announce('No se confirmó toda la operación. Reintenta los mismos datos; no se enviará una orden nueva.');
  }finally{purchaseInFlight=false}
