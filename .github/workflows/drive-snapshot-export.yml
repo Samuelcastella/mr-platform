@@ -1,0 +1,49 @@
+name: Drive snapshot export (MR Adulam)
+
+on:
+  push:
+    branches:
+      - backup/drive-snapshot-20261024
+
+permissions:
+  contents: read
+
+jobs:
+  export-source-and-history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository with history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Archive exact main branch, including Git history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main:refs/heads/main
+          SHA="$(git rev-parse main)"
+          mkdir -p export
+          git archive --format=zip --prefix=mr-platform/ --output="export/mr-platform-${SHA}-source.zip" main
+          git bundle create "export/mr-platform-${SHA}-history.bundle" main
+          cat > export/README-backup.txt <<EOF
+          MR Adulam GitHub repository backup
+          Source: https://github.com/Samuelcastella/mr-platform
+          Branch: main
+          Commit: ${SHA}
+          Source ZIP is a working-tree snapshot (all tracked files).
+          Git bundle is a portable backup of main branch's Git commit history.
+          Generated UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+          (cd export && sha256sum *.zip *.bundle > SHA256SUMS.txt)
+          unzip -t "export/mr-platform-${SHA}-source.zip" >/dev/null
+          git bundle verify "export/mr-platform-${SHA}-history.bundle"
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mr-platform-drive-export
+          path: export/
+          retention-days: 3
+          if-no-files-found: error
