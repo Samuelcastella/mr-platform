@@ -142,5 +142,22 @@ function fakeServer(h,{failStage=null, failCount=1, promiseOnOrder=null}={}){
   assert.deepEqual(calls,['order','fulfillment','checkout']);
   assert.equal(JSON.parse(h.localStorage.mrOrderRefs)[0].id,88);
  }
+
+ // H. Conflicting idempotency payload: do not keep offering the same retry.
+ {
+  const h=harness(),calls=[];
+  h.context.fetch=async(url,options)=>{
+   calls.push({url,key:options.headers['idempotency-key']});
+   return {ok:false,json:async()=>({error:'idempotency_conflict'})};
+  };
+  await h.run('confirmOrder()');
+  const pending=JSON.parse(h.sessionStorage[pendingKey]);
+  assert.equal(pending.lastError,'idempotency_conflict');
+  assert.match(h.run('reviewView()'),/conflicto de intento/);
+  assert.doesNotMatch(h.run('reviewView()'),/onclick="confirmOrder\\(\\)"/);
+  await h.run('confirmOrder()');
+  assert.equal(calls.length,1,'blocked conflict must not produce another POST');
+  assert.ok(h.sessionStorage[pendingKey],'pending purchase remains for support');
+ }
  console.log('Checkout recovery checks passed: lost Order/Fulfillment/Checkout response, immutable variants/contact, replay keys, stage resume, legacy key, expired reservation and double tap.');
 })().catch(err=>{console.error(err);process.exitCode=1});
